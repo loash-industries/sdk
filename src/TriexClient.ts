@@ -7,7 +7,7 @@ import type { ClientWithCoreApi } from '@mysten/sui/client'
 
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
-import { findCreatedObject, normalizeExecuteResult } from './execute'
+import { executeAndNormalize, findCreatedObject } from './execute'
 import type { NormalizedExecution } from './execute'
 import {
   prepareWalletCoinInput,
@@ -196,7 +196,7 @@ export class TriexClient {
     owner: string,
   ): Promise<TxResult> {
     if (!existingBmId) tx.transferObjects([bm as TransactionResult], owner)
-    const res = normalizeExecuteResult(await this.requireExecutor()(tx))
+    const res = await executeAndNormalize(this.requireExecutor(), tx)
     if (!existingBmId) {
       const created = findCreatedBalanceManagerId(res)
       if (created) this.rememberBalanceManagerId(created)
@@ -256,7 +256,7 @@ class AccountApi {
     const tx = new Transaction()
     const bm = newBalanceManager(tx, this.c.ids)
     tx.transferObjects([bm], owner)
-    const res = normalizeExecuteResult(await executor(tx))
+    const res = await executeAndNormalize(executor, tx)
 
     const id = findCreatedBalanceManagerId(res)
     if (!id) {
@@ -332,7 +332,7 @@ class AccountApi {
         ? withdrawCoin(tx, this.c.ids, bm, params.amount)
         : withdrawAllCoin(tx, this.c.ids, bm)
     tx.transferObjects([coin], owner)
-    return toTxResult(normalizeExecuteResult(await executor(tx)))
+    return toTxResult(await executeAndNormalize(executor, tx))
   }
 
   /** #12 — withdraw items (in full) from the BM into the hangar at a hub. */
@@ -380,7 +380,7 @@ class AccountApi {
         isOwner: ssuOwner !== null,
       })
     }
-    return toTxResult(normalizeExecuteResult(await executor(tx)))
+    return toTxResult(await executeAndNormalize(executor, tx))
   }
 
   /** Claimable proceeds + idle BM items (indexer manifest, lags by seconds). */
@@ -434,7 +434,7 @@ class AccountApi {
         quoteCoinType: pool.quoteCoinType,
       })
     }
-    return toTxResult(normalizeExecuteResult(await executor(tx)))
+    return toTxResult(await executeAndNormalize(executor, tx))
   }
 }
 
@@ -844,8 +844,7 @@ class OrdersApi {
       tx,
       bm,
       poolId,
-      execute: async () =>
-        toTxResult(normalizeExecuteResult(await executor(tx))),
+      execute: async () => toTxResult(await executeAndNormalize(executor, tx)),
     }
   }
 }

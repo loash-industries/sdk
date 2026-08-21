@@ -53,7 +53,11 @@ export {
   prepareWalletCoinInput,
   sourceItemsIntoBalanceManager,
 } from './funding'
-export { normalizeExecuteResult, findCreatedObject } from './execute'
+export {
+  normalizeExecuteResult,
+  executeAndNormalize,
+  findCreatedObject,
+} from './execute'
 export type { NormalizedExecution, CreatedObject } from './execute'
 
 // ─── Analytics & pagination helpers ──────────────────────────────────────────

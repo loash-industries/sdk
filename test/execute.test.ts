@@ -1,4 +1,8 @@
-import { normalizeExecuteResult, findCreatedObject } from '../src/execute'
+import {
+  executeAndNormalize,
+  normalizeExecuteResult,
+  findCreatedObject,
+} from '../src/execute'
 import { TriexClientError, TriexError } from '../src/errors'
 
 const BM_TYPE = '0xabc::balance_manager::BalanceManager'
@@ -96,5 +100,38 @@ describe('normalizeExecuteResult', () => {
     } catch (e) {
       expect((e as TriexClientError).code).toBe(TriexError.UnexpectedResponse)
     }
+  })
+})
+
+describe('executeAndNormalize', () => {
+  it('wraps thrown pre-submit Move aborts as typed TransactionFailed (live format)', async () => {
+    const executor = async () => {
+      // Exact format the v2 client throws during transaction resolution.
+      throw new Error(
+        "Transaction resolution failed: MoveAbort in 2nd command, abort code: 8, in '0x291b9da738dffedd18d7c5049e5e6792270202e03f3c9d9db4c7097670bf6eb2::book::cancel_order' (instruction 102)",
+      )
+    }
+    try {
+      await executeAndNormalize(executor, {})
+      throw new Error('expected throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(TriexClientError)
+      expect((e as TriexClientError).code).toBe(TriexError.TransactionFailed)
+      expect((e as TriexClientError).message).toContain('Order not found')
+    }
+  })
+
+  it('passes non-abort executor throws through untouched', async () => {
+    const boom = new Error('network unreachable')
+    const executor = async () => {
+      throw boom
+    }
+    await expect(executeAndNormalize(executor, {})).rejects.toBe(boom)
+  })
+
+  it('normalizes successful results end to end', async () => {
+    const executor = async () => ({ digest: '0xd', objectChanges: [] })
+    const res = await executeAndNormalize(executor, {})
+    expect(res.digest).toBe('0xd')
   })
 })

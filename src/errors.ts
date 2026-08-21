@@ -108,13 +108,30 @@ export function explainMoveAbort(error: unknown): string | null {
       : error instanceof Error
         ? error.message
         : JSON.stringify(error ?? '')
-  // Matches both `MoveAbort(MoveLocation { … name: Identifier("book") … }, 2)`
-  // (quotes possibly backslash-escaped inside JSON-stringified errors) and
-  // compact `…::book::…, 2)` / `abort_code: 2 … module … book` renderings.
-  const m =
-    /Identifier\(\\*"([a-z_]+)\\*"\)[\s\S]*?},?\s*(\d+)\)/.exec(text) ??
-    /::([a-z_]+)::[a-z_]+[^,]*,\s*abort code:?\s*(\d+)/i.exec(text) ??
-    /module:?\s*'?"?([a-z_]+)'?"?[\s\S]*?abort_code:?\s*"?(\d+)"?/i.exec(text)
-  if (!m) return null
-  return MOVE_ABORTS[`${m[1]}::${m[2]}`] ?? null
+  // Matches the shapes Sui errors arrive in:
+  //  - `MoveAbort(MoveLocation { … name: Identifier("book") … }, 2)` (quotes
+  //    possibly backslash-escaped inside JSON-stringified errors)
+  //  - `…::book::fn…, abort code: 2` and the reversed pre-submit resolution
+  //    form `MoveAbort in Nth command, abort code: 8, in '0x…::book::fn'`
+  //  - structured `module … book … abort_code: 2`
+  let module: string | undefined
+  let code: string | undefined
+  let m = /Identifier\(\\*"([a-z_]+)\\*"\)[\s\S]*?},?\s*(\d+)\)/.exec(text)
+  if (m) [, module, code] = m
+  if (!module) {
+    m = /::([a-z_]+)::[a-z_]+[^,]*,\s*abort code:?\s*(\d+)/i.exec(text)
+    if (m) [, module, code] = m
+  }
+  if (!module) {
+    m = /abort code:?\s*(\d+)[\s\S]*?::([a-z_]+)::[a-z_]+/i.exec(text)
+    if (m) [, code, module] = m
+  }
+  if (!module) {
+    m = /module:?\s*'?"?([a-z_]+)'?"?[\s\S]*?abort_code:?\s*"?(\d+)"?/i.exec(
+      text,
+    )
+    if (m) [, module, code] = m
+  }
+  if (!module || !code) return null
+  return MOVE_ABORTS[`${module}::${code}`] ?? null
 }

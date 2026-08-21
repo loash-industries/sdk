@@ -27,6 +27,37 @@ export interface NormalizedExecution {
   raw: unknown
 }
 
+/**
+ * Run an executor and normalize its result. Executors can FAIL two ways: by
+ * resolving with a failed-transaction result, or by THROWING (e.g. the v2
+ * client's pre-submit resolution/simulation surfaces Move aborts as thrown
+ * errors before anything hits the chain). Both become typed
+ * `TransactionFailed` errors with the abort translated; non-abort throws
+ * (network failures, user rejection) pass through untouched.
+ */
+export async function executeAndNormalize<T>(
+  executor: (tx: T) => Promise<unknown>,
+  tx: T,
+): Promise<NormalizedExecution> {
+  let raw: unknown
+  try {
+    raw = await executor(tx)
+  } catch (e) {
+    if (e instanceof TriexClientError) throw e
+    const text = e instanceof Error ? e.message : String(e)
+    if (/MoveAbort|abort code/i.test(text)) {
+      const explained = explainMoveAbort(text)
+      throw new TriexClientError(
+        TriexError.TransactionFailed,
+        `Transaction failed${explained ? `: ${explained}` : ''} (${text}).`,
+        e,
+      )
+    }
+    throw e
+  }
+  return normalizeExecuteResult(raw)
+}
+
 export function normalizeExecuteResult(raw: unknown): NormalizedExecution {
   const r = raw as any
 

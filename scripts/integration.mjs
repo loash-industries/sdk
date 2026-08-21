@@ -147,13 +147,40 @@ await step('orders.limit buy — full pipeline to typed shortfall', async () => 
   }
 })
 
-// ── 5. real on-chain abort → TransactionFailed + translation ─────────────────
-await step(
-  'withdrawCurrency on an empty BM → typed TransactionFailed (live abort)',
-  expectCode(TriexError.TransactionFailed, () =>
-    client.account.withdrawCurrency(),
-  ),
-)
+// ── 5. withdraw-all on an empty BM is a no-op success on-chain ───────────────
+await step('withdrawCurrency (all) on an empty BM succeeds as a no-op', async () => {
+  const r = await client.account.withdrawCurrency()
+  return `digest=${r.digest}`
+})
+
+// ── 6. real pool interaction: cancelAll no-op + abort translation ────────────
+const market = await (async () => {
+  const feed = await client.market.discover({ limit: 10 })
+  return feed.orders.find((o) => o.hubId) ?? null
+})()
+
+if (market) {
+  await step('orders.cancelAll on a real pool (no orders → no-op success)', async () => {
+    const r = await client.orders.cancelAll({
+      storageUnitId: market.hubId,
+      assetId: market.assetId,
+    })
+    return `digest=${r.digest}`
+  })
+
+  await step(
+    'orders.cancel with a bogus order id → typed TransactionFailed (live abort)',
+    expectCode(TriexError.TransactionFailed, () =>
+      client.orders.cancel({
+        storageUnitId: market.hubId,
+        assetId: market.assetId,
+        orderId: 987654321n,
+      }),
+    ),
+  )
+} else {
+  console.log('⚠️  no discoverable market — skipping live pool interaction steps')
+}
 
 console.log(failures ? `\n${failures} step(s) FAILED` : '\nAll integration steps passed.')
 process.exit(failures ? 1 : 0)
