@@ -157,7 +157,11 @@ sdk/
 │   ├── ReadOnlyClient.ts   # indexer-only client (no executor / no signing)
 │   ├── config.ts           # network + package-id + tenant resolution, defaults
 │   ├── queries.ts          # indexer HTTP client (fetch + x-api-key + zod parse)
-│   ├── onchain.ts          # fullnode balance reads (wallet CRED, BM BalanceKey<CRED>)
+│   ├── onchain.ts          # fullnode reads: balances, receipts, character/cap resolution
+│   ├── funding.ts          # deficit sourcing: coin merge/split, receipts → hangar
+│   ├── execute.ts          # executor-result normalization (v2 + legacy shapes)
+│   ├── book.ts             # order-book analytics (levels, mid, spread, vwap)
+│   ├── paging.ts           # auto-pagination generators (discovery, fills, trades)
 │   ├── transactions.ts     # pure PTB builders (balance_manager, pool, receipt)
 │   ├── money.ts            # price scaling, fee/deposit math, decimals helpers
 │   ├── types.ts            # config, executor, domain types
