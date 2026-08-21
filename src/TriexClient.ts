@@ -220,13 +220,18 @@ export class TriexClient {
 /** @internal — pull the created BalanceManager id out of executor results. */
 function findCreatedBalanceManagerId(res: NormalizedExecution): string | null {
   return (
-    findCreatedObject(res, '::balance_manager::BalanceManager')?.objectId ?? null
+    findCreatedObject(res, '::balance_manager::BalanceManager')?.objectId ??
+    null
   )
 }
 
 /** @internal */
 function toTxResult(res: NormalizedExecution): TxResult {
-  return { digest: res.digest, createdObjects: res.createdObjects, raw: res.raw }
+  return {
+    digest: res.digest,
+    createdObjects: res.createdObjects,
+    raw: res.raw,
+  }
 }
 
 // ─── account ─────────────────────────────────────────────────────────────────
@@ -295,16 +300,22 @@ class AccountApi {
     const ssuObjectId = toSsuObjectId(params.storageUnitId)
     const { tx, bm, existingBmId } = await this.c.beginBmTx(owner)
     for (const item of params.items) {
-      await sourceItemsIntoBalanceManager(this.c.suiClient, tx, this.c.ids, bm, {
-        owner,
-        ssuObjectId,
-        vaultConfigId: vault.vaultConfigId,
-        vaultCollectionId: vault.collectionId,
-        assetId: BigInt(item.assetId),
-        amount: item.amount,
-        balanceManagerId: existingBmId,
-        deficitMode: false,
-      })
+      await sourceItemsIntoBalanceManager(
+        this.c.suiClient,
+        tx,
+        this.c.ids,
+        bm,
+        {
+          owner,
+          ssuObjectId,
+          vaultConfigId: vault.vaultConfigId,
+          vaultCollectionId: vault.collectionId,
+          assetId: BigInt(item.assetId),
+          amount: item.amount,
+          balanceManagerId: existingBmId,
+          deficitMode: false,
+        },
+      )
     }
     return this.c.finishBmTx(tx, bm, existingBmId, owner)
   }
@@ -345,7 +356,11 @@ class AccountApi {
     }
     // `is_owner` selects OwnerCap<StorageUnit> vs OwnerCap<Character> in the
     // redeem; true only when the player owns this hub.
-    const ssuOwner = await fetchSsuOwnerInfo(this.c.suiClient, ssuObjectId, owner)
+    const ssuOwner = await fetchSsuOwnerInfo(
+      this.c.suiClient,
+      ssuObjectId,
+      owner,
+    )
 
     const tx = new Transaction()
     const bm = tx.object(balanceManagerId)
@@ -396,7 +411,10 @@ class AccountApi {
           (p) =>
             p.settled.base > 0n || p.settled.quote > 0n || p.settled.cred > 0n,
         )
-        .map((p) => ({ poolId: p.poolId, quoteCoinType: p.quoteAssetId ?? undefined }))
+        .map((p) => ({
+          poolId: p.poolId,
+          quoteCoinType: p.quoteAssetId ?? undefined,
+        }))
     }
     if (pools.length === 0) {
       throw new TriexClientError(
@@ -439,7 +457,11 @@ class BalancesApi {
       (await this.c.resolveBalanceManagerId(address)) ?? undefined
     let inventoryKey = params.inventoryKey
     if (!inventoryKey && params.includeHangar) {
-      const info = await fetchCharacterInfo(this.c.suiClient, this.c.ids, address)
+      const info = await fetchCharacterInfo(
+        this.c.suiClient,
+        this.c.ids,
+        address,
+      )
       inventoryKey = info?.ownerCapId
     }
     return this.c.indexer.inventoryBalances({
@@ -458,7 +480,11 @@ class BalancesApi {
   async currency(address?: string): Promise<CurrencyBalances> {
     const owner = this.c.requireAddress(address)
     const [wallet, balanceManagerId] = await Promise.all([
-      getWalletCurrencyBalance(this.c.suiClient, owner, this.c.ids.credCoinType),
+      getWalletCurrencyBalance(
+        this.c.suiClient,
+        owner,
+        this.c.ids.credCoinType,
+      ),
       this.c.resolveBalanceManagerId(owner),
     ])
     const balanceManager = balanceManagerId
@@ -564,16 +590,22 @@ class OrdersApi {
     const { tx, bm, existingBmId } = await this.c.beginBmTx(owner)
 
     if (!isBid) {
-      await sourceItemsIntoBalanceManager(this.c.suiClient, tx, this.c.ids, bm, {
-        owner,
-        ssuObjectId: toSsuObjectId(params.storageUnitId),
-        vaultConfigId: vault.vaultConfigId,
-        vaultCollectionId: vault.collectionId,
-        assetId: BigInt(params.assetId),
-        amount: params.quantity,
-        balanceManagerId: existingBmId,
-        deficitMode: true,
-      })
+      await sourceItemsIntoBalanceManager(
+        this.c.suiClient,
+        tx,
+        this.c.ids,
+        bm,
+        {
+          owner,
+          ssuObjectId: toSsuObjectId(params.storageUnitId),
+          vaultConfigId: vault.vaultConfigId,
+          vaultCollectionId: vault.collectionId,
+          assetId: BigInt(params.assetId),
+          amount: params.quantity,
+          balanceManagerId: existingBmId,
+          deficitMode: true,
+        },
+      )
     } else {
       let quoteAmount = params.quoteDeposit
       if (quoteAmount === undefined) {
@@ -630,16 +662,22 @@ class OrdersApi {
     const { tx, bm, existingBmId } = await this.c.beginBmTx(owner)
 
     if (!isBid) {
-      await sourceItemsIntoBalanceManager(this.c.suiClient, tx, this.c.ids, bm, {
-        owner,
-        ssuObjectId: toSsuObjectId(params.storageUnitId),
-        vaultConfigId: vault.vaultConfigId,
-        vaultCollectionId: vault.collectionId,
-        assetId: BigInt(params.assetId),
-        amount: params.quantity,
-        balanceManagerId: existingBmId,
-        deficitMode: true,
-      })
+      await sourceItemsIntoBalanceManager(
+        this.c.suiClient,
+        tx,
+        this.c.ids,
+        bm,
+        {
+          owner,
+          ssuObjectId: toSsuObjectId(params.storageUnitId),
+          vaultConfigId: vault.vaultConfigId,
+          vaultCollectionId: vault.collectionId,
+          assetId: BigInt(params.assetId),
+          amount: params.quantity,
+          balanceManagerId: existingBmId,
+          deficitMode: true,
+        },
+      )
     } else {
       if (!params.quoteBudget || params.quoteBudget <= 0n) {
         throw new TriexClientError(
@@ -651,7 +689,13 @@ class OrdersApi {
       const effectiveQuote =
         params.quoteBudget +
         marketBuyRoundingBuffer(params.quantity, meta.feeRateScaled)
-      await this.depositQuoteDeficit(tx, bm, existingBmId, owner, effectiveQuote)
+      await this.depositQuoteDeficit(
+        tx,
+        bm,
+        existingBmId,
+        owner,
+        effectiveQuote,
+      )
     }
 
     const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]

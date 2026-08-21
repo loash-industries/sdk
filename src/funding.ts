@@ -136,9 +136,7 @@ export async function sourceItemsIntoBalanceManager(
         )
       : { hasKey: false, balance: 0n }
 
-  let remainingDeficit = params.deficitMode
-    ? amount - bmState.balance
-    : amount
+  let remainingDeficit = params.deficitMode ? amount - bmState.balance : amount
   if (remainingDeficit <= 0n) return
 
   // ── Step 1: wallet receipts (market collection only) ───────────────────────
@@ -215,7 +213,8 @@ export async function sourceItemsIntoBalanceManager(
       ),
     ])
 
-    const fromSsu = ssuSlotQty >= remainingDeficit ? remainingDeficit : ssuSlotQty
+    const fromSsu =
+      ssuSlotQty >= remainingDeficit ? remainingDeficit : ssuSlotQty
     const stillNeeded = remainingDeficit - fromSsu
     const fromChar = stillNeeded <= charSlotQty ? stillNeeded : charSlotQty
 

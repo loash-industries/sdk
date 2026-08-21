@@ -77,7 +77,10 @@ export function normalizeExecuteResult(raw: unknown): NormalizedExecution {
         typeof ch.objectId === 'string' &&
         typeof ch.objectType === 'string'
       ) {
-        createdObjects.push({ objectId: ch.objectId, objectType: ch.objectType })
+        createdObjects.push({
+          objectId: ch.objectId,
+          objectType: ch.objectType,
+        })
       }
     }
     // Legacy effects-level failure (JSON-RPC): status.status === 'failure'.

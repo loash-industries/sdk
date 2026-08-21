@@ -20,11 +20,15 @@ describe('normalizeExecuteResult', () => {
       },
     })
     expect(res.digest).toBe('0xd')
-    expect(res.createdObjects).toEqual([{ objectId: '0x1', objectType: BM_TYPE }])
-    expect(findCreatedObject(res, '::balance_manager::BalanceManager')).toEqual({
-      objectId: '0x1',
-      objectType: BM_TYPE,
-    })
+    expect(res.createdObjects).toEqual([
+      { objectId: '0x1', objectType: BM_TYPE },
+    ])
+    expect(findCreatedObject(res, '::balance_manager::BalanceManager')).toEqual(
+      {
+        objectId: '0x1',
+        objectType: BM_TYPE,
+      },
+    )
   })
 
   it('falls back to the objectTypes map when effects are not included', () => {
@@ -71,7 +75,9 @@ describe('normalizeExecuteResult', () => {
         { type: 'mutated', objectId: '0x2', objectType: 'x' },
       ],
     })
-    expect(res.createdObjects).toEqual([{ objectId: '0x1', objectType: BM_TYPE }])
+    expect(res.createdObjects).toEqual([
+      { objectId: '0x1', objectType: BM_TYPE },
+    ])
   })
 
   it('throws typed TransactionFailed for legacy effects failure', () => {

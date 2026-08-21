@@ -72,21 +72,25 @@ export function notImplemented(what: string): never {
  * `module::code` (TRIEX_SYSTEM_DESIGN §11 — Transaction Abort Codes).
  */
 const MOVE_ABORTS: Record<string, string> = {
-  'pool::12': 'Slippage too high — the order price moved (EMinimumQuantityOutNotMet)',
+  'pool::12':
+    'Slippage too high — the order price moved (EMinimumQuantityOutNotMet)',
   'book::2': 'No liquidity available (EEmptyOrderbook)',
   'order_info::5':
     'POST-ONLY order would cross the book — use a plain limit order (EPOSTOrderCrossesOrderbook)',
   'order_info::6':
     'Not enough liquidity to fully fill a FOK order (EFOKOrderCannotBeFullyFilled)',
-  'order_info::8': 'Self-match would cancel your order (ESelfMatchingCancelTaker)',
+  'order_info::8':
+    'Self-match would cancel your order (ESelfMatchingCancelTaker)',
   'balance_manager::3':
     'Balance manager holds insufficient currency — deposit more (EBalanceManagerBalanceTooLow)',
   'balance_manager::7':
     'Balance manager holds insufficient items (EMultiCoinBalanceTooLow)',
-  'state::2': 'Max 100 open orders per balance manager per pool reached (EMaxOpenOrders)',
+  'state::2':
+    'Max 100 open orders per balance manager per pool reached (EMaxOpenOrders)',
   'book::7':
     'Modified quantity must be less than the original (ENewQuantityMustBeLessThanOriginal)',
-  'book::8': 'Order not found — already filled or canceled? (EBookOrderNotFound)',
+  'book::8':
+    'Order not found — already filled or canceled? (EBookOrderNotFound)',
   'order_info::4': 'Invalid order restriction value (EInvalidOrderType)',
   'order_info::0': 'Price out of valid range (EOrderInvalidPrice)',
   'order_info::3': 'Expire timestamp is in the past (EInvalidExpireTimestamp)',

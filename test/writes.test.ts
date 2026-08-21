@@ -35,7 +35,12 @@ function routeFetch(routes: Array<[string, unknown]>): void {
     const s = String(url)
     const hit = routes.find(([pattern]) => s.includes(pattern))
     if (!hit) {
-      return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) }
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        json: async () => ({}),
+      }
     }
     return { ok: true, status: 200, statusText: 'OK', json: async () => hit[1] }
   })
@@ -50,12 +55,10 @@ type CoreImpl = Partial<{
 }>
 
 function fakeSuiClient(impl: CoreImpl): any {
-  const wrap =
-    (name: string, fn?: (args: any) => any) =>
-    async (args: any) => {
-      if (!fn) throw new Error(`fake core.${name} not stubbed for this test`)
-      return fn(args)
-    }
+  const wrap = (name: string, fn?: (args: any) => any) => async (args: any) => {
+    if (!fn) throw new Error(`fake core.${name} not stubbed for this test`)
+    return fn(args)
+  }
   return {
     core: {
       listCoins: wrap('listCoins', impl.listCoins),
@@ -93,11 +96,13 @@ function captureExecutor(opts?: { createBm?: boolean }) {
 
 /** Compact command list: 'module::function' for MoveCalls, '$kind' otherwise. */
 function commandNames(tx: Transaction): string[] {
-  return tx.getData().commands.map((c: any) =>
-    c.$kind === 'MoveCall'
-      ? `${c.MoveCall.module}::${c.MoveCall.function}`
-      : c.$kind,
-  )
+  return tx
+    .getData()
+    .commands.map((c: any) =>
+      c.$kind === 'MoveCall'
+        ? `${c.MoveCall.module}::${c.MoveCall.function}`
+        : c.$kind,
+    )
 }
 
 /** All pure inputs decodable as u64, as bigints. */
@@ -235,7 +240,10 @@ const VAULT_ROUTE: [string, unknown] = [
   '/vault',
   { hub_id: HEX, collection_id: HEX, vault_config_id: HEX },
 ]
-const RESOLVE_ROUTE: [string, unknown] = ['/v1/pools/resolve', { pool_id: POOL }]
+const RESOLVE_ROUTE: [string, unknown] = [
+  '/v1/pools/resolve',
+  { pool_id: POOL },
+]
 const META_ROUTE: [string, unknown] = [
   '/metadata',
   {
@@ -328,8 +336,14 @@ describe('orders.limit (sell)', () => {
         String(args?.type ?? '').includes('multicoin::Balance')
           ? {
               objects: [
-                { objectId: '0x' + '01'.repeat(32), content: receiptContent(2n) },
-                { objectId: '0x' + '02'.repeat(32), content: receiptContent(9n) },
+                {
+                  objectId: '0x' + '01'.repeat(32),
+                  content: receiptContent(2n),
+                },
+                {
+                  objectId: '0x' + '02'.repeat(32),
+                  content: receiptContent(9n),
+                },
               ],
               hasNextPage: false,
             }
@@ -383,7 +397,10 @@ describe('orders.limit (sell)', () => {
         String(args?.type ?? '').includes('multicoin::Balance')
           ? {
               objects: [
-                { objectId: '0x' + '01'.repeat(32), content: receiptContent(50n, foreign) },
+                {
+                  objectId: '0x' + '01'.repeat(32),
+                  content: receiptContent(50n, foreign),
+                },
               ],
               hasNextPage: false,
             }
@@ -567,7 +584,12 @@ describe('account.claimSettled', () => {
     routeFetch([
       [
         '/sweepable',
-        { balance_manager_id: BM_ID, as_of_checkpoint: null, pools: [], items: [] },
+        {
+          balance_manager_id: BM_ID,
+          as_of_checkpoint: null,
+          pools: [],
+          items: [],
+        },
       ],
     ])
     const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })

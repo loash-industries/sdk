@@ -17,9 +17,9 @@ import {
   STILLNESS_PACKAGE_IDS,
 } from '../dist/index.js'
 
-const apiKey = process.env.TRIEX_API_KEY
+const apiKey = process.env.TRINARY_API_KEY ?? process.env.TRIEX_API_KEY
 if (!apiKey) {
-  console.error('TRIEX_API_KEY missing — put it in .env')
+  console.error('TRINARY_API_KEY missing — put it in .env')
   process.exit(1)
 }
 

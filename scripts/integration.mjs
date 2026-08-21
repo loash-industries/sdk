@@ -14,10 +14,10 @@ import { SuiGrpcClient } from '@mysten/sui/grpc'
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
 import { TriexClient, TriexClientError, TriexError } from '../dist/index.js'
 
-const apiKey = process.env.TRIEX_API_KEY
+const apiKey = process.env.TRINARY_API_KEY ?? process.env.TRIEX_API_KEY
 const secret = process.env.SUI_PRIVATE_KEY
 if (!apiKey || !secret) {
-  console.error('TRIEX_API_KEY and SUI_PRIVATE_KEY are required (see .env)')
+  console.error('TRINARY_API_KEY and SUI_PRIVATE_KEY are required (see .env)')
   process.exit(1)
 }
 

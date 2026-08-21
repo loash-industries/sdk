@@ -1,7 +1,7 @@
 {
   "name": "@trinaryex/sdk",
   "version": "0.0.0",
-  "description": "SDK for trading on Trinary Exchange (Sui / triexbook) — reads via api.trinary.exchange, writes via wallet-signed PTBs",
+  "description": "Trading SDK for Trinary Exchange \u2014 market data, order books, and on-chain trading (Sui) for bots, analytics tools, and CLIs.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,8 +12,9 @@
     }
   },
   "files": [
-    "src",
-    "dist"
+    "dist",
+    "README.md",
+    "DESIGN.md"
   ],
   "scripts": {
     "build": "vite build",
@@ -89,5 +90,19 @@
     ],
     "testEnvironment": "node",
     "coverageDirectory": "./coverage"
+  },
+  "keywords": [
+    "trinary-exchange",
+    "trading",
+    "sdk",
+    "sui",
+    "orderbook",
+    "eve-frontier",
+    "deepbook"
+  ],
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loash-industries/sdk.git"
   }
 }

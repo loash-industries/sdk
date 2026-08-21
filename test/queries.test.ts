@@ -170,7 +170,10 @@ describe('TriexClient.market composition', () => {
             ok: false,
             status: 404,
             statusText: 'Not Found',
-            json: async () => ({ message: 'No location found', statusCode: 404 }),
+            json: async () => ({
+              message: 'No location found',
+              statusCode: 404,
+            }),
           }
         : {
             ok: true,

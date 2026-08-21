@@ -56,6 +56,20 @@ export {
 export { normalizeExecuteResult, findCreatedObject } from './execute'
 export type { NormalizedExecution, CreatedObject } from './execute'
 
+// ─── Analytics & pagination helpers ──────────────────────────────────────────
+export {
+  aggregateLevels,
+  bestBid,
+  bestAsk,
+  midPrice,
+  spread,
+  depth,
+  vwap,
+} from './book'
+export type { BookLevel } from './book'
+export { iterateDiscovery, iterateFills, iterateTrades } from './paging'
+export type { IterateOptions } from './paging'
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type {
   TriexNetwork,
@@ -107,4 +121,9 @@ export type {
   ModifyOrderParams,
   ClaimSettledParams,
 } from './types'
-export type { OwnedItemReceipt, CharacterInfo, SsuOwnerInfo, ObjectRef } from './onchain'
+export type {
+  OwnedItemReceipt,
+  CharacterInfo,
+  SsuOwnerInfo,
+  ObjectRef,
+} from './onchain'

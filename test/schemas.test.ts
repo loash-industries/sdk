@@ -125,7 +125,11 @@ describe('PoolMetadataSchema', () => {
   })
 
   it('treats a null fee as 0n', () => {
-    const parsed = PoolMetadataSchema.parse({ ...base, fee: null, fee_rate: null })
+    const parsed = PoolMetadataSchema.parse({
+      ...base,
+      fee: null,
+      fee_rate: null,
+    })
     expect(parsed.feeRateScaled).toBe(0n)
   })
 })

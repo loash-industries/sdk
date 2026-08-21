@@ -1,7 +1,9 @@
 # `@trinaryex/sdk` — Trinary Exchange Trading SDK
 
-**Status:** Phases 0–1 complete (2026-08-21): gateway routes live, read core implemented
-against pinned schemas (RQ-1/RQ-4 resolved). Open questions resolved 2026-08-15.
+**Status:** Phases 0–3 complete (2026-08-21): gateway routes live, read core implemented
+against pinned schemas (RQ-1/RQ-4 resolved), write flows (deposits, withdrawals, claims,
+orders incl. cancel/modify) ported from the production app and unit-tested (RQ-3 resolved).
+Remaining: npm publish + funded-signer integration run. Open questions resolved 2026-08-15.
 **Package:** `@trinaryex/sdk` (repo: `sdk/`) — an umbrella SDK; the trading surface is the
 first module, with room to grow into a higher-level, full-featured client.
 **Audience:** players and bots trading on Trinary Exchange via an API key.
@@ -38,8 +40,10 @@ The SDK gives a player/bot one object to:
 
 - No tribe/DAO governance-wrapped trading (the `armature_trading` `board_voting` path in
   triex-app-api). MVP is **personal** balance-manager trading only.
-- No cancel/modify order, no claim-settled/sweep-all conveniences (beyond the withdraw
-  primitives), no price-history/analytics endpoints.
+- ~~No cancel/modify order, no claim-settled conveniences~~ — **revised 2026-08-21**:
+  cancel/cancelAll/modify, `sweepable`, and `claimSettled` were pulled into the MVP (a
+  trading bot is not viable without them). Full multi-hub sweep-all and price-history
+  endpoints remain out.
 - No custody. The SDK never holds keys; signing is delegated to an `executor`.
 - No websocket/relay live order-book streaming (the app's `TradeContext` relay
   subscriptions). MVP is request/response against the indexer.
@@ -120,19 +124,23 @@ on the free/standard tier).
 The SDK stays custody-free and wallet-agnostic. Two canonical executors:
 
 ```ts
-// Browser wallet (@mysten/dapp-kit)
-executor: (tx) => signAndExecuteTransaction({ transaction: tx, options: { showObjectChanges: true } })
-
-// Bot / server keypair (Node)
-executor: async (tx) => {
-  return suiClient.signAndExecuteTransaction({
-    signer: keypair, transaction: tx, options: { showObjectChanges: true, showEffects: true },
+// Bot / server keypair (@mysten/sui v2 core client)
+executor: (tx) =>
+  suiClient.signAndExecuteTransaction({
+    transaction: tx, signer: keypair,
+    include: { effects: true, objectTypes: true },
   })
-}
+
+// Browser wallet (@mysten/dapp-kit) — pass its signAndExecuteTransaction through
+executor: (tx) => signAndExecuteTransaction({ transaction: tx })
 ```
 
-`showObjectChanges: true` is **required** for `ensureTradingAccount()` (to capture the newly
-created `BalanceManager` object id) — same contract keyspace enforces for `createAcl`.
+Executor results are **normalized** (`execute.ts`): both the v2 core-client
+`TransactionResult` and the legacy `{ digest, objectChanges }` shape work, and on-chain
+aborts are rethrown as typed `TransactionFailed` errors with the triexbook abort code
+translated (§11 of TRIEX_SYSTEM_DESIGN). Include `effects` + `objectTypes` (v2) or
+`objectChanges` (legacy) so created objects — e.g. a freshly-created `BalanceManager` —
+are captured for read-your-writes.
 
 Optional: a `sponsor` hook to route execution through the gas-station (sponsored/gasless) so
 bots don't need SUI for gas. Post-MVP; the executor signature leaves room (§11, §9 Later).
@@ -243,6 +251,11 @@ client.orders.trades(params?): Promise<TradesPage>
 // orders (#10, #11) — each auto-ensures BM + deposits any deficit in one PTB
 client.orders.limit({ storageUnitId, assetId, side, price, quantity, expireAt? }): Promise<TxResult>   // #10
 client.orders.market({ storageUnitId, assetId, side, quantity, quoteBudget? }): Promise<TxResult>      // #11
+
+// pulled forward from post-MVP (bots are not viable without them):
+client.orders.cancel({ storageUnitId, assetId, orderId }) / cancelAll / modify
+client.account.sweepable(): Promise<Sweepable>          // claimable proceeds + idle BM items
+client.account.claimSettled({ poolIds? })               // withdraw_settled_amounts per pool
 ```
 
 `side: 'buy' | 'sell'` maps to `isBid`; items are identified by `assetId` (the indexer's
@@ -269,7 +282,9 @@ pure functions `(args) => Transaction`; the facade fills object IDs from indexer
 | `ownerProof` | `${triexbook}::balance_manager::generate_proof_as_owner(bm)` | required before placing/withdrawing |
 | `placeLimitOrderItem` | `${triexbook}::multicoin_pool::place_limit_order<Quote>(pool, bm, proof, orderType, selfMatch, price, qty, isBid, expireTs, clock)` | items (multicoin) |
 | `placeMarketOrderItem` | `${triexbook}::multicoin_pool::place_market_order<Quote>(pool, bm, proof, selfMatch, qty, isBid, clock)` | items (multicoin) |
-| `cancelOrderItem` | `${triexbook}::multicoin_pool::cancel_order<Quote>(pool, bm, proof, orderId, clock)` | post-MVP but confirmed present |
+| `cancelOrderItem` | `${triexbook}::multicoin_pool::cancel_order<Quote>(pool, bm, proof, orderId u64, clock)` | implemented (+ `cancel_all_orders`, `modify_order`) |
+| `withdrawCoin` | `${triexbook}::balance_manager::withdraw<T>(bm, amount)` | partial currency withdraw |
+| `withdrawSettledAmounts` | `${triexbook}::multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` | claim post-fill proceeds into the BM |
 
 > `<Quote>` is the CRED coin type (`credCoinType`). Item markets are `multicoin_pool`; the
 > item is identified by `collectionId` + `assetId` (u64), not a Move type parameter.
@@ -303,6 +318,13 @@ covering a deposit deficit from two sources in order:
    character::return_owner_cap<CapType>(character, cap, borrowReceipt)
    balance_manager::deposit_multicoin(bm, receipt)
    ```
+
+**RQ-3 resolved (from the app):** the SSU owner-cap type arg is
+`${worldOriginalPackageId}::storage_unit::StorageUnit`, the character cap
+`${worldOriginalPackageId}::character::Character`; a hub owner drains the SSU slot first,
+then the character slot; non-owners use the character cap only. Hangar slots are dynamic
+fields on the SSU keyed by owner-cap id (`Field<0x2::object::ID, Inventory>`), which is
+also the indexer's `inventory_key`.
 
 **Inputs the SDK must resolve first:**
 - `vaultConfigId`, `vaultCollectionId` — from `GET /v1/hubs/{hub_id}/vault` (indexer) keyed off
@@ -388,18 +410,23 @@ via `packageIds`. Optionally hydrate the *package* IDs at runtime from
   hub-scoped item balances, order-status reads. Currency balances implemented as fullnode
   reads (`onchain.ts`, ported from the app's production hooks). Domain types inferred from
   the zod schemas.
-- **Phase 2 — Account lifecycle + deposits/withdrawals.** `transactions.ts` for BM create,
-  deposit currency/items, withdraw currency/items; facade `account.*` methods. `money.ts`.
-- **Phase 3 — Orders.** limit + market, buy + sell (item/CRED `multicoin_pool`);
-  direct-from-hangar item sourcing (§6.1); deficit-deposit composition; atomic PTBs.
+- **Phase 2 — Account lifecycle + deposits/withdrawals. ✅ DONE 2026-08-21.** Deposits
+  (coin merge/split; item sourcing wallet-receipts → hangar per §6.1), partial + full
+  withdrawals, item redeem into the hangar, `sweepable` + `claimSettled`. All fullnode
+  resolution ported from the app (`onchain.ts`, `funding.ts`).
+- **Phase 3 — Orders. ✅ DONE 2026-08-21.** limit + market, buy + sell, atomic PTBs with
+  create-BM-in-tx and deficit-only funding; GTC default; market-buy rounding buffer;
+  cancel / cancelAll / modify pulled forward from post-MVP. Composition unit-tested
+  command-by-command against the app's flows (63+ tests).
 - **Phase 3.5 — Order-status reads (in MVP).** `balance-managers/{bm}/open-orders`, `/fills`,
   `/trades` — pulled into MVP for bots (story #14). Cheap once the balance-manager routes are
   enabled in Phase 0.
 - **Phase 4 — Packaging & docs.** README quick-start, examples (browser wallet + bot
   keypair), semantic-release → publish `@trinaryex/sdk@0.x`.
-- **Later (post-MVP):** cancel/modify orders, sweep-all convenience, tribe/governance trading,
-  **gas-station sponsored (gasless) execution** (optional `sponsor` hook), live orderbook
-  streaming, mainnet, coin-pools (currency-pair markets).
+- **Later (post-MVP):** full sweep-all convenience (multi-hub redeem), tribe/governance
+  trading, **gas-station sponsored (gasless) execution** (optional `sponsor` hook), live
+  orderbook streaming, mainnet, coin-pools (currency-pair markets). (Cancel/modify and
+  claim-settled were pulled INTO the MVP — a trading bot is not viable without them.)
 
 ---
 
@@ -460,9 +487,10 @@ via `packageIds`. Optionally hydrate the *package* IDs at runtime from
 
 - **RQ-2:** Is `GET /api/v1/package-ids` reachable via `api.trinary.exchange`, or origin-only?
   If not routed through the gateway, the SDK just uses the baked-in preset (fine for MVP).
-- **RQ-3:** `receipt::deposit_for_receipt` cap-type argument (`<CapType>`) and which owner cap
-  (SSU vs character) applies for a **personal, non-tribe** player at their own SSU vs a public
-  hub. Confirm on a live stillness SSU during Phase 2 integration testing.
+- **RQ-3 — RESOLVED 2026-08-21** from the production app (see §6.1): SSU cap type
+  `{worldOriginal}::storage_unit::StorageUnit` (hub owners, drained first), character cap
+  `{worldOriginal}::character::Character` (everyone). Live-SSU spot check still worthwhile
+  once a funded character-owning signer is available.
 
 ---
 
