@@ -1,10 +1,11 @@
 # `@trinaryex/sdk` — Trinary Exchange Trading SDK
 
-**Status:** Phases 0–3 + refinement complete (2026-08-22). Gateway routes live; schemas
-pinned and verified against the published swagger; write flows ported from the production
-app, 91 unit tests, and an 11/11 live testnet integration run (real balance-manager
-creation, live pool PTBs, on-chain abort translation) with a funded signer. RQ-1/3/4
-resolved. Remaining: npm publish (CI release workflow ready; needs NPM_TOKEN + push).
+**Status:** COMPLETE (2026-08-22) — all phases plus a full live-testnet trading lifecycle:
+real deposits/withdrawals, resting bids picked up by the indexer, modify + cancel + refund
+recovery, a REAL market-buy fill (14,999 CRED + exactly 2% fee), taker trade visible in
+`/trades`, item held in the BM, settled claims, and a BM-funded limit sell — 12/12
+lifecycle + 11/11 integration + 91 unit tests. Schemas verified against the published
+swagger. Remaining: npm publish (CI release workflow ready; needs NPM_TOKEN + push).
 **Package:** `@trinaryex/sdk` (repo: `sdk/`) — an umbrella SDK; the trading surface is the
 first module, with room to grow into a higher-level, full-featured client.
 **Audience:** players and bots trading on Trinary Exchange via an API key.
