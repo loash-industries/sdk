@@ -19,13 +19,16 @@ import type {
   OpenOrdersPageSchema,
   OrderbookOrderSchema,
   PoolMetadataSchema,
+  SweepableItemSchema,
+  SweepablePoolSchema,
+  SweepableSchema,
   TradeSchema,
   TradesPageSchema,
 } from './schemas'
 
 // ─── Wallet / executor plumbing (mirrors keyspace) ──────────────────────────
 
-/** A single object change returned by an executed transaction. */
+/** A single object change returned by a legacy-shaped executed transaction. */
 export interface ObjectChange {
   type: string
   objectId?: string
@@ -33,24 +36,24 @@ export interface ObjectChange {
   [key: string]: unknown
 }
 
-/** Result of signing + executing a PTB. */
-export interface ExecuteResult {
-  digest: string
-  objectChanges?: ObjectChange[]
-  [key: string]: unknown
-}
-
 /**
  * Signs and submits a PTB. Delegated to the caller's wallet (browser) or a
- * keypair (bot). Must be configured with `showObjectChanges: true` so the SDK
- * can extract newly-created object IDs (e.g. a freshly-created balance manager).
+ * keypair (bot). Return the execution result as-is — the SDK normalizes both
+ * the v2 core-client `TransactionResult` (`signAndExecuteTransaction({
+ * transaction, signer, include: { effects: true, objectTypes: true } })`) and
+ * legacy `{ digest, objectChanges }` shapes, and surfaces on-chain failures
+ * as typed `TransactionFailed` errors. Include effects/objectTypes (v2) or
+ * objectChanges (legacy) so the SDK can capture created object ids.
  */
-export type TransactionExecutor = (tx: Transaction) => Promise<ExecuteResult>
+export type TransactionExecutor = (tx: Transaction) => Promise<unknown>
 
 /** Convenience shape returned by every mutating SDK method. */
 export interface TxResult {
   digest: string
-  objectChanges?: ObjectChange[]
+  /** Objects created by the transaction, when the executor surfaced them. */
+  createdObjects: { objectId: string; objectType: string }[]
+  /** The executor's untouched return value. */
+  raw: unknown
 }
 
 // ─── Networks & on-chain IDs ─────────────────────────────────────────────────
@@ -133,6 +136,9 @@ export type Fill = z.output<typeof FillSchema>
 export type FillsPage = z.output<typeof FillsPageSchema>
 export type Trade = z.output<typeof TradeSchema>
 export type TradesPage = z.output<typeof TradesPageSchema>
+export type SweepablePool = z.output<typeof SweepablePoolSchema>
+export type SweepableItem = z.output<typeof SweepableItemSchema>
+export type Sweepable = z.output<typeof SweepableSchema>
 
 /** Order book for one pool: resting orders (not aggregated price levels). */
 export interface Orderbook {
@@ -248,8 +254,14 @@ export interface WithdrawCurrencyParams {
 
 export interface WithdrawItemsParams {
   storageUnitId: string
-  characterId: string
-  items: { assetId: string; amount: bigint }[]
+  /**
+   * Each listed asset is withdrawn IN FULL (`withdraw_all_multicoin`) and
+   * redeemed into the hangar at the hub — partial item withdrawal is not part
+   * of the redeem flow (matches the app's sweep semantics).
+   */
+  items: { assetId: string }[]
+  /** Defaults to the on-chain character resolved from the client address. */
+  characterId?: string
 }
 
 export interface LimitOrderParams {
@@ -261,6 +273,15 @@ export interface LimitOrderParams {
   quantity: bigint
   /** Epoch milliseconds; defaults to good-til-cancelled (MAX_U64). */
   expireAt?: bigint
+  /** 0 = none (default), 1 = IOC, 2 = FOK, 3 = POST_ONLY. */
+  orderType?: number
+  /** 0 = allowed (default), 1 = cancel taker, 2 = cancel maker. */
+  selfMatchingOption?: number
+  /**
+   * Override the quote (CRED) amount deposited for a bid; defaults to
+   * `computeBidQuoteDeposit(price, quantity, feeRateScaled)`.
+   */
+  quoteDeposit?: bigint
 }
 
 export interface MarketOrderParams {
@@ -268,6 +289,34 @@ export interface MarketOrderParams {
   assetId: string
   side: OrderSide
   quantity: bigint
-  /** Required for market buys — the max CRED (base units) to spend. */
+  /**
+   * Required for market buys — worst-case CRED cost including taker fees,
+   * typically `estimateMarketBuyCost(book.asks, quantity, feeRateScaled)`.
+   * The SDK adds the app's per-fill rounding buffer on top.
+   */
   quoteBudget?: bigint
+  /** 0 = allowed (default), 1 = cancel taker, 2 = cancel maker. */
+  selfMatchingOption?: number
+}
+
+export interface CancelOrderParams {
+  storageUnitId: string
+  assetId: string
+  /** Pool-local order id (u64), from `orders.openOrders()` / discovery. */
+  orderId: bigint | string
+}
+
+export interface CancelAllOrdersParams {
+  storageUnitId: string
+  assetId: string
+}
+
+export interface ModifyOrderParams extends CancelOrderParams {
+  /** New quantity — must be less than original and more than filled. */
+  newQuantity: bigint
+}
+
+export interface ClaimSettledParams {
+  /** Pools to claim from; defaults to every pool the sweepable read reports. */
+  poolIds?: string[]
 }

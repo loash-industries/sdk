@@ -15,6 +15,7 @@ import type {
   PackageIds,
   PoolMetadata,
   ReadOnlyClientConfig,
+  Sweepable,
   TradeHubDetail,
   TradesPage,
   TradesParams,
@@ -119,5 +120,10 @@ export class ReadOnlyClient {
   /** #14 — trades for an explicit balance manager. */
   trades(balanceManagerId: string, params?: TradesParams): Promise<TradesPage> {
     return this.indexer.trades(balanceManagerId, params)
+  }
+
+  /** Claimable proceeds + idle BM items for an explicit balance manager. */
+  sweepable(balanceManagerId: string): Promise<Sweepable> {
+    return this.indexer.sweepable(balanceManagerId)
   }
 }

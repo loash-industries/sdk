@@ -11,6 +11,7 @@ import {
   OrderbookSchema,
   PoolMetadataSchema,
   PoolResolveSchema,
+  SweepableSchema,
   TradesPageSchema,
   parseWith,
 } from './schemas'
@@ -29,6 +30,7 @@ import type {
   OpenOrdersPage,
   Orderbook,
   PoolMetadata,
+  Sweepable,
   TradesPage,
   TradesParams,
 } from './types'
@@ -219,6 +221,18 @@ export class IndexerClient {
       },
     )
     return parseWith(FillsPageSchema, data, 'fills')
+  }
+
+  /**
+   * Everything claimable / withdrawable for a balance manager: per-pool
+   * settled proceeds + idle BM item balances. (BM-resident CRED is deliberately
+   * not in this manifest — read it via `balances.currency()`.)
+   */
+  async sweepable(balanceManagerId: string): Promise<Sweepable> {
+    const data = await this.get(
+      `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/sweepable`,
+    )
+    return parseWith(SweepableSchema, data, 'sweepable')
   }
 
   async trades(

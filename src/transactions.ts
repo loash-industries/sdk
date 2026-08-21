@@ -74,6 +74,21 @@ export function depositMulticoinObject(
 
 // ─── Withdrawals ─────────────────────────────────────────────────────────────
 
+/** `balance_manager::withdraw<T>(bm, amount)` → coin (partial withdraw). */
+export function withdrawCoin(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+  amount: bigint,
+  coinType: string = ids.credCoinType,
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triexbook}::balance_manager::withdraw`,
+    typeArguments: [coinType],
+    arguments: [bm, tx.pure.u64(amount)],
+  })
+}
+
 /** `balance_manager::withdraw_all<T>(bm)` → coin (transfer to self after). */
 export function withdrawAllCoin(
   tx: Transaction,
@@ -268,5 +283,107 @@ export function placeMarketOrderItem(
       tx.pure.bool(args.isBid),
       tx.object(ids.clock),
     ],
+  })
+}
+
+/**
+ * `multicoin_pool::cancel_order<Quote>(pool, bm, proof, orderId, clock)`.
+ * `orderId` is the pool-local order id (u64) as surfaced by open-orders /
+ * discovery reads — matches the app and TRIEX_SYSTEM_DESIGN §7.3.
+ */
+export function cancelOrderItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    poolId: string
+    bm: TransactionObjectArgument
+    proof: TransactionObjectArgument
+    orderId: bigint
+  },
+): void {
+  tx.moveCall({
+    target: `${ids.triexbook}::multicoin_pool::cancel_order`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(args.poolId),
+      args.bm,
+      args.proof,
+      tx.pure.u64(args.orderId),
+      tx.object(ids.clock),
+    ],
+  })
+}
+
+/** `multicoin_pool::cancel_all_orders<Quote>(pool, bm, proof, clock)`. */
+export function cancelAllOrdersItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    poolId: string
+    bm: TransactionObjectArgument
+    proof: TransactionObjectArgument
+  },
+): void {
+  tx.moveCall({
+    target: `${ids.triexbook}::multicoin_pool::cancel_all_orders`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(args.poolId),
+      args.bm,
+      args.proof,
+      tx.object(ids.clock),
+    ],
+  })
+}
+
+/**
+ * `multicoin_pool::modify_order<Quote>(pool, bm, proof, orderId, newQuantity, clock)`
+ * — reduce a resting order's quantity (newQuantity < original, > filled).
+ */
+export function modifyOrderItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    poolId: string
+    bm: TransactionObjectArgument
+    proof: TransactionObjectArgument
+    orderId: bigint
+    newQuantity: bigint
+  },
+): void {
+  tx.moveCall({
+    target: `${ids.triexbook}::multicoin_pool::modify_order`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(args.poolId),
+      args.bm,
+      args.proof,
+      tx.pure.u64(args.orderId),
+      tx.pure.u64(args.newQuantity),
+      tx.object(ids.clock),
+    ],
+  })
+}
+
+/**
+ * `multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` — claim
+ * settled (post-fill) proceeds from a pool into the balance manager. Fill
+ * proceeds sit "settled" in the pool until claimed; bots must call this (or
+ * `account.claimSettled`) before withdrawing.
+ */
+export function withdrawSettledAmounts(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    poolId: string
+    bm: TransactionObjectArgument
+    proof: TransactionObjectArgument
+    quoteCoinType?: string
+  },
+): void {
+  tx.moveCall({
+    target: `${ids.triexbook}::multicoin_pool::withdraw_settled_amounts`,
+    typeArguments: [args.quoteCoinType ?? ids.credCoinType],
+    arguments: [tx.object(args.poolId), args.bm, args.proof],
   })
 }

@@ -384,6 +384,75 @@ export const TradesPageSchema = z
   })
   .transform((v) => ({ trades: v.data, nextCursor: v.next_cursor }))
 
+// ─── Sweepable (claimable proceeds + idle BM items) ──────────────────────────
+
+export const SweepableBalancesSchema = z
+  .object({ base: bigintString, quote: bigintString, cred: bigintString })
+  .transform((v) => ({ base: v.base, quote: v.quote, cred: v.cred }))
+
+export const SweepablePoolSchema = z
+  .object({
+    pool_id: z.string(),
+    collection_id: z.string(),
+    asset_id: z.string(),
+    quote_asset_id: z.string().nullable(),
+    storage_unit_id: z.string(),
+    vault_config_id: z.string(),
+    settled: SweepableBalancesSchema,
+    owed: SweepableBalancesSchema,
+    open_order_count: z.number(),
+  })
+  .transform((v) => ({
+    poolId: v.pool_id,
+    collectionId: v.collection_id,
+    assetId: v.asset_id,
+    /** Quote coin type — the type argument for withdraw_settled_amounts. */
+    quoteAssetId: v.quote_asset_id,
+    storageUnitId: v.storage_unit_id,
+    vaultConfigId: v.vault_config_id,
+    /** Claimable into the balance manager. */
+    settled: v.settled,
+    /** Informational: currently owed by the account. */
+    owed: v.owed,
+    openOrderCount: v.open_order_count,
+  }))
+
+export const SweepableItemSchema = z
+  .object({
+    collection_id: z.string(),
+    asset_id: z.string(),
+    amount: bigintString,
+    storage_unit_id: z.string(),
+    vault_config_id: z.string(),
+  })
+  .transform((v) => ({
+    collectionId: v.collection_id,
+    assetId: v.asset_id,
+    amount: v.amount,
+    storageUnitId: v.storage_unit_id,
+    vaultConfigId: v.vault_config_id,
+  }))
+
+/**
+ * `GET /v1/balance-managers/{bm}/sweepable` — everything claimable /
+ * withdrawable: per-pool settled (post-fill) proceeds and idle item balances
+ * already sitting in the balance manager. Note: BM-resident CRED is
+ * deliberately NOT in this manifest — read it via `balances.currency()`.
+ */
+export const SweepableSchema = z
+  .object({
+    balance_manager_id: z.string(),
+    as_of_checkpoint: z.string().nullable(),
+    pools: z.array(SweepablePoolSchema),
+    items: z.array(SweepableItemSchema),
+  })
+  .transform((v) => ({
+    balanceManagerId: v.balance_manager_id,
+    asOfCheckpoint: v.as_of_checkpoint,
+    pools: v.pools,
+    items: v.items,
+  }))
+
 // ─── Parse helper ────────────────────────────────────────────────────────────
 
 /**

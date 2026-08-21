@@ -1,20 +1,51 @@
 import { Transaction } from '@mysten/sui/transactions'
+import type {
+  TransactionObjectArgument,
+  TransactionResult,
+} from '@mysten/sui/transactions'
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
-import { TriexClientError, TriexError, notImplemented } from './errors'
+import { TriexClientError, TriexError } from './errors'
+import { findCreatedObject, normalizeExecuteResult } from './execute'
+import type { NormalizedExecution } from './execute'
 import {
+  prepareWalletCoinInput,
+  sourceItemsIntoBalanceManager,
+} from './funding'
+import {
+  GTC_EXPIRE,
+  computeBidQuoteDeposit,
+  marketBuyRoundingBuffer,
+} from './money'
+import {
+  fetchCharacterInfo,
+  fetchSsuOwnerInfo,
   getBalanceManagerCurrencyBalance,
   getWalletCurrencyBalance,
+  toSsuObjectId,
 } from './onchain'
 import { IndexerClient } from './queries'
 import {
+  cancelAllOrdersItem,
+  cancelOrderItem,
+  depositCoin,
   generateProofAsOwner,
+  modifyOrderItem,
   newBalanceManager,
+  placeLimitOrderItem,
+  placeMarketOrderItem,
+  redeemReceipt,
   withdrawAllCoin,
+  withdrawAllMulticoin,
+  withdrawCoin,
+  withdrawSettledAmounts,
 } from './transactions'
 import type {
   BalancesAtHubParams,
+  CancelAllOrdersParams,
+  CancelOrderParams,
+  ClaimSettledParams,
   CurrencyBalances,
   DepositCurrencyParams,
   DepositItemsParams,
@@ -28,10 +59,12 @@ import type {
   InventoryBalances,
   LimitOrderParams,
   MarketOrderParams,
+  ModifyOrderParams,
   OpenOrdersPage,
   Orderbook,
   PackageIds,
   PoolMetadata,
+  Sweepable,
   TradeHubDetail,
   TradesPage,
   TradesParams,
@@ -51,9 +84,11 @@ import type {
  * as Sui PTBs and handed to the caller-supplied `executor` to sign. The API
  * surface is grouped: `account`, `balances`, `market`, `orders`.
  *
- * SCAFFOLD STATUS: the read surface (Phase 1) and `account.ensure` /
- * `withdrawCurrency` are implemented; deposits, item withdrawals, and order
- * placement land in Phases 2–3 (see DESIGN.md §9).
+ * Write flows mirror triex-app-api's production composition: the balance
+ * manager is created on demand INSIDE the same PTB as the first operation,
+ * deposits cover only the deficit (BM balance is consumed first), and every
+ * order is atomic — deposit + proof + place in one transaction that rolls
+ * back as a unit.
  */
 export class TriexClient {
   readonly suiClient: ClientWithCoreApi
@@ -117,7 +152,6 @@ export class TriexClient {
   async resolveBalanceManagerId(address: string): Promise<string | null> {
     if (this.cachedBalanceManagerId) return this.cachedBalanceManagerId
     const structType = `${this.ids.triexbook}::balance_manager::BalanceManager`
-    // Defensive: SuiClient `.core` surface varies by version; treat as best-effort.
     const core = (this.suiClient as any).core
     const page = await core.listOwnedObjects({
       owner: address,
@@ -129,10 +163,70 @@ export class TriexClient {
     return objectId ?? null
   }
 
-  /** @internal — pull the created BalanceManager id out of executor results. */
+  /** @internal */
   rememberBalanceManagerId(id: string): void {
     this.cachedBalanceManagerId = id
   }
+
+  /**
+   * @internal — start a write PTB against the balance manager, creating it in
+   * this same transaction when the player has none (the app's exact pattern).
+   */
+  async beginBmTx(owner: string): Promise<{
+    tx: Transaction
+    bm: TransactionObjectArgument
+    existingBmId: string | null
+  }> {
+    const existingBmId = await this.resolveBalanceManagerId(owner)
+    const tx = new Transaction()
+    const bm = existingBmId
+      ? tx.object(existingBmId)
+      : newBalanceManager(tx, this.ids)[0]
+    return { tx, bm, existingBmId }
+  }
+
+  /**
+   * @internal — finish a BM write: transfer a freshly-created BM to the owner,
+   * execute, capture the new BM id from objectChanges, and map to TxResult.
+   */
+  async finishBmTx(
+    tx: Transaction,
+    bm: TransactionObjectArgument,
+    existingBmId: string | null,
+    owner: string,
+  ): Promise<TxResult> {
+    if (!existingBmId) tx.transferObjects([bm as TransactionResult], owner)
+    const res = normalizeExecuteResult(await this.requireExecutor()(tx))
+    if (!existingBmId) {
+      const created = findCreatedBalanceManagerId(res)
+      if (created) this.rememberBalanceManagerId(created)
+    }
+    return toTxResult(res)
+  }
+
+  /** @internal — the player's BM id, or a typed error when none exists. */
+  async requireBalanceManagerId(owner: string): Promise<string> {
+    const id = await this.resolveBalanceManagerId(owner)
+    if (!id) {
+      throw new TriexClientError(
+        TriexError.BalanceManagerNotFound,
+        'No balance manager exists for this address yet.',
+      )
+    }
+    return id
+  }
+}
+
+/** @internal — pull the created BalanceManager id out of executor results. */
+function findCreatedBalanceManagerId(res: NormalizedExecution): string | null {
+  return (
+    findCreatedObject(res, '::balance_manager::BalanceManager')?.objectId ?? null
+  )
+}
+
+/** @internal */
+function toTxResult(res: NormalizedExecution): TxResult {
+  return { digest: res.digest, createdObjects: res.createdObjects, raw: res.raw }
 }
 
 // ─── account ─────────────────────────────────────────────────────────────────
@@ -157,66 +251,172 @@ class AccountApi {
     const tx = new Transaction()
     const bm = newBalanceManager(tx, this.c.ids)
     tx.transferObjects([bm], owner)
-    const res = await executor(tx)
+    const res = normalizeExecuteResult(await executor(tx))
 
-    const created = (res.objectChanges ?? []).find(
-      (ch) =>
-        ch.type === 'created' &&
-        typeof ch.objectType === 'string' &&
-        ch.objectType.includes('::balance_manager::BalanceManager'),
-    )
-    const id = created?.objectId
+    const id = findCreatedBalanceManagerId(res)
     if (!id) {
       throw new TriexClientError(
         TriexError.UnexpectedResponse,
-        'Balance manager created but no objectId found — ensure the executor sets showObjectChanges:true.',
+        'Balance manager created but no created-object info found — have the executor include effects+objectTypes (v2) or objectChanges (legacy).',
       )
     }
     this.c.rememberBalanceManagerId(id)
     return { balanceManagerId: id, created: true }
   }
 
-  /** #5 — deposit CRED currency from wallet into the balance manager. */
-  async depositCurrency(_params: DepositCurrencyParams): Promise<TxResult> {
-    // TODO(Phase 2): ensure BM → prepareWalletCoinInput (list/merge/split) →
-    // balance_manager::deposit<CRED> → execute.
-    return notImplemented('account.depositCurrency')
-  }
-
-  /** #4 — deposit items from hangar/SSU into the balance manager (§6.1). */
-  async depositItems(_params: DepositItemsParams): Promise<TxResult> {
-    // TODO(Phase 2): ensure BM → hubVault() → resolve character + owner caps →
-    // sourceItemsFromHangar → execute.
-    return notImplemented('account.depositItems')
-  }
-
-  /** #13 — withdraw all CRED from the balance manager back to the wallet. */
-  async withdrawCurrency(params?: WithdrawCurrencyParams): Promise<TxResult> {
-    const owner = this.c.requireAddress()
-    const balanceManagerId = await this.c.resolveBalanceManagerId(owner)
-    if (!balanceManagerId) {
+  /** #5 — deposit CRED from the wallet into the balance manager. */
+  async depositCurrency(params: DepositCurrencyParams): Promise<TxResult> {
+    if (params.amount <= 0n) {
       throw new TriexClientError(
-        TriexError.BalanceManagerNotFound,
-        'No balance manager to withdraw from.',
+        TriexError.ValidationFailed,
+        'Deposit amount must be positive.',
       )
     }
-    if (params?.amount !== undefined) {
-      // TODO(Phase 2): partial withdraw uses balance_manager::withdraw<T>(bm, amount).
-      return notImplemented('account.withdrawCurrency(amount)')
+    const owner = this.c.requireAddress()
+    this.c.requireExecutor()
+    const { tx, bm, existingBmId } = await this.c.beginBmTx(owner)
+    const coin = await prepareWalletCoinInput(
+      this.c.suiClient,
+      tx,
+      owner,
+      this.c.ids.credCoinType,
+      params.amount,
+      'Insufficient CRED in the wallet for this deposit.',
+    )
+    depositCoin(tx, this.c.ids, bm, coin)
+    return this.c.finishBmTx(tx, bm, existingBmId, owner)
+  }
+
+  /** #4 — deposit items (wallet receipts → hangar) into the balance manager. */
+  async depositItems(params: DepositItemsParams): Promise<TxResult> {
+    const owner = this.c.requireAddress()
+    this.c.requireExecutor()
+    const vault = await this.c.indexer.hubVault(params.storageUnitId)
+    const ssuObjectId = toSsuObjectId(params.storageUnitId)
+    const { tx, bm, existingBmId } = await this.c.beginBmTx(owner)
+    for (const item of params.items) {
+      await sourceItemsIntoBalanceManager(this.c.suiClient, tx, this.c.ids, bm, {
+        owner,
+        ssuObjectId,
+        vaultConfigId: vault.vaultConfigId,
+        vaultCollectionId: vault.collectionId,
+        assetId: BigInt(item.assetId),
+        amount: item.amount,
+        balanceManagerId: existingBmId,
+        deficitMode: false,
+      })
     }
+    return this.c.finishBmTx(tx, bm, existingBmId, owner)
+  }
+
+  /** #13 — withdraw CRED from the balance manager to the wallet. */
+  async withdrawCurrency(params?: WithdrawCurrencyParams): Promise<TxResult> {
+    const owner = this.c.requireAddress()
+    const balanceManagerId = await this.c.requireBalanceManagerId(owner)
     const executor = this.c.requireExecutor()
     const tx = new Transaction()
     const bm = tx.object(balanceManagerId)
-    const coin = withdrawAllCoin(tx, this.c.ids, bm)
+    const coin =
+      params?.amount !== undefined
+        ? withdrawCoin(tx, this.c.ids, bm, params.amount)
+        : withdrawAllCoin(tx, this.c.ids, bm)
     tx.transferObjects([coin], owner)
-    const res = await executor(tx)
-    return { digest: res.digest, objectChanges: res.objectChanges }
+    return toTxResult(normalizeExecuteResult(await executor(tx)))
   }
 
-  /** #12 — withdraw items from the balance manager back to a storage unit. */
-  async withdrawItems(_params: WithdrawItemsParams): Promise<TxResult> {
-    // TODO(Phase 2): withdraw_all_multicoin → receipt::redeem_receipt.
-    return notImplemented('account.withdrawItems')
+  /** #12 — withdraw items (in full) from the BM into the hangar at a hub. */
+  async withdrawItems(params: WithdrawItemsParams): Promise<TxResult> {
+    const owner = this.c.requireAddress()
+    const balanceManagerId = await this.c.requireBalanceManagerId(owner)
+    const executor = this.c.requireExecutor()
+    const vault = await this.c.indexer.hubVault(params.storageUnitId)
+    const ssuObjectId = toSsuObjectId(params.storageUnitId)
+
+    let characterId = params.characterId
+    if (!characterId) {
+      const info = await fetchCharacterInfo(this.c.suiClient, this.c.ids, owner)
+      if (!info) {
+        throw new TriexClientError(
+          TriexError.CharacterNotFound,
+          `No on-chain character resolved for ${owner} — pass characterId explicitly.`,
+        )
+      }
+      characterId = info.characterId
+    }
+    // `is_owner` selects OwnerCap<StorageUnit> vs OwnerCap<Character> in the
+    // redeem; true only when the player owns this hub.
+    const ssuOwner = await fetchSsuOwnerInfo(this.c.suiClient, ssuObjectId, owner)
+
+    const tx = new Transaction()
+    const bm = tx.object(balanceManagerId)
+    for (const item of params.items) {
+      const balance = withdrawAllMulticoin(
+        tx,
+        this.c.ids,
+        bm,
+        vault.collectionId,
+        BigInt(item.assetId),
+      )
+      redeemReceipt(tx, this.c.ids, balance, {
+        ssuObjectId,
+        characterId,
+        vaultConfigId: vault.vaultConfigId,
+        collectionId: vault.collectionId,
+        isOwner: ssuOwner !== null,
+      })
+    }
+    return toTxResult(normalizeExecuteResult(await executor(tx)))
+  }
+
+  /** Claimable proceeds + idle BM items (indexer manifest, lags by seconds). */
+  async sweepable(): Promise<Sweepable> {
+    const owner = this.c.requireAddress()
+    const balanceManagerId = await this.c.requireBalanceManagerId(owner)
+    return this.c.indexer.sweepable(balanceManagerId)
+  }
+
+  /**
+   * Claim settled (post-fill) proceeds from pools into the balance manager.
+   * Defaults to every pool the sweepable manifest reports as claimable; the
+   * proceeds then show up in `balances.currency()` / BM item balances and can
+   * be withdrawn.
+   */
+  async claimSettled(params?: ClaimSettledParams): Promise<TxResult> {
+    const owner = this.c.requireAddress()
+    const balanceManagerId = await this.c.requireBalanceManagerId(owner)
+    const executor = this.c.requireExecutor()
+
+    let pools: { poolId: string; quoteCoinType?: string }[]
+    if (params?.poolIds?.length) {
+      pools = params.poolIds.map((poolId) => ({ poolId }))
+    } else {
+      const manifest = await this.c.indexer.sweepable(balanceManagerId)
+      pools = manifest.pools
+        .filter(
+          (p) =>
+            p.settled.base > 0n || p.settled.quote > 0n || p.settled.cred > 0n,
+        )
+        .map((p) => ({ poolId: p.poolId, quoteCoinType: p.quoteAssetId ?? undefined }))
+    }
+    if (pools.length === 0) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'Nothing settled to claim — no pools with claimable balances.',
+      )
+    }
+
+    const tx = new Transaction()
+    const bm = tx.object(balanceManagerId)
+    const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
+    for (const pool of pools) {
+      withdrawSettledAmounts(tx, this.c.ids, {
+        poolId: pool.poolId,
+        bm,
+        proof,
+        quoteCoinType: pool.quoteCoinType,
+      })
+    }
+    return toTxResult(normalizeExecuteResult(await executor(tx)))
   }
 }
 
@@ -227,19 +427,26 @@ class BalancesApi {
 
   /**
    * #2 — hub-scoped ITEM balances (indexer). Defaults `address` to the client
-   * address and auto-fills `balanceManagerId` when one resolves, so warehouse
-   * + marketplace sections come back populated. Hangar contents additionally
-   * need `inventoryKey` (an owner_cap_id; automatic resolution lands in
-   * Phase 2).
+   * address and auto-fills `balanceManagerId` when one resolves. Pass
+   * `includeHangar: true` to also resolve the character's hangar slot
+   * (`inventoryKey`) on-chain when not supplied explicitly.
    */
-  async atHub(params: BalancesAtHubParams): Promise<InventoryBalances> {
+  async atHub(
+    params: BalancesAtHubParams & { includeHangar?: boolean },
+  ): Promise<InventoryBalances> {
     const address = params.address ?? this.c.requireAddress()
     const balanceManagerId =
       (await this.c.resolveBalanceManagerId(address)) ?? undefined
+    let inventoryKey = params.inventoryKey
+    if (!inventoryKey && params.includeHangar) {
+      const info = await fetchCharacterInfo(this.c.suiClient, this.c.ids, address)
+      inventoryKey = info?.ownerCapId
+    }
     return this.c.indexer.inventoryBalances({
       ...params,
       address,
       balanceManagerId,
+      inventoryKey,
     })
   }
 
@@ -336,45 +543,266 @@ class MarketApi {
 class OrdersApi {
   constructor(private readonly c: TriexClient) {}
 
-  /** #10 — place a limit buy/sell order (auto-ensures BM + deposits deficit). */
-  async limit(_params: LimitOrderParams): Promise<TxResult> {
-    // TODO(Phase 3): ensure BM → resolvePool + poolMetadata → compute deposit
-    // (money.ts) → deposit deficit (currency for buy / items for sell) →
-    // generateProofAsOwner → placeLimitOrderItem → execute (atomic PTB).
-    void generateProofAsOwner
-    return notImplemented('orders.limit')
+  /**
+   * #10 — place a limit order, atomically: [create BM if missing] → deposit
+   * only the deficit (items for sells, CRED+fee for bids; BM balance consumed
+   * first) → owner proof → place. Defaults to good-til-cancelled.
+   */
+  async limit(params: LimitOrderParams): Promise<TxResult> {
+    if (params.quantity <= 0n || params.price <= 0n) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'Limit orders need a positive price and quantity.',
+      )
+    }
+    const owner = this.c.requireAddress()
+    this.c.requireExecutor()
+    const isBid = params.side === 'buy'
+
+    const vault = await this.c.indexer.hubVault(params.storageUnitId)
+    const poolId = await this.requirePool(vault.collectionId, params)
+    const { tx, bm, existingBmId } = await this.c.beginBmTx(owner)
+
+    if (!isBid) {
+      await sourceItemsIntoBalanceManager(this.c.suiClient, tx, this.c.ids, bm, {
+        owner,
+        ssuObjectId: toSsuObjectId(params.storageUnitId),
+        vaultConfigId: vault.vaultConfigId,
+        vaultCollectionId: vault.collectionId,
+        assetId: BigInt(params.assetId),
+        amount: params.quantity,
+        balanceManagerId: existingBmId,
+        deficitMode: true,
+      })
+    } else {
+      let quoteAmount = params.quoteDeposit
+      if (quoteAmount === undefined) {
+        const meta = await this.c.indexer.poolMetadata(poolId)
+        quoteAmount = computeBidQuoteDeposit(
+          params.price,
+          params.quantity,
+          meta.feeRateScaled,
+        )
+      }
+      if (quoteAmount <= 0n) {
+        throw new TriexClientError(
+          TriexError.ValidationFailed,
+          'Invalid quote deposit amount.',
+        )
+      }
+      await this.depositQuoteDeficit(tx, bm, existingBmId, owner, quoteAmount)
+    }
+
+    const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
+    placeLimitOrderItem(tx, this.c.ids, {
+      poolId,
+      bm,
+      proof,
+      orderType: params.orderType ?? 0,
+      selfMatchingOption: params.selfMatchingOption ?? 0,
+      price: params.price,
+      quantity: params.quantity,
+      isBid,
+      expireTimestamp: params.expireAt ?? GTC_EXPIRE,
+    })
+    return this.c.finishBmTx(tx, bm, existingBmId, owner)
   }
 
-  /** #11 — place a market buy/sell order. */
-  async market(_params: MarketOrderParams): Promise<TxResult> {
-    // TODO(Phase 3): as limit() but placeMarketOrderItem; buys require quoteBudget.
-    return notImplemented('orders.market')
+  /**
+   * #11 — place a market order. Sells fund items like a limit sell; buys
+   * REQUIRE `quoteBudget` (worst-case cost incl. fees — see
+   * `estimateMarketBuyCost`), topped up with the app's per-fill rounding
+   * buffer. Unspent quote stays in the balance manager.
+   */
+  async market(params: MarketOrderParams): Promise<TxResult> {
+    if (params.quantity <= 0n) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'Market orders need a positive quantity.',
+      )
+    }
+    const owner = this.c.requireAddress()
+    this.c.requireExecutor()
+    const isBid = params.side === 'buy'
+
+    const vault = await this.c.indexer.hubVault(params.storageUnitId)
+    const poolId = await this.requirePool(vault.collectionId, params)
+    const { tx, bm, existingBmId } = await this.c.beginBmTx(owner)
+
+    if (!isBid) {
+      await sourceItemsIntoBalanceManager(this.c.suiClient, tx, this.c.ids, bm, {
+        owner,
+        ssuObjectId: toSsuObjectId(params.storageUnitId),
+        vaultConfigId: vault.vaultConfigId,
+        vaultCollectionId: vault.collectionId,
+        assetId: BigInt(params.assetId),
+        amount: params.quantity,
+        balanceManagerId: existingBmId,
+        deficitMode: true,
+      })
+    } else {
+      if (!params.quoteBudget || params.quoteBudget <= 0n) {
+        throw new TriexClientError(
+          TriexError.ValidationFailed,
+          'Market buys require `quoteBudget` (see estimateMarketBuyCost).',
+        )
+      }
+      const meta = await this.c.indexer.poolMetadata(poolId)
+      const effectiveQuote =
+        params.quoteBudget +
+        marketBuyRoundingBuffer(params.quantity, meta.feeRateScaled)
+      await this.depositQuoteDeficit(tx, bm, existingBmId, owner, effectiveQuote)
+    }
+
+    const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
+    placeMarketOrderItem(tx, this.c.ids, {
+      poolId,
+      bm,
+      proof,
+      quantity: params.quantity,
+      isBid,
+      selfMatchingOption: params.selfMatchingOption ?? 0,
+    })
+    return this.c.finishBmTx(tx, bm, existingBmId, owner)
   }
 
-  /** @internal */
-  private async requireBm(): Promise<string | null> {
-    return this.c.resolveBalanceManagerId(this.c.requireAddress())
+  /** Cancel one resting order (order id from `openOrders()` / discovery). */
+  async cancel(params: CancelOrderParams): Promise<TxResult> {
+    const { tx, bm, poolId, execute } = await this.beginCancelTx(params)
+    const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
+    cancelOrderItem(tx, this.c.ids, {
+      poolId,
+      bm,
+      proof,
+      orderId: BigInt(params.orderId),
+    })
+    return execute()
+  }
+
+  /** Cancel every resting order on one pool. */
+  async cancelAll(params: CancelAllOrdersParams): Promise<TxResult> {
+    const { tx, bm, poolId, execute } = await this.beginCancelTx(params)
+    const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
+    cancelAllOrdersItem(tx, this.c.ids, { poolId, bm, proof })
+    return execute()
+  }
+
+  /** Reduce a resting order's quantity (must stay below the original). */
+  async modify(params: ModifyOrderParams): Promise<TxResult> {
+    if (params.newQuantity <= 0n) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'Modified quantity must be positive.',
+      )
+    }
+    const { tx, bm, poolId, execute } = await this.beginCancelTx(params)
+    const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
+    modifyOrderItem(tx, this.c.ids, {
+      poolId,
+      bm,
+      proof,
+      orderId: BigInt(params.orderId),
+      newQuantity: params.newQuantity,
+    })
+    return execute()
   }
 
   /** #14 — the player's open orders (empty page when no BM exists yet). */
   async openOrders(params?: HistoryPageParams): Promise<OpenOrdersPage> {
-    const bm = await this.requireBm()
+    const bm = await this.ownBm()
     if (!bm) return { orders: [], nextCursor: null }
     return this.c.indexer.openOrders(bm, params)
   }
 
   /** #14 — the player's fills. */
   async fills(params?: FillsParams): Promise<FillsPage> {
-    const bm = await this.requireBm()
+    const bm = await this.ownBm()
     if (!bm) return { fills: [], nextCursor: null }
     return this.c.indexer.fills(bm, params)
   }
 
   /** #14 — the player's trades. */
   async trades(params?: TradesParams): Promise<TradesPage> {
-    const bm = await this.requireBm()
+    const bm = await this.ownBm()
     if (!bm) return { trades: [], nextCursor: null }
     return this.c.indexer.trades(bm, params)
+  }
+
+  // ─── internals ─────────────────────────────────────────────────────────────
+
+  private ownBm(): Promise<string | null> {
+    return this.c.resolveBalanceManagerId(this.c.requireAddress())
+  }
+
+  private async requirePool(
+    collectionId: string,
+    params: { storageUnitId: string; assetId: string },
+  ): Promise<string> {
+    const poolId = await this.c.indexer.resolvePool({
+      collectionId,
+      assetId: params.assetId,
+    })
+    if (!poolId) {
+      throw new TriexClientError(
+        TriexError.PoolNotFound,
+        `No pool for item ${params.assetId} at hub ${params.storageUnitId}.`,
+      )
+    }
+    return poolId
+  }
+
+  /** Deposit only the CRED the BM is short of `target` (BM balance first). */
+  private async depositQuoteDeficit(
+    tx: Transaction,
+    bm: TransactionObjectArgument,
+    existingBmId: string | null,
+    owner: string,
+    target: bigint,
+  ): Promise<void> {
+    const bmBalance = existingBmId
+      ? await getBalanceManagerCurrencyBalance(
+          this.c.suiClient,
+          this.c.ids,
+          existingBmId,
+        )
+      : 0n
+    const deficit = target > bmBalance ? target - bmBalance : 0n
+    if (deficit === 0n) return
+    const coin = await prepareWalletCoinInput(
+      this.c.suiClient,
+      tx,
+      owner,
+      this.c.ids.credCoinType,
+      deficit,
+      'Insufficient CRED to fund the balance manager for this order.',
+    )
+    depositCoin(tx, this.c.ids, bm, coin)
+  }
+
+  /** Cancels/modifies need an EXISTING balance manager and a resolved pool. */
+  private async beginCancelTx(params: {
+    storageUnitId: string
+    assetId: string
+  }): Promise<{
+    tx: Transaction
+    bm: TransactionObjectArgument
+    poolId: string
+    execute: () => Promise<TxResult>
+  }> {
+    const owner = this.c.requireAddress()
+    const balanceManagerId = await this.c.requireBalanceManagerId(owner)
+    const executor = this.c.requireExecutor()
+    const vault = await this.c.indexer.hubVault(params.storageUnitId)
+    const poolId = await this.requirePool(vault.collectionId, params)
+    const tx = new Transaction()
+    const bm = tx.object(balanceManagerId)
+    return {
+      tx,
+      bm,
+      poolId,
+      execute: async () =>
+        toTxResult(normalizeExecuteResult(await executor(tx))),
+    }
   }
 }
 

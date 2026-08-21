@@ -21,6 +21,9 @@ export const MULTICOIN_PRICE_SCALING = 1n
  */
 export const FEE_RATE_SCALING = 1_000_000_000n
 
+/** Good-til-cancelled expiry sentinel (MAX_U64) — the default order expiry. */
+export const GTC_EXPIRE = 18446744073709551615n
+
 /** Convert a human decimal string/number to base units given `decimals`. */
 export function toBase(human: string | number, decimals: number): bigint {
   const s = typeof human === 'number' ? human.toString() : human.trim()
@@ -73,4 +76,42 @@ export function computeBidQuoteDeposit(
 ): bigint {
   const quote = computeItemQuote(price, quantity)
   return (quote * (FEE_RATE_SCALING + feeRateScaled)) / FEE_RATE_SCALING
+}
+
+/**
+ * Per-fill rounding buffer for market buys: on-chain fees floor per fill
+ * while client estimates round on the total, so the on-chain cost can exceed
+ * the estimate by up to `quantity × feeRate` units (+2 slack) — the app's
+ * exact buffer, converted to the 1e9 fee scale.
+ */
+export function marketBuyRoundingBuffer(
+  quantity: bigint,
+  feeRateScaled: bigint,
+): bigint {
+  return (quantity * feeRateScaled) / FEE_RATE_SCALING + 2n
+}
+
+/**
+ * Walk the asks (lowest price first) and estimate the worst-case quote cost of
+ * a market buy for `quantity` items, including the taker fee. `fillable` is
+ * how much the current book can satisfy — when it is below `quantity`, the
+ * remainder has no resting liquidity and `total` covers only the fillable part.
+ * Feed `total` (or your own bound) to `orders.market` as `quoteBudget`.
+ */
+export function estimateMarketBuyCost(
+  asks: ReadonlyArray<{ price: bigint; remainingQuantity: bigint }>,
+  quantity: bigint,
+  feeRateScaled: bigint,
+): { quote: bigint; fee: bigint; total: bigint; fillable: bigint } {
+  let needed = quantity
+  let quote = 0n
+  for (const level of asks) {
+    if (needed <= 0n) break
+    const take =
+      level.remainingQuantity < needed ? level.remainingQuantity : needed
+    quote += take * level.price
+    needed -= take
+  }
+  const fee = (quote * feeRateScaled) / FEE_RATE_SCALING
+  return { quote, fee, total: quote + fee, fillable: quantity - needed }
 }

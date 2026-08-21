@@ -9,7 +9,7 @@ export type {
 export { ReadOnlyClient } from './ReadOnlyClient'
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
-export { TriexError, TriexClientError } from './errors'
+export { TriexError, TriexClientError, explainMoveAbort } from './errors'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 export {
@@ -26,9 +26,12 @@ export {
   fromBase,
   computeItemQuote,
   computeBidQuoteDeposit,
+  estimateMarketBuyCost,
+  marketBuyRoundingBuffer,
   TRIEXBOOK_PRICE_SCALING,
   MULTICOIN_PRICE_SCALING,
   FEE_RATE_SCALING,
+  GTC_EXPIRE,
 } from './money'
 
 // ─── Low-level building blocks (for advanced callers) ────────────────────────
@@ -37,7 +40,21 @@ export * as transactions from './transactions'
 export {
   getWalletCurrencyBalance,
   getBalanceManagerCurrencyBalance,
+  getBalanceManagerItemBalance,
+  getRegistryMulticoinCollectionId,
+  findOwnedItemReceipts,
+  fetchCharacterInfo,
+  fetchSsuOwnerInfo,
+  fetchInventorySlotQuantity,
+  toSsuObjectId,
+  getObjectRef,
 } from './onchain'
+export {
+  prepareWalletCoinInput,
+  sourceItemsIntoBalanceManager,
+} from './funding'
+export { normalizeExecuteResult, findCreatedObject } from './execute'
+export type { NormalizedExecution, CreatedObject } from './execute'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type {
@@ -46,7 +63,6 @@ export type {
   TriexClientConfig,
   ReadOnlyClientConfig,
   TransactionExecutor,
-  ExecuteResult,
   ObjectChange,
   TxResult,
   OrderSide,
@@ -76,6 +92,9 @@ export type {
   HistoryPageParams,
   FillsParams,
   TradesParams,
+  Sweepable,
+  SweepablePool,
+  SweepableItem,
   EnsureAccountResult,
   DepositCurrencyParams,
   DepositItemsParams,
@@ -83,4 +102,9 @@ export type {
   WithdrawItemsParams,
   LimitOrderParams,
   MarketOrderParams,
+  CancelOrderParams,
+  CancelAllOrdersParams,
+  ModifyOrderParams,
+  ClaimSettledParams,
 } from './types'
+export type { OwnedItemReceipt, CharacterInfo, SsuOwnerInfo, ObjectRef } from './onchain'

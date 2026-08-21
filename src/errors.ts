@@ -12,10 +12,15 @@ export enum TriexError {
   IndexerError = 'TRIEX_INDEXER_ERROR',
   /** The indexer response did not match the expected schema. */
   UnexpectedResponse = 'TRIEX_UNEXPECTED_RESPONSE',
-  /** Local input validation (zod) failed. */
+  /** Local input validation failed. */
   ValidationFailed = 'TRIEX_VALIDATION_FAILED',
   /** Not enough wallet / hangar / balance-manager funds to build the PTB. */
   InsufficientBalance = 'TRIEX_INSUFFICIENT_BALANCE',
+  /**
+   * Owned item receipts exist but in a different MultiCoin collection than
+   * the market trades (wrong deployment/network, or re-initialized registry).
+   */
+  CollectionMismatch = 'TRIEX_COLLECTION_MISMATCH',
   /** No balance manager found for the player (and one was expected). */
   BalanceManagerNotFound = 'TRIEX_BALANCE_MANAGER_NOT_FOUND',
   /** No pool exists for the requested item + storage unit. */
@@ -24,6 +29,8 @@ export enum TriexError {
   HubNotFound = 'TRIEX_HUB_NOT_FOUND',
   /** The player's on-chain character could not be resolved. */
   CharacterNotFound = 'TRIEX_CHARACTER_NOT_FOUND',
+  /** The transaction executed but failed (aborted) on-chain. */
+  TransactionFailed = 'TRIEX_TRANSACTION_FAILED',
   /** Placeholder — the code path is scaffolded but not yet implemented. */
   NotImplemented = 'TRIEX_NOT_IMPLEMENTED',
 }
@@ -56,4 +63,54 @@ export function notImplemented(what: string): never {
     TriexError.NotImplemented,
     `${what} is not implemented yet (scaffold).`,
   )
+}
+
+// ─── On-chain abort translation ──────────────────────────────────────────────
+
+/**
+ * Known triexbook Move abort codes → developer-facing explanations, keyed by
+ * `module::code` (TRIEX_SYSTEM_DESIGN §11 — Transaction Abort Codes).
+ */
+const MOVE_ABORTS: Record<string, string> = {
+  'pool::12': 'Slippage too high — the order price moved (EMinimumQuantityOutNotMet)',
+  'book::2': 'No liquidity available (EEmptyOrderbook)',
+  'order_info::5':
+    'POST-ONLY order would cross the book — use a plain limit order (EPOSTOrderCrossesOrderbook)',
+  'order_info::6':
+    'Not enough liquidity to fully fill a FOK order (EFOKOrderCannotBeFullyFilled)',
+  'order_info::8': 'Self-match would cancel your order (ESelfMatchingCancelTaker)',
+  'balance_manager::3':
+    'Balance manager holds insufficient currency — deposit more (EBalanceManagerBalanceTooLow)',
+  'balance_manager::7':
+    'Balance manager holds insufficient items (EMultiCoinBalanceTooLow)',
+  'state::2': 'Max 100 open orders per balance manager per pool reached (EMaxOpenOrders)',
+  'book::7':
+    'Modified quantity must be less than the original (ENewQuantityMustBeLessThanOriginal)',
+  'book::8': 'Order not found — already filled or canceled? (EBookOrderNotFound)',
+  'order_info::4': 'Invalid order restriction value (EInvalidOrderType)',
+  'order_info::0': 'Price out of valid range (EOrderInvalidPrice)',
+  'order_info::3': 'Expire timestamp is in the past (EInvalidExpireTimestamp)',
+}
+
+/**
+ * Translate a raw Sui execution error into a developer-readable explanation of
+ * the triexbook abort, or null when the error is not a recognized Move abort.
+ * Feed it anything: the thrown error, `effects.status.error`, or a string.
+ */
+export function explainMoveAbort(error: unknown): string | null {
+  const text =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : JSON.stringify(error ?? '')
+  // Matches both `MoveAbort(MoveLocation { … name: Identifier("book") … }, 2)`
+  // (quotes possibly backslash-escaped inside JSON-stringified errors) and
+  // compact `…::book::…, 2)` / `abort_code: 2 … module … book` renderings.
+  const m =
+    /Identifier\(\\*"([a-z_]+)\\*"\)[\s\S]*?},?\s*(\d+)\)/.exec(text) ??
+    /::([a-z_]+)::[a-z_]+[^,]*,\s*abort code:?\s*(\d+)/i.exec(text) ??
+    /module:?\s*'?"?([a-z_]+)'?"?[\s\S]*?abort_code:?\s*"?(\d+)"?/i.exec(text)
+  if (!m) return null
+  return MOVE_ABORTS[`${m[1]}::${m[2]}`] ?? null
 }
