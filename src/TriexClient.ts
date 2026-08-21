@@ -3,6 +3,10 @@ import type { ClientWithCoreApi } from '@mysten/sui/client'
 
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError, notImplemented } from './errors'
+import {
+  getBalanceManagerCurrencyBalance,
+  getWalletCurrencyBalance,
+} from './onchain'
 import { IndexerClient } from './queries'
 import {
   generateProofAsOwner,
@@ -10,24 +14,31 @@ import {
   withdrawAllCoin,
 } from './transactions'
 import type {
-  CharacterBalances,
+  BalancesAtHubParams,
+  CurrencyBalances,
+  DepositCurrencyParams,
+  DepositItemsParams,
+  DiscoveryFilters,
   DiscoveryResult,
   EnsureAccountResult,
-  Fill,
-  HubItemListing,
+  FillsPage,
+  FillsParams,
+  HistoryPageParams,
+  HubItemsPage,
+  InventoryBalances,
   LimitOrderParams,
   MarketOrderParams,
-  OpenOrder,
+  OpenOrdersPage,
   Orderbook,
   PackageIds,
-  Trade,
+  PoolMetadata,
   TradeHubDetail,
+  TradesPage,
+  TradesParams,
   TradingAccount,
   TransactionExecutor,
   TriexClientConfig,
   TxResult,
-  DepositCurrencyParams,
-  DepositItemsParams,
   WithdrawCurrencyParams,
   WithdrawItemsParams,
 } from './types'
@@ -35,13 +46,14 @@ import type {
 /**
  * High-level, full-featured trading client for Trinary Exchange.
  *
- * Reads go through the indexer (`api.trinary.exchange`, `x-api-key`); writes are
- * built as Sui PTBs and handed to the caller-supplied `executor` to sign. The
- * API surface is grouped: `account`, `balances`, `market`, `orders`.
+ * Reads go through the indexer (`api.trinary.exchange`, `x-api-key`) except
+ * currency balances, which are head-current fullnode reads; writes are built
+ * as Sui PTBs and handed to the caller-supplied `executor` to sign. The API
+ * surface is grouped: `account`, `balances`, `market`, `orders`.
  *
- * SCAFFOLD STATUS: read delegation + `account.ensure`/`withdrawCurrency` are
- * wired; the remaining write orchestration (deposits, item withdraws, orders)
- * is stubbed with `notImplemented()` and lands in Phases 2–3 (see DESIGN.md).
+ * SCAFFOLD STATUS: the read surface (Phase 1) and `account.ensure` /
+ * `withdrawCurrency` are implemented; deposits, item withdrawals, and order
+ * placement land in Phases 2–3 (see DESIGN.md §9).
  */
 export class TriexClient {
   readonly suiClient: ClientWithCoreApi
@@ -49,7 +61,7 @@ export class TriexClient {
   readonly indexer: IndexerClient
   private readonly executor?: TransactionExecutor
   private readonly address?: string
-  /** Read-your-writes cache for the resolved balance manager id (see §13). */
+  /** Read-your-writes cache for the resolved balance manager id (see §12). */
   private cachedBalanceManagerId?: string
 
   readonly account: AccountApi
@@ -98,7 +110,7 @@ export class TriexClient {
 
   /**
    * Resolve the player's balance manager id. On-chain first (authoritative,
-   * head-current — avoids the indexer-lag double-create race, DESIGN.md §13),
+   * head-current — avoids the indexer-lag double-create race, DESIGN.md §12),
    * with an in-client cache for read-your-writes.
    * @internal
    */
@@ -213,9 +225,43 @@ class AccountApi {
 class BalancesApi {
   constructor(private readonly c: TriexClient) {}
 
-  /** #2/#3 — item + currency balances for a character. */
-  forCharacter(characterId: string): Promise<CharacterBalances> {
-    return this.c.indexer.characterBalances(characterId)
+  /**
+   * #2 — hub-scoped ITEM balances (indexer). Defaults `address` to the client
+   * address and auto-fills `balanceManagerId` when one resolves, so warehouse
+   * + marketplace sections come back populated. Hangar contents additionally
+   * need `inventoryKey` (an owner_cap_id; automatic resolution lands in
+   * Phase 2).
+   */
+  async atHub(params: BalancesAtHubParams): Promise<InventoryBalances> {
+    const address = params.address ?? this.c.requireAddress()
+    const balanceManagerId =
+      (await this.c.resolveBalanceManagerId(address)) ?? undefined
+    return this.c.indexer.inventoryBalances({
+      ...params,
+      address,
+      balanceManagerId,
+    })
+  }
+
+  /**
+   * #3 — CRED balances (wallet + balance manager), read from the FULLNODE:
+   * the indexer's inventory endpoint serves items only, and currency values
+   * feed write-flow deficit math, which must be head-current (§12).
+   */
+  async currency(address?: string): Promise<CurrencyBalances> {
+    const owner = this.c.requireAddress(address)
+    const [wallet, balanceManagerId] = await Promise.all([
+      getWalletCurrencyBalance(this.c.suiClient, owner, this.c.ids.credCoinType),
+      this.c.resolveBalanceManagerId(owner),
+    ])
+    const balanceManager = balanceManagerId
+      ? await getBalanceManagerCurrencyBalance(
+          this.c.suiClient,
+          this.c.ids,
+          balanceManagerId,
+        )
+      : 0n
+    return { wallet, balanceManager, balanceManagerId }
   }
 }
 
@@ -224,37 +270,64 @@ class BalancesApi {
 class MarketApi {
   constructor(private readonly c: TriexClient) {}
 
-  /** #6 — discover items with live orders across the universe. */
-  discover(filters?: {
-    typeId?: string
-    hubId?: string
-    side?: 'buy' | 'sell'
-    cursor?: string
-    limit?: number
-  }): Promise<DiscoveryResult> {
+  /** #6 — discover open orders across the universe (most recent first). */
+  discover(filters?: DiscoveryFilters): Promise<DiscoveryResult> {
     return this.c.indexer.discovery(filters)
   }
 
-  /** #7 — trade-hub details. */
-  hub(hubId: string): Promise<TradeHubDetail> {
-    return this.c.indexer.hub(hubId)
+  /** #7 — trade-hub detail: vault descriptor + location (null if unrevealed). */
+  async hub(hubId: string): Promise<TradeHubDetail> {
+    const [vault, location] = await Promise.all([
+      this.c.indexer.hubVault(hubId),
+      this.c.indexer.hubLocation(hubId),
+    ])
+    return {
+      hubId: vault.hubId,
+      collectionId: vault.collectionId,
+      vaultConfigId: vault.vaultConfigId,
+      location,
+    }
   }
 
-  /** #8 — items with live orders at a storage unit. */
-  itemsAtHub(hubId: string): Promise<HubItemListing[]> {
-    return this.c.indexer.itemsAtHub(hubId)
+  /** #8 — items with open orders at a trade hub. */
+  itemsAtHub(hubId: string): Promise<HubItemsPage> {
+    return this.c.indexer.hubItems(hubId)
   }
 
-  /** #9 — order book for one item at a storage unit (resolves pool first). */
+  /**
+   * #9a — resolve the pool for an item at a trade hub (hub → vault collection
+   * → pool). Throws `PoolNotFound` when no market exists for the pair.
+   */
+  async resolvePool(params: {
+    storageUnitId: string
+    assetId: string
+  }): Promise<string> {
+    const vault = await this.c.indexer.hubVault(params.storageUnitId)
+    const poolId = await this.c.indexer.resolvePool({
+      collectionId: vault.collectionId,
+      assetId: params.assetId,
+    })
+    if (!poolId) {
+      throw new TriexClientError(
+        TriexError.PoolNotFound,
+        `No pool for item ${params.assetId} at hub ${params.storageUnitId}.`,
+      )
+    }
+    return poolId
+  }
+
+  /** #9 — order book for one item at a trade hub. */
   async orderbook(params: {
     storageUnitId: string
-    typeId: string
+    assetId: string
   }): Promise<Orderbook> {
-    const poolId = await this.c.indexer.resolvePool(
-      params.storageUnitId,
-      params.typeId,
-    )
+    const poolId = await this.resolvePool(params)
     return this.c.indexer.orderbook(poolId)
+  }
+
+  /** #10/#11 — pool metadata (decimals, fee rate, hub linkage). */
+  poolMetadata(poolId: string): Promise<PoolMetadata> {
+    return this.c.indexer.poolMetadata(poolId)
   }
 }
 
@@ -278,25 +351,30 @@ class OrdersApi {
     return notImplemented('orders.market')
   }
 
-  /** #14 — the player's open orders. */
-  async openOrders(): Promise<OpenOrder[]> {
-    const bm = await this.c.resolveBalanceManagerId(this.c.requireAddress())
-    if (!bm) return []
-    return this.c.indexer.openOrders(bm)
+  /** @internal */
+  private async requireBm(): Promise<string | null> {
+    return this.c.resolveBalanceManagerId(this.c.requireAddress())
+  }
+
+  /** #14 — the player's open orders (empty page when no BM exists yet). */
+  async openOrders(params?: HistoryPageParams): Promise<OpenOrdersPage> {
+    const bm = await this.requireBm()
+    if (!bm) return { orders: [], nextCursor: null }
+    return this.c.indexer.openOrders(bm, params)
   }
 
   /** #14 — the player's fills. */
-  async fills(): Promise<Fill[]> {
-    const bm = await this.c.resolveBalanceManagerId(this.c.requireAddress())
-    if (!bm) return []
-    return this.c.indexer.fills(bm)
+  async fills(params?: FillsParams): Promise<FillsPage> {
+    const bm = await this.requireBm()
+    if (!bm) return { fills: [], nextCursor: null }
+    return this.c.indexer.fills(bm, params)
   }
 
   /** #14 — the player's trades. */
-  async trades(): Promise<Trade[]> {
-    const bm = await this.c.resolveBalanceManagerId(this.c.requireAddress())
-    if (!bm) return []
-    return this.c.indexer.trades(bm)
+  async trades(params?: TradesParams): Promise<TradesPage> {
+    const bm = await this.requireBm()
+    if (!bm) return { trades: [], nextCursor: null }
+    return this.c.indexer.trades(bm, params)
   }
 }
 

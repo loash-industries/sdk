@@ -33,6 +33,8 @@ export class TriexClientError extends Error {
     public readonly code: TriexError,
     message: string,
     public readonly cause?: unknown,
+    /** HTTP status for `IndexerError`s, when the failure was an HTTP response. */
+    public readonly status?: number,
   ) {
     super(message)
     this.name = 'TriexClientError'

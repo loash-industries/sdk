@@ -1,6 +1,7 @@
 # `@trinaryex/sdk` — Trinary Exchange Trading SDK
 
-**Status:** Draft / system design (pre-implementation). Open questions resolved 2026-08-15.
+**Status:** Phases 0–1 complete (2026-08-21): gateway routes live, read core implemented
+against pinned schemas (RQ-1/RQ-4 resolved). Open questions resolved 2026-08-15.
 **Package:** `@trinaryex/sdk` (repo: `sdk/`) — an umbrella SDK; the trading surface is the
 first module, with room to grow into a higher-level, full-featured client.
 **Audience:** players and bots trading on Trinary Exchange via an API key.
@@ -47,32 +48,36 @@ The SDK gives a player/bot one object to:
 
 ## 2. MVP scope → endpoint / transaction map
 
-Each user story below is tagged **READ** (indexer) or **WRITE** (on-chain PTB). The
-"Gateway" column is the **current** state in `dynamic-config-registry/gateway-routes/etl-api.json`.
+Each user story below is tagged **READ** (indexer or fullnode) or **WRITE** (on-chain PTB).
+The "Gateway" column is the **current** state in
+`dynamic-config-registry/gateway-routes/etl-api.json` (as of 2026-08-21).
 
 | # | User story | Plane | Indexer endpoint / Move entrypoint | Gateway today |
 |---|---|---|---|---|
-| 1 | Create trading account **iff** none exists (balance manager) | READ+WRITE | READ `GET /v1/inventory/balance-manager` to check → WRITE `balance_manager::new()` (+ `transferObjects` to self) | **disabled** (read) |
-| 2 | Fetch item balances for character | READ | `GET /v1/inventory/balances` (character hangar/wallet + BM item balances) | **disabled** |
-| 3 | Fetch trade-currency (CRED) balance for character | READ | `GET /v1/inventory/balances` (wallet CRED + BM CRED balance) | **disabled** |
-| 4 | Deposit items from hangar → trading account | READ+WRITE | READ `GET /v1/hubs/{hub_id}/vault` (vaultConfigId + collectionId) + on-chain owner-cap/char resolution → WRITE the **direct-from-hangar sequence** (borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap → balance_manager::deposit_multicoin); see §6.1 | **disabled** (read) |
+| 1 | Create trading account **iff** none exists (balance manager) | READ+WRITE | READ on-chain `listOwnedObjects` (authoritative; `GET /v1/inventory/balance-manager` stays disabled) → WRITE `balance_manager::new()` (+ `transferObjects` to self) | n/a (on-chain read) |
+| 2 | Fetch item balances | READ | `GET /v1/inventory/balances` — **hub-scoped** (`storage_unit_id` required): warehouse (wallet receipts, by `owner_address`), marketplace (BM, by `balance_manager_id`), hangar (by `inventory_key` owner-cap id) | **enabled** (50 CU) |
+| 3 | Fetch trade-currency (CRED) balance | READ | **fullnode** — wallet coins (`listCoins`) + BM `BalanceKey<CRED>` dynamic field; the indexer inventory endpoint serves *items only* | n/a (fullnode) |
+| 4 | Deposit items from hangar → trading account | READ+WRITE | READ `GET /v1/hubs/{hub_id}/vault` (vaultConfigId + collectionId) + on-chain owner-cap/char resolution → WRITE the **direct-from-hangar sequence** (borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap → balance_manager::deposit_multicoin); see §6.1 | **enabled** (vault) |
 | 5 | Deposit currency → trading account | WRITE | `balance_manager::deposit<CRED>` (wallet coin selected/merged/split) | n/a (on-chain) |
-| 6 | Discover items with live buy/sell orders across the universe | READ | `GET /v1/discovery` — **open orders sorted by recency**, with filters (item/hub/side/etc.) | **enabled** |
-| 7 | Fetch trade-hub details (public/private, owner, tribe, fuel) | READ | `GET /v1/hubs/{hub_id}/vault` + `GET /v1/hubs/{hub_id}/location` (+ `GET /v1/collections/{collection_id}/hub`) | **disabled** |
-| 8 | Fetch items with buy/sell orders at a specific storage unit | READ | `GET /v1/hubs/{hub_id}/items` | **disabled** |
-| 9 | Fetch order book for one item at that storage unit | READ | resolve: `GET /v1/pools/resolve` (item+SSU → poolId) → `GET /v1/pools/{pool_id}/orderbook` | **disabled** |
-| 10 | Create **limit** buy/sell order | READ+WRITE | READ `GET /v1/pools/resolve` + `GET /v1/pools/{pool_id}/metadata` → WRITE `multicoin_pool::place_limit_order<Quote>` + deposit deficit | **disabled** (reads) |
-| 11 | Create **market** buy/sell order | READ+WRITE | as #10 but `multicoin_pool::place_market_order<Quote>` (no price/expiry) | **disabled** (reads) |
-| 14 | Read own open orders / fills / trades (bots) | READ | `GET /v1/balance-managers/{bm}/open-orders`, `/fills`, `/trades` | **disabled** |
+| 6 | Discover items with live buy/sell orders across the universe | READ | `GET /v1/discovery` — **open orders sorted by recency**, with filters (hubs/item/side/bm/public) | **enabled** (150 CU) |
+| 7 | Fetch trade-hub details (public/private, owner, location) | READ | `GET /v1/hubs/{hub_id}/vault` + `GET /v1/hubs/{hub_id}/location` (+ `GET /v1/collections/{collection_id}/hub` reverse lookup). `/location` **404s semantically** for unrevealed hubs (most of them) → `TradeHubDetail.location` is nullable. Tribe/fuel are NOT in these responses (post-MVP: hubs economics/enriched routes) | **enabled** |
+| 8 | Fetch items with buy/sell orders at a specific storage unit | READ | `GET /v1/hubs/{hub_id}/items` (`has_bids`/`has_asks` flags) | **enabled** |
+| 9 | Fetch order book for one item at that storage unit | READ | `GET /v1/hubs/{hub_id}/vault` → `GET /v1/pools/resolve` (**`collection_id`+`asset_id`**, not hub+item) → `GET /v1/pools/{pool_id}/orderbook` (returns resting **orders**, not levels) | **enabled** |
+| 10 | Create **limit** buy/sell order | READ+WRITE | READ resolve chain + `GET /v1/pools/{pool_id}/metadata` (fee is 1e9-scaled `fee`, not bps) → WRITE `multicoin_pool::place_limit_order<Quote>` + deposit deficit | **enabled** (reads) |
+| 11 | Create **market** buy/sell order | READ+WRITE | as #10 but `multicoin_pool::place_market_order<Quote>` (no price/expiry) | **enabled** (reads) |
+| 14 | Read own open orders / fills / trades (bots) | READ | `GET /v1/balance-managers/{bm}/open-orders`, `/fills`, `/trades` (epoch-ms `before`/`after` paging) | **enabled** |
 | 12 | Withdraw items from BM → storage unit | WRITE | `balance_manager::withdraw_all_multicoin` → `receipt::redeem_receipt(...ssu, character...)` | n/a (on-chain) |
 | 13 | Withdraw currency from BM → wallet | WRITE | `balance_manager::withdraw_all<CRED>` + `transferObjects` to self | n/a (on-chain) |
 
-**Consequence of the "indexer-only reads" decision:** every read the MVP touches — except
-`/v1/discovery` — is a route that is **currently `enabled: false`** and therefore returns 404
-through `api.trinary.exchange`. So **Phase 0 of this project is a `dynamic-config-registry`
-task, not an SDK task**: enable, price (CUs), and publish those routes. Until that ships, the
-SDK cannot function against the public gateway. This is confirmed to be **only a work-to-do
-item, not a policy blocker** — we own these routes and intend to expose them. (See §9 Phasing.)
+**Phase 0 status (2026-08-21): done.** The market surface (pools, hubs, collections,
+balance-manager reads, discovery) was enabled in DCR `62acb22`;
+`GET /v1/inventory/balances` followed in `feat/publish-inventory-balances` (already
+published to the running gateway). Two inventory routes stay deliberately disabled under
+the sluice trust model (D11 — the gateway attaches no caller identity):
+`/v1/inventory/balance-manager` (SDK reads on-chain instead — authoritative, §12) and
+`/v1/inventory/receipt-objects` (wallet-receipt discovery is PTB *input* resolution and
+belongs on the fullnode). Note `/v1/discovery` was repriced 30 → 150 CU (2 rps sustained
+on the free/standard tier).
 
 > **"Indexer-only" scopes market/account *data* reads, not PTB input resolution.** Building
 > the item deposit/withdraw PTBs (#4, #12) requires live object references — owner-cap
@@ -144,6 +149,7 @@ sdk/
 │   ├── ReadOnlyClient.ts   # indexer-only client (no executor / no signing)
 │   ├── config.ts           # network + package-id + tenant resolution, defaults
 │   ├── queries.ts          # indexer HTTP client (fetch + x-api-key + zod parse)
+│   ├── onchain.ts          # fullnode balance reads (wallet CRED, BM BalanceKey<CRED>)
 │   ├── transactions.ts     # pure PTB builders (balance_manager, pool, receipt)
 │   ├── money.ts            # price scaling, fee/deposit math, decimals helpers
 │   ├── types.ts            # config, executor, domain types
@@ -182,11 +188,15 @@ A **layered** design so the package can grow "higher level" later:
 ### 5.1 Construction
 
 ```ts
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
+import { SuiGrpcClient } from '@mysten/sui/grpc'
 import { TriexClient } from '@trinaryex/sdk'
 
 const client = new TriexClient({
-  suiClient: new SuiClient({ url: getFullnodeUrl('testnet') }),
+  // @mysten/sui v2 unified client (`.core` API) — no SuiClient/getFullnodeUrl.
+  suiClient: new SuiGrpcClient({
+    network: 'testnet',
+    baseUrl: 'https://fullnode.testnet.sui.io:443',
+  }),
   apiKey: process.env.TRIEX_API_KEY!,            // reads → x-api-key
   indexerUrl: 'https://api.trinary.exchange',    // default
   network: 'testnet',                            // selects package-id bundle
@@ -196,39 +206,50 @@ const client = new TriexClient({
 })
 ```
 
-`ReadOnlyClient` takes the same config minus `executor`/package IDs and exposes only the
-read methods — for dashboards/bots that only observe.
+`ReadOnlyClient` takes the same config minus `suiClient`/`executor` and exposes the
+indexer-backed read surface with explicit identity params — for dashboards/bots that only
+observe. Currency balances (a fullnode read) live on `TriexClient.balances.currency()` only.
 
 ### 5.2 Methods → user stories
 
 ```ts
 // account (balance manager lifecycle)
-client.account.get(address): Promise<TradingAccount | null>            // #1 read
+client.account.get(address): Promise<TradingAccount | null>            // #1 read (on-chain)
 client.account.ensure(): Promise<{ balanceManagerId: string; created: boolean }>  // #1 write (idempotent)
 
-// balances (#2, #3)
-client.balances.forCharacter(characterId): Promise<CharacterBalances>  // items + CRED, wallet + BM
+// balances — items are hub-scoped indexer reads; currency is a fullnode read
+client.balances.atHub({ storageUnitId, inventoryKey? }): Promise<InventoryBalances>  // #2 (warehouse/marketplace/hangar)
+client.balances.currency(address?): Promise<CurrencyBalances>          // #3 (wallet + BM CRED, head-current)
 
 // deposits / withdrawals (#4, #5, #12, #13)
 client.account.depositCurrency({ amount }): Promise<TxResult>                  // #5
-client.account.depositItems({ storageUnitId, items: [{ typeId, amount }] }): Promise<TxResult>  // #4
+client.account.depositItems({ storageUnitId, items: [{ assetId, amount }] }): Promise<TxResult>  // #4
 client.account.withdrawCurrency({ amount? }): Promise<TxResult>                // #13 (default: all)
 client.account.withdrawItems({ storageUnitId, characterId, items }): Promise<TxResult>  // #12
 
 // market discovery / hub info (#6, #7, #8, #9)
-client.market.discover(params?): Promise<DiscoveryResult>             // #6
-client.market.hub(hubId): Promise<TradeHubDetail>                     // #7 (public/private, owner, tribe, fuel)
-client.market.itemsAtHub(hubId): Promise<HubItemListing[]>           // #8
-client.market.orderbook({ storageUnitId, typeId }): Promise<Orderbook>  // #9 (resolves pool then fetches)
+client.market.discover(filters?): Promise<DiscoveryResult>            // #6
+client.market.hub(hubId): Promise<TradeHubDetail>                     // #7 (vault + location/owner/visibility)
+client.market.itemsAtHub(hubId): Promise<HubItemsPage>                // #8
+client.market.resolvePool({ storageUnitId, assetId }): Promise<string>  // #9a (vault → resolve)
+client.market.orderbook({ storageUnitId, assetId }): Promise<Orderbook>  // #9 (resting orders, not levels)
+client.market.poolMetadata(poolId): Promise<PoolMetadata>             // #10/#11 (decimals + 1e9-scaled fee)
+
+// order status (#14) — epoch-ms before/after paging
+client.orders.openOrders(params?): Promise<OpenOrdersPage>
+client.orders.fills(params?): Promise<FillsPage>
+client.orders.trades(params?): Promise<TradesPage>
 
 // orders (#10, #11) — each auto-ensures BM + deposits any deficit in one PTB
-client.orders.limit({ storageUnitId, typeId, side, price, quantity, expireAt? }): Promise<TxResult>   // #10
-client.orders.market({ storageUnitId, typeId, side, quantity, quoteBudget? }): Promise<TxResult>      // #11
+client.orders.limit({ storageUnitId, assetId, side, price, quantity, expireAt? }): Promise<TxResult>   // #10
+client.orders.market({ storageUnitId, assetId, side, quantity, quoteBudget? }): Promise<TxResult>      // #11
 ```
 
-`side: 'buy' | 'sell'` maps to `isBid`. `TxResult = { digest: string; objectChanges?: ... }`.
+`side: 'buy' | 'sell'` maps to `isBid`; items are identified by `assetId` (the indexer's
+numeric item-type id, a string). `TxResult = { digest: string; objectChanges?: ... }`.
 Amounts are `bigint` in base units; the SDK converts human ↔ base using coin/item `decimals`
-and applies **price scaling** and **bid-fee overhead** in `money.ts` (see §7).
+and applies **price scaling** and **bid-fee overhead** in `money.ts` (see §7). Domain types
+are inferred from the pinned zod wire schemas (`schemas.ts`) — single source of truth.
 
 ---
 
@@ -304,16 +325,21 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
 
 - **Coin (currency-pair) pools:** `quote = base * price / TRIEXBOOK_PRICE_SCALING`
   where `TRIEXBOOK_PRICE_SCALING = 1_000_000_000` (1e9).
-- **Multicoin (item) pools:** scaling factor `1` → `quote = price * quantity`.
+- **Multicoin (item) pools:** scaling factor `1` → `quote = price * quantity` (confirmed
+  against the production app, which passes the unscaled price straight to
+  `place_limit_order`; TRIEX_SYSTEM_DESIGN §7's blanket "all prices ×1e9" describes coin
+  pools).
 - **Bid deposit overhead:** v1 pools charge a **quote-denominated fee**; a bid must deposit
-  `quote + fee`. Port `computeCoinBidQuoteDeposit(price, qty, isV1, feeBps)` /
-  `computeBidQuoteDeposit(...)` from the app. Market bids require an explicit
-  `quoteBudget` (the app requires `quoteDepositAmount > 0`).
-- **Decimals:** CRED and each item type carry `decimals`; the SDK exposes both `bigint`
-  base-unit and helper `toBase(human, decimals)` / `fromBase(base, decimals)`.
-- **Pool version:** the SDK **always assumes v1** (it supports only the most-recent contracts),
-  so v1 fee treatment is hard-coded; `feeBps` is still read from
-  `GET /v1/pools/{pool_id}/metadata`. No multi-version branching (resolves OQ-6).
+  `quote × (1e9 + feeRateScaled) / 1e9` (floor-of-total — matches the app's
+  `computeBidQuoteDeposit` and the on-chain per-fill floor). `feeRateScaled` is pool
+  metadata's raw `fee` (scaled by 1e9; `20_000_000` = 2%, the default volatile fee) — the
+  endpoint exposes **no bps field**. Only buyers pay fees; asks are fee-free. Market bids
+  require an explicit `quoteBudget` (the app requires `quoteDepositAmount > 0`).
+- **Decimals:** CRED and each item type carry `decimals` (pool metadata's
+  `base_asset_decimals` / `quote_asset_decimals`); the SDK exposes both `bigint` base-unit
+  and helper `toBase(human, decimals)` / `fromBase(base, decimals)`.
+- **Pool version:** the SDK **always assumes v1** (it supports only the most-recent
+  contracts), so v1 fee treatment is hard-coded. No multi-version branching (resolves OQ-6).
 
 > Getting scaling/fees wrong silently over/under-funds orders. `money.ts` is the highest-risk
 > unit-test target: snapshot tests against known app values.
@@ -351,15 +377,17 @@ via `packageIds`. Optionally hydrate the *package* IDs at runtime from
 
 ## 9. Phasing / milestones
 
-- **Phase 0 — Gateway enablement (DCR, blocking, indexer-only decision).** Enable + price +
-  publish the disabled `etl-api` routes the MVP needs (§2 table). Use the existing project
-  skills: `gateway-toggle-endpoint` (enable), `gateway-cu-pricing`, `gateway-publish`.
-  Confirm each returns 200 through `api.trinary.exchange`. **Nothing in the SDK works until
-  this ships and is published to the running gateway** (remember: merge ≠ published — see
-  CLAUDE.md; run `scripts/push-gateway.sh --env <env>`). Deliverable: a checklist PR against
-  `gateway-routes/etl-api.json` flipping the ~12 routes on with CU costs.
-- **Phase 1 — Read core.** `queries.ts` + `schemas.ts` + `ReadOnlyClient`: discovery, hub
-  details, items-at-hub, orderbook (resolve+fetch), balances, BM lookup. Validated with zod.
+- **Phase 0 — Gateway enablement. ✅ DONE 2026-08-21.** Market surface enabled in DCR
+  `62acb22`; `GET /v1/inventory/balances` in `feat/publish-inventory-balances` (published
+  to the running gateway). Two inventory routes stay disabled by design (D11) with
+  fullnode alternatives — see §2. Remaining nit: merge the balances branch to `main` so
+  the next `push-gateway.sh` run doesn't revert it.
+- **Phase 1 — Read core. ✅ DONE 2026-08-21.** `queries.ts` + `schemas.ts` (pinned against
+  the committed etl-api upstream spec — RQ-1) + `ReadOnlyClient`: discovery, hub details,
+  items-at-hub, pool resolve (vault → collection+asset chain), orderbook, pool metadata,
+  hub-scoped item balances, order-status reads. Currency balances implemented as fullnode
+  reads (`onchain.ts`, ported from the app's production hooks). Domain types inferred from
+  the zod schemas.
 - **Phase 2 — Account lifecycle + deposits/withdrawals.** `transactions.ts` for BM create,
   deposit currency/items, withdraw currency/items; facade `account.*` methods. `money.ts`.
 - **Phase 3 — Orders.** limit + market, buy + sell (item/CRED `multicoin_pool`);
@@ -414,19 +442,27 @@ via `packageIds`. Optionally hydrate the *package* IDs at runtime from
 - **OQ-11 — Identity:** for now assume **one address ↔ one character ↔ one BM**; the balances
   read stitches wallet + hangar + BM under that assumption.
 
-### Remaining (resolve during Phase 0/1)
+### Resolved (2026-08-21, Phase 0/1)
 
-- **RQ-1:** Exact response schemas for the newly-enabled routes (`/v1/pools/resolve`,
-  `/v1/pools/{id}/orderbook`, `/v1/pools/{id}/metadata` field names incl. `feeBps`,
-  `/v1/inventory/balances`, `/v1/hubs/{id}/vault` incl. fuel/public-vs-private/owner-tribe,
-  `/v1/discovery` filters + item-presence). Drives `schemas.ts`. Read etl-api's `/docs-json`.
+- **RQ-1 — Response schemas: pinned** in `schemas.ts` against the committed upstream spec
+  (`dynamic-config-registry/upstream-specs/etl-api.json`). Notable deltas from the draft:
+  `pools/resolve` is keyed by `collection_id`+`asset_id` (hub flows resolve the vault
+  first); the orderbook returns resting **orders**, not aggregated levels; pool metadata
+  exposes the fee as a 1e9-scaled `fee` string (no bps field); hub vault/location carry
+  no tribe/fuel fields (post-MVP).
+- **RQ-4 — `inventory/balances` keying:** hub-scoped (`storage_unit_id` required, one hub
+  per call); sections selected by explicit params — `owner_address` → warehouse,
+  `balance_manager_id` → marketplace, `inventory_key` (owner-cap id) → hangar. It serves
+  **items only** — CRED (#3) is NOT in the endpoint, so currency balances are fullnode
+  reads (`balances.currency()`), which write-flow deficit math wants anyway (§12).
+
+### Remaining (resolve during Phase 2/3)
+
 - **RQ-2:** Is `GET /api/v1/package-ids` reachable via `api.trinary.exchange`, or origin-only?
   If not routed through the gateway, the SDK just uses the baked-in preset (fine for MVP).
 - **RQ-3:** `receipt::deposit_for_receipt` cap-type argument (`<CapType>`) and which owner cap
   (SSU vs character) applies for a **personal, non-tribe** player at their own SSU vs a public
   hub. Confirm on a live stillness SSU during Phase 2 integration testing.
-- **RQ-4:** How the indexer keys `inventory/balances` — by address or characterId — and whether
-  it returns wallet + hangar + BM in one call (per OQ-11's one-to-one assumption).
 
 ---
 
@@ -470,36 +506,38 @@ object IDs. For latency-sensitive bots, note the post-MVP live-stream option.
 
 ## 13. Appendix — current `etl-api` gateway route inventory
 
-From `dynamic-config-registry/gateway-routes/etl-api.json` (65 routes). **Enabled** routes are
-already externalized through `api.trinary.exchange`; the MVP needs many of the **disabled**
-ones flipped on (Phase 0).
+From `dynamic-config-registry/gateway-routes/etl-api.json` (65 routes), **as of 2026-08-21**
+(DCR `62acb22` + `feat/publish-inventory-balances`). Phase 0 is done: everything the MVP
+reads is live.
 
-**Enabled today (relevant):** `GET /v1/discovery` (getDiscovery, 30 CU), `GET /v1/characters/*`,
-`GET /v1/orgs*`, `GET /v1/search`, `GET /v1/stats`, `GET /v1/trades/recent`,
-`GET /v1/hubs/{hub_id}/dao-vaults`, `GET /v1/tribes/{tribe_id}`.
-
-**Disabled — Phase 0 flip list for MVP** (item/CRED `multicoin_pool` = the `pools` family;
-`coin-pools/*` stay disabled). CU costs are the values already curated in `etl-api.json`:
+**Enabled — MVP reads** (CU costs as published):
 
 ```
-GET /v1/inventory/balance-manager                          (20 CU)   # story 1 existence check (indexer; on-chain is authoritative)
-GET /v1/inventory/balances                                 (50 CU)   # stories 2,3
-GET /v1/inventory/receipt-objects                          (30 CU)   # story 4 (wallet multicoin receipts)
-GET /v1/hubs/{hub_id}/vault                                (20 CU)   # stories 4,7 (vaultConfig/collection, fuel, public/private, owner)
-GET /v1/hubs/{hub_id}/location                             (20 CU)   # story 7 (location/owner/tribe)
+GET /v1/discovery                                          (150 CU)  # story 6 — repriced 30 → 150 (2 rps sustained on free/standard)
+GET /v1/inventory/balances                                 (50 CU)   # story 2 (items only; hub-scoped)
+GET /v1/hubs/{hub_id}/vault                                (20 CU)   # stories 4,7,9 (vaultConfig/collection)
+GET /v1/hubs/{hub_id}/location                             (20 CU)   # story 7 (location/owner/visibility)
 GET /v1/hubs/{hub_id}/items                                (20 CU)   # story 8
 GET /v1/collections/{collection_id}/hub                    (20 CU)   # story 7 reverse lookup
-GET /v1/pools/resolve                                      (30 CU)   # stories 9,10,11 (item+SSU → poolId)
+GET /v1/pools/resolve                                      (30 CU)   # stories 9,10,11 (collection+asset → poolId)
 GET /v1/pools/{pool_id}/orderbook                          (30 CU)   # story 9
-GET /v1/pools/{pool_id}/metadata                           (20 CU)   # stories 10,11 (feeBps)
-GET /v1/balance-managers/{balance_manager_id}/open-orders  (30 CU)   # story 14 (MVP)
-GET /v1/balance-managers/{balance_manager_id}/fills        (30 CU)   # story 14 (MVP)
-GET /v1/balance-managers/{balance_manager_id}/trades       (30 CU)   # story 14 (MVP)
+GET /v1/pools/{pool_id}/metadata                           (20 CU)   # stories 10,11 (1e9-scaled fee)
+GET /v1/balance-managers/{balance_manager_id}/open-orders  (30 CU)   # story 14
+GET /v1/balance-managers/{balance_manager_id}/fills        (30 CU)   # story 14
+GET /v1/balance-managers/{balance_manager_id}/trades       (30 CU)   # story 14
 ```
 
-Everything else (`coin-pools/*`, `pools/top-by-fees`, coin-pool balance-manager sub-routes,
-`assemblies/*`, `display-prices/*`, etc.) stays `enabled: false` until a later phase.
+(Also enabled beyond MVP need: `/v1/balance-managers/{bm}/sweepable`, `/owners`, the wider
+pools/hubs/assets/activity families, `GET /v1/characters/*`, `GET /v1/orgs*`,
+`GET /v1/search` (100 CU), `GET /v1/stats`, `GET /v1/trades/recent`.)
 
-> Publish with the project skills: `gateway-toggle-endpoint` (enable) → `gateway-cu-pricing`
-> (confirm CU) → `gateway-publish` (push + verify hot-reload). Remember a merge to `main` does
-> **not** update the running gateway — run `scripts/push-gateway.sh --env <env>` (per CLAUDE.md).
+**Deliberately disabled (D11 — sluice attaches no caller identity):** the remaining
+`inventory` family, including the seven POST container mutations and two GETs the SDK
+replaces with fullnode reads — `GET /v1/inventory/balance-manager` (story 1: on-chain
+`listOwnedObjects` is authoritative) and `GET /v1/inventory/receipt-objects` (story 4:
+wallet-receipt discovery is PTB input resolution). `coin-pools/*` stays disabled by choice.
+
+> Remember a merge to `main` does **not** update the running gateway — run
+> `scripts/push-gateway.sh --env <env>` (per CLAUDE.md). The balances route is already
+> published; its branch still needs merging to `main` so a future publish from a clean
+> checkout doesn't revert it.

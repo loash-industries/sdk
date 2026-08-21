@@ -37,14 +37,21 @@ describe('computeItemQuote', () => {
 })
 
 describe('computeBidQuoteDeposit', () => {
-  it('adds no fee when feeBps is 0', () => {
-    expect(computeBidQuoteDeposit(100n, 3n, 0)).toBe(300n)
+  it('adds no fee when feeRateScaled is 0', () => {
+    expect(computeBidQuoteDeposit(100n, 3n, 0n)).toBe(300n)
   })
 
-  it('adds a ceil-rounded quote-denominated fee', () => {
-    // quote = 300; fee = ceil(300 * 30 / 10000) = ceil(0.9) = 1
-    expect(computeBidQuoteDeposit(100n, 3n, 30)).toBe(301n)
-    // quote = 1_000_000; fee = 1_000_000 * 50 / 10000 = 5000
-    expect(computeBidQuoteDeposit(1_000n, 1_000n, 50)).toBe(1_005_000n)
+  it('applies the 1e9-scaled fee with floor-of-total semantics', () => {
+    // 2% (the default volatile fee): 300 * 1.02 = 306
+    expect(computeBidQuoteDeposit(100n, 3n, 20_000_000n)).toBe(306n)
+    // 0.5%: 1_000_000 * 1.005 = 1_005_000
+    expect(computeBidQuoteDeposit(1_000n, 1_000n, 5_000_000n)).toBe(1_005_000n)
+  })
+
+  it('floors when the fee is fractional (matches the app + on-chain per-fill floor)', () => {
+    // quote = 1; 1 * 1.02 = 1.02 → floor → 1 (fee floors to zero)
+    expect(computeBidQuoteDeposit(1n, 1n, 20_000_000n)).toBe(1n)
+    // quote = 99; 99 * 1.02 = 100.98 → floor → 100
+    expect(computeBidQuoteDeposit(99n, 1n, 20_000_000n)).toBe(100n)
   })
 })

@@ -2,6 +2,26 @@ import type { Transaction } from '@mysten/sui/transactions'
 // `ClientWithCoreApi` is the modern SuiClient interface (what `new SuiClient()`
 // satisfies); `@mysten/sui` v2 no longer type-exports a `SuiClient` name.
 import type { ClientWithCoreApi } from '@mysten/sui/client'
+import type { z } from 'zod'
+import type {
+  AssetBalanceSchema,
+  CollectionHubSchema,
+  DiscoveryOrderSchema,
+  DiscoveryResultSchema,
+  FillSchema,
+  FillsPageSchema,
+  HubItemSchema,
+  HubItemsPageSchema,
+  HubLocationSchema,
+  HubVaultSchema,
+  InventoryBalancesSchema,
+  OpenOrderSchema,
+  OpenOrdersPageSchema,
+  OrderbookOrderSchema,
+  PoolMetadataSchema,
+  TradeSchema,
+  TradesPageSchema,
+} from './schemas'
 
 // ─── Wallet / executor plumbing (mirrors keyspace) ──────────────────────────
 
@@ -86,16 +106,56 @@ export interface TriexClientConfig {
 }
 
 export interface ReadOnlyClientConfig {
-  suiClient?: ClientWithCoreApi
   apiKey: string
   indexerUrl?: string
   network?: TriexNetwork
   packageIds?: Partial<PackageIds>
 }
 
-// ─── Domain types (shapes are provisional — tighten in Phase 1, see RQ-1) ────
+// ─── Domain types (inferred from the pinned wire schemas — see schemas.ts) ───
 
 export type OrderSide = 'buy' | 'sell'
+
+export type DiscoveryOrder = z.output<typeof DiscoveryOrderSchema>
+export type DiscoveryResult = z.output<typeof DiscoveryResultSchema>
+export type OrderbookOrder = z.output<typeof OrderbookOrderSchema>
+export type PoolMetadata = z.output<typeof PoolMetadataSchema>
+export type HubVaultInfo = z.output<typeof HubVaultSchema>
+export type HubLocation = z.output<typeof HubLocationSchema>
+export type HubItem = z.output<typeof HubItemSchema>
+export type HubItemsPage = z.output<typeof HubItemsPageSchema>
+export type CollectionHub = z.output<typeof CollectionHubSchema>
+export type AssetBalance = z.output<typeof AssetBalanceSchema>
+export type InventoryBalances = z.output<typeof InventoryBalancesSchema>
+export type OpenOrder = z.output<typeof OpenOrderSchema>
+export type OpenOrdersPage = z.output<typeof OpenOrdersPageSchema>
+export type Fill = z.output<typeof FillSchema>
+export type FillsPage = z.output<typeof FillsPageSchema>
+export type Trade = z.output<typeof TradeSchema>
+export type TradesPage = z.output<typeof TradesPageSchema>
+
+/** Order book for one pool: resting orders (not aggregated price levels). */
+export interface Orderbook {
+  poolId: string
+  /** Bids, highest first. */
+  bids: OrderbookOrder[]
+  /** Asks, lowest first. */
+  asks: OrderbookOrder[]
+}
+
+/** Trade-hub detail — the vault descriptor + indexed location/ownership. */
+export interface TradeHubDetail {
+  hubId: string
+  /** Item collection backing the hub's vault (PTB input, §6.1). */
+  collectionId: string
+  /** The hub vault's configuration object (PTB input, §6.1). */
+  vaultConfigId: string
+  /**
+   * Location / ownership / visibility — null when the hub's location is not
+   * revealed (etl-api 404s those; most hubs are private).
+   */
+  location: HubLocation | null
+}
 
 /** The player's on-chain trading account. */
 export interface TradingAccount {
@@ -103,110 +163,17 @@ export interface TradingAccount {
   owner: string
 }
 
-/** An item + currency balance snapshot for a character. */
-export interface CharacterBalances {
-  characterId: string
-  address: string
-  /** CRED balance in the player's wallet (base units). */
-  walletCurrency: bigint
-  /** CRED balance held inside the balance manager (base units). */
-  balanceManagerCurrency: bigint
-  /** Per-item balances across wallet/hangar and the balance manager. */
-  items: ItemBalance[]
-  balanceManagerId?: string
-}
-
-export interface ItemBalance {
-  typeId: string
-  /** Quantity held in wallet receipts + hangar. */
-  ownedQuantity: bigint
-  /** Quantity held inside the balance manager. */
-  balanceManagerQuantity: bigint
-}
-
-/** Trade-hub (SSU) details — public/private, ownership, fuel, vault. */
-export interface TradeHubDetail {
-  hubId: string
-  collectionId?: string
-  isPublic: boolean
-  ownerAddress?: string
-  ownerCharacterId?: string
-  ownerTribeId?: string
-  fuel?: { current: bigint; capacity: bigint; isOnline: boolean }
-  location?: { solarSystemId?: string; name?: string }
-}
-
-/** One item that has live orders at a hub. */
-export interface HubItemListing {
-  typeId: string
-  poolId: string
-  bestBid?: bigint
-  bestAsk?: bigint
-  bidDepth?: bigint
-  askDepth?: bigint
-}
-
-export interface OrderbookLevel {
-  price: bigint
-  quantity: bigint
-}
-
-export interface Orderbook {
-  poolId: string
-  bids: OrderbookLevel[]
-  asks: OrderbookLevel[]
-}
-
-export interface PoolMetadata {
-  poolId: string
-  baseCollectionId: string
-  assetId: string
-  quoteCoinType: string
-  feeBps: number
-  /** SDK assumes v1 always; carried for completeness. */
-  version: number
-}
-
-/** A single open order across the universe (from `/v1/discovery`). */
-export interface DiscoveryOrder {
-  poolId: string
-  hubId: string
-  typeId: string
-  side: OrderSide
-  price: bigint
-  quantity: bigint
-  /** Epoch milliseconds. */
-  createdAt: number
-}
-
-export interface DiscoveryResult {
-  orders: DiscoveryOrder[]
-  nextCursor?: string
-}
-
-export interface OpenOrder {
-  orderId: string
-  poolId: string
-  side: OrderSide
-  price: bigint
-  quantity: bigint
-  filled: bigint
-  /** Epoch milliseconds. */
-  expireAt?: number
-}
-
-export interface Fill {
-  orderId: string
-  poolId: string
-  side: OrderSide
-  price: bigint
-  quantity: bigint
-  /** Epoch milliseconds. */
-  timestamp: number
-}
-
-export interface Trade extends Fill {
-  counterparty?: string
+/**
+ * CRED balances for a player — read from the FULLNODE (head-current), because
+ * the indexer's inventory endpoint serves item balances only.
+ */
+export interface CurrencyBalances {
+  /** CRED held as wallet coins (base units). */
+  wallet: bigint
+  /** CRED held inside the balance manager (base units); 0n when no BM. */
+  balanceManager: bigint
+  /** Resolved balance manager, when one exists. */
+  balanceManagerId: string | null
 }
 
 // ─── Method params ──────────────────────────────────────────────────────────
@@ -216,13 +183,62 @@ export interface EnsureAccountResult {
   created: boolean
 }
 
+export interface DiscoveryFilters {
+  /** Comma-joined server-side; trade hub IDs and/or item collection IDs (max 100). */
+  storageUnitIds?: string[]
+  /** Numeric item type / asset id. */
+  assetId?: string
+  /** Only orders owned by this balance manager ("my orders"). */
+  balanceManagerId?: string
+  /** Default `both`. */
+  side?: 'buy' | 'sell' | 'both'
+  /** Restrict to location-revealed (public) hubs. */
+  publicOnly?: boolean
+  cursor?: string
+  /** Rows per page (default and max 100). */
+  limit?: number
+}
+
+export interface BalancesAtHubParams {
+  /** Trade hub scoping the whole read (the collection derives from it). */
+  storageUnitId: string
+  /** Wallet whose warehouse (receipt) balances to include. */
+  address?: string
+  /**
+   * Hub or character `owner_cap_id` selecting a hangar to include. Resolved
+   * on-chain by the caller for now (Phase 2 adds automatic resolution).
+   */
+  inventoryKey?: string
+  /** Organization (DAO) receipt vault ids to include. */
+  vaultIds?: string[]
+}
+
+/** Cursorless history paging: epoch-ms bounds + limit (1–100). */
+export interface HistoryPageParams {
+  before?: number
+  after?: number
+  limit?: number
+}
+
+export interface FillsParams extends HistoryPageParams {
+  poolId?: string
+  /** The account's role in the fill. */
+  side?: 'maker' | 'taker' | 'all'
+}
+
+export interface TradesParams extends HistoryPageParams {
+  /** The account's role in the trade. */
+  side?: 'maker' | 'taker' | 'all'
+  assetId?: string
+}
+
 export interface DepositCurrencyParams {
   amount: bigint
 }
 
 export interface DepositItemsParams {
   storageUnitId: string
-  items: { typeId: string; amount: bigint }[]
+  items: { assetId: string; amount: bigint }[]
 }
 
 export interface WithdrawCurrencyParams {
@@ -233,23 +249,23 @@ export interface WithdrawCurrencyParams {
 export interface WithdrawItemsParams {
   storageUnitId: string
   characterId: string
-  items: { typeId: string; amount: bigint }[]
+  items: { assetId: string; amount: bigint }[]
 }
 
 export interface LimitOrderParams {
   storageUnitId: string
-  typeId: string
+  assetId: string
   side: OrderSide
-  /** Price in quote (CRED) base units per item, pre-scaling. */
+  /** Price in quote (CRED) base units per item (multicoin scaling = 1). */
   price: bigint
   quantity: bigint
-  /** Epoch milliseconds; defaults to a far-future timestamp. */
-  expireAt?: number
+  /** Epoch milliseconds; defaults to good-til-cancelled (MAX_U64). */
+  expireAt?: bigint
 }
 
 export interface MarketOrderParams {
   storageUnitId: string
-  typeId: string
+  assetId: string
   side: OrderSide
   quantity: bigint
   /** Required for market buys — the max CRED (base units) to spend. */

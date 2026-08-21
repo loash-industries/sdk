@@ -1,29 +1,46 @@
 import { TriexClientError, TriexError } from './errors'
 import {
+  CollectionHubSchema,
   DiscoveryResultSchema,
+  FillsPageSchema,
+  HubItemsPageSchema,
+  HubLocationSchema,
+  HubVaultSchema,
+  InventoryBalancesSchema,
+  OpenOrdersPageSchema,
   OrderbookSchema,
   PoolMetadataSchema,
+  PoolResolveSchema,
+  TradesPageSchema,
   parseWith,
 } from './schemas'
 import type {
-  CharacterBalances,
+  BalancesAtHubParams,
+  CollectionHub,
+  DiscoveryFilters,
   DiscoveryResult,
-  HubItemListing,
+  FillsPage,
+  FillsParams,
+  HistoryPageParams,
+  HubItemsPage,
+  HubLocation,
+  HubVaultInfo,
+  InventoryBalances,
+  OpenOrdersPage,
   Orderbook,
   PoolMetadata,
-  TradeHubDetail,
-  OpenOrder,
-  Fill,
-  Trade,
+  TradesPage,
+  TradesParams,
 } from './types'
 
 /**
  * Thin HTTP client for the Trinary Exchange indexer (etl-api behind the sluice
  * gateway). All reads go through here; auth is the `x-api-key` header.
  *
- * NOTE: Most endpoints below are currently DISABLED on the gateway and will 404
- * until Phase 0 enables + publishes them (DESIGN.md §9 / Appendix). The wiring
- * is complete; response schemas are provisional (RQ-1).
+ * Endpoints and shapes are pinned against the published gateway surface
+ * (RQ-1 resolved — see schemas.ts). Note `resolvePool` is keyed by
+ * `collection_id` + `asset_id`; hub-scoped flows resolve the collection via
+ * `hubVault()` first (the facade composes this).
  */
 export class IndexerClient {
   constructor(
@@ -34,7 +51,7 @@ export class IndexerClient {
   /** GET `path` (+ optional query) and return parsed JSON. */
   private async get<T = unknown>(
     path: string,
-    query?: Record<string, string | number | undefined>,
+    query?: Record<string, string | number | boolean | undefined>,
   ): Promise<T> {
     if (!this.apiKey) {
       throw new TriexClientError(
@@ -55,6 +72,8 @@ export class IndexerClient {
       throw new TriexClientError(
         TriexError.IndexerError,
         `Indexer ${res.status} ${res.statusText} for GET ${url.pathname}`,
+        undefined,
+        res.status,
       )
     }
     return (await res.json()) as T
@@ -62,129 +81,160 @@ export class IndexerClient {
 
   // ─── Discovery / market data ──────────────────────────────────────────────
 
-  /** #6 — open orders across the universe, sorted by recency, with filters. */
-  async discovery(filters?: {
-    typeId?: string
-    hubId?: string
-    side?: 'buy' | 'sell'
-    cursor?: string
-    limit?: number
-  }): Promise<DiscoveryResult> {
+  /** #6 — open orders across the universe, most-recent activity first. */
+  async discovery(filters?: DiscoveryFilters): Promise<DiscoveryResult> {
     const data = await this.get('/v1/discovery', {
-      type_id: filters?.typeId,
-      hub_id: filters?.hubId,
+      storage_unit_ids: filters?.storageUnitIds?.join(','),
+      asset_id: filters?.assetId,
+      balance_manager_id: filters?.balanceManagerId,
       side: filters?.side,
+      public_only: filters?.publicOnly,
       cursor: filters?.cursor,
       limit: filters?.limit,
     })
-    return parseWith(
-      DiscoveryResultSchema,
-      data,
-      'discovery',
-    ) as DiscoveryResult
+    return parseWith(DiscoveryResultSchema, data, 'discovery')
   }
 
-  /** #9a — resolve an item + storage unit to a pool id. */
-  async resolvePool(storageUnitId: string, typeId: string): Promise<string> {
-    const data = await this.get<{ pool_id?: string; poolId?: string }>(
-      '/v1/pools/resolve',
-      { storage_unit_id: storageUnitId, type_id: typeId },
-    )
-    const poolId = data.pool_id ?? data.poolId
-    if (!poolId) {
-      throw new TriexClientError(
-        TriexError.PoolNotFound,
-        `No pool for item ${typeId} at storage unit ${storageUnitId}.`,
-      )
-    }
-    return poolId
+  /**
+   * #9a — resolve a pool from its vault collection + item. Returns null when
+   * no pool exists (creating one is permissionless but out of SDK scope).
+   */
+  async resolvePool(params: {
+    collectionId: string
+    assetId: string
+    quoteType?: string
+  }): Promise<string | null> {
+    const data = await this.get('/v1/pools/resolve', {
+      collection_id: params.collectionId,
+      asset_id: params.assetId,
+      quote_type: params.quoteType,
+    })
+    return parseWith(PoolResolveSchema, data, 'resolvePool').poolId
   }
 
-  /** #9b — order book for a pool. */
+  /** #9b — resting orders for a pool (bids high-first, asks low-first). */
   async orderbook(poolId: string): Promise<Orderbook> {
     const data = await this.get(
       `/v1/pools/${encodeURIComponent(poolId)}/orderbook`,
     )
-    return parseWith(OrderbookSchema, data, 'orderbook') as Orderbook
+    return { poolId, ...parseWith(OrderbookSchema, data, 'orderbook') }
   }
 
-  /** #10/#11 — pool metadata (feeBps etc). */
+  /** #10/#11 — pool metadata (decimals, fee rate, hub linkage). */
   async poolMetadata(poolId: string): Promise<PoolMetadata> {
     const data = await this.get(
       `/v1/pools/${encodeURIComponent(poolId)}/metadata`,
     )
-    return parseWith(PoolMetadataSchema, data, 'poolMetadata') as PoolMetadata
+    return parseWith(PoolMetadataSchema, data, 'poolMetadata')
   }
 
   // ─── Hubs ─────────────────────────────────────────────────────────────────
 
-  /** #7 — trade-hub details. TODO(RQ-1): map real vault/location fields. */
-  async hub(_hubId: string): Promise<TradeHubDetail> {
-    throw new TriexClientError(
-      TriexError.NotImplemented,
-      'hub() response mapping pending RQ-1 (combine /v1/hubs/{id}/vault + /location).',
-    )
-  }
-
-  /** #8 — items with live orders at a hub. */
-  async itemsAtHub(_hubId: string): Promise<HubItemListing[]> {
-    throw new TriexClientError(
-      TriexError.NotImplemented,
-      'itemsAtHub() response mapping pending RQ-1 (/v1/hubs/{id}/items).',
-    )
+  /**
+   * Vault descriptor for a trade hub — `collectionId` (pool resolution + §6.1)
+   * and `vaultConfigId` (item deposit/withdraw PTBs).
+   */
+  async hubVault(hubId: string): Promise<HubVaultInfo> {
+    const data = await this.get(`/v1/hubs/${encodeURIComponent(hubId)}/vault`)
+    return parseWith(HubVaultSchema, data, 'hubVault')
   }
 
   /**
-   * Vault descriptor for a storage unit — vaultConfigId + collectionId used by
-   * the item deposit/withdraw PTBs (DESIGN.md §6.1).
+   * #7 — indexed location / ownership / visibility for a trade hub. Returns
+   * null for hubs whose location is not revealed/indexed — etl-api 404s those
+   * semantically (verified live: "No location found for assembly …"), and most
+   * hubs are private.
    */
-  async hubVault(
-    _hubId: string,
-  ): Promise<{ vaultConfigId: string; collectionId: string }> {
-    throw new TriexClientError(
-      TriexError.NotImplemented,
-      'hubVault() mapping pending RQ-1 (/v1/hubs/{id}/vault).',
-    )
+  async hubLocation(hubId: string): Promise<HubLocation | null> {
+    try {
+      const data = await this.get(
+        `/v1/hubs/${encodeURIComponent(hubId)}/location`,
+      )
+      return parseWith(HubLocationSchema, data, 'hubLocation')
+    } catch (e) {
+      if (e instanceof TriexClientError && e.status === 404) return null
+      throw e
+    }
   }
 
-  // ─── Account / balances ───────────────────────────────────────────────────
-
-  /** #1 — indexer view of the player's balance manager (on-chain is authoritative). */
-  async balanceManagerId(_address: string): Promise<string | null> {
-    throw new TriexClientError(
-      TriexError.NotImplemented,
-      'balanceManagerId() mapping pending RQ-1 (/v1/inventory/balance-manager).',
-    )
+  /** #8 — items with open orders at a trade hub. */
+  async hubItems(hubId: string): Promise<HubItemsPage> {
+    const data = await this.get(`/v1/hubs/${encodeURIComponent(hubId)}/items`)
+    return parseWith(HubItemsPageSchema, data, 'hubItems')
   }
 
-  /** #2/#3 — item + currency balances for a character. */
-  async characterBalances(_characterId: string): Promise<CharacterBalances> {
-    throw new TriexClientError(
-      TriexError.NotImplemented,
-      'characterBalances() mapping pending RQ-1/RQ-4 (/v1/inventory/balances).',
+  /** #7 — reverse lookup: vault collection → its trade hub. */
+  async collectionHub(collectionId: string): Promise<CollectionHub> {
+    const data = await this.get(
+      `/v1/collections/${encodeURIComponent(collectionId)}/hub`,
     )
+    return parseWith(CollectionHubSchema, data, 'collectionHub')
   }
 
-  // ─── Order status (#14, MVP) ──────────────────────────────────────────────
+  // ─── Inventory (#2 — items only; CRED reads live on the fullnode) ─────────
 
-  async openOrders(_balanceManagerId: string): Promise<OpenOrder[]> {
-    throw new TriexClientError(
-      TriexError.NotImplemented,
-      'openOrders() mapping pending RQ-1 (/v1/balance-managers/{bm}/open-orders).',
-    )
+  /**
+   * Hub-scoped item balances. Sections come back empty unless their selecting
+   * parameter is passed: `address` → warehouse, `balanceManagerId` →
+   * marketplace, `inventoryKey` → hangar, `vaultIds` → orgVaults.
+   */
+  async inventoryBalances(
+    params: BalancesAtHubParams & { balanceManagerId?: string },
+  ): Promise<InventoryBalances> {
+    const data = await this.get('/v1/inventory/balances', {
+      storage_unit_id: params.storageUnitId,
+      owner_address: params.address,
+      balance_manager_id: params.balanceManagerId,
+      inventory_key: params.inventoryKey,
+      vault_ids: params.vaultIds?.join(','),
+    })
+    return parseWith(InventoryBalancesSchema, data, 'inventoryBalances')
   }
 
-  async fills(_balanceManagerId: string): Promise<Fill[]> {
-    throw new TriexClientError(
-      TriexError.NotImplemented,
-      'fills() mapping pending RQ-1 (/v1/balance-managers/{bm}/fills).',
+  // ─── Order status (#14) ───────────────────────────────────────────────────
+
+  async openOrders(
+    balanceManagerId: string,
+    params?: HistoryPageParams,
+  ): Promise<OpenOrdersPage> {
+    const data = await this.get(
+      `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/open-orders`,
+      { before: params?.before, after: params?.after, limit: params?.limit },
     )
+    return parseWith(OpenOrdersPageSchema, data, 'openOrders')
   }
 
-  async trades(_balanceManagerId: string): Promise<Trade[]> {
-    throw new TriexClientError(
-      TriexError.NotImplemented,
-      'trades() mapping pending RQ-1 (/v1/balance-managers/{bm}/trades).',
+  async fills(
+    balanceManagerId: string,
+    params?: FillsParams,
+  ): Promise<FillsPage> {
+    const data = await this.get(
+      `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/fills`,
+      {
+        before: params?.before,
+        after: params?.after,
+        limit: params?.limit,
+        pool_id: params?.poolId,
+        side: params?.side,
+      },
     )
+    return parseWith(FillsPageSchema, data, 'fills')
+  }
+
+  async trades(
+    balanceManagerId: string,
+    params?: TradesParams,
+  ): Promise<TradesPage> {
+    const data = await this.get(
+      `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/trades`,
+      {
+        before: params?.before,
+        after: params?.after,
+        limit: params?.limit,
+        side: params?.side,
+        asset_id: params?.assetId,
+      },
+    )
+    return parseWith(TradesPageSchema, data, 'trades')
   }
 }

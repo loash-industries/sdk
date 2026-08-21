@@ -28,11 +28,16 @@ export {
   computeBidQuoteDeposit,
   TRIEXBOOK_PRICE_SCALING,
   MULTICOIN_PRICE_SCALING,
+  FEE_RATE_SCALING,
 } from './money'
 
 // ─── Low-level building blocks (for advanced callers) ────────────────────────
 export { IndexerClient } from './queries'
 export * as transactions from './transactions'
+export {
+  getWalletCurrencyBalance,
+  getBalanceManagerCurrencyBalance,
+} from './onchain'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type {
@@ -46,18 +51,31 @@ export type {
   TxResult,
   OrderSide,
   TradingAccount,
-  CharacterBalances,
-  ItemBalance,
+  CurrencyBalances,
+  AssetBalance,
+  InventoryBalances,
   TradeHubDetail,
-  HubItemListing,
+  HubVaultInfo,
+  HubLocation,
+  HubItem,
+  HubItemsPage,
+  CollectionHub,
   Orderbook,
-  OrderbookLevel,
+  OrderbookOrder,
   PoolMetadata,
   DiscoveryOrder,
   DiscoveryResult,
+  DiscoveryFilters,
   OpenOrder,
+  OpenOrdersPage,
   Fill,
+  FillsPage,
   Trade,
+  TradesPage,
+  BalancesAtHubParams,
+  HistoryPageParams,
+  FillsParams,
+  TradesParams,
   EnsureAccountResult,
   DepositCurrencyParams,
   DepositItemsParams,

@@ -15,7 +15,11 @@ export const TRIEXBOOK_PRICE_SCALING = 1_000_000_000n
 /** Price scaling for item (multicoin) pools. */
 export const MULTICOIN_PRICE_SCALING = 1n
 
-const BPS_DENOMINATOR = 10_000n
+/**
+ * Denominator of the on-chain fee rate (`FLOAT_SCALING`): pool metadata's
+ * `feeRateScaled` is fee × 1e9 (20_000_000 = 2%).
+ */
+export const FEE_RATE_SCALING = 1_000_000_000n
 
 /** Convert a human decimal string/number to base units given `decimals`. */
 export function toBase(human: string | number, decimals: number): bigint {
@@ -50,28 +54,23 @@ export function computeItemQuote(price: bigint, quantity: bigint): bigint {
   return (price * quantity * MULTICOIN_PRICE_SCALING) / 1n
 }
 
-/** Ceil-division for positive bigints. */
-function ceilDiv(a: bigint, b: bigint): bigint {
-  return (a + b - 1n) / b
-}
-
 /**
  * Total quote (CRED base units) a **bid** must deposit into the balance manager
  * to place a limit buy of `quantity` at `price`: the quote notional plus the
- * v1 quote-denominated maker fee.
+ * v1 quote-denominated fee (only buyers pay fees; asks are fee-free).
  *
- * `feeBps` comes from pool metadata (`GET /v1/pools/{id}/metadata`). The SDK
- * assumes v1 fee treatment (fee charged on the quote side of a bid).
- *
- * TODO(money): confirm rounding direction + whether the fee is additive on
- * deposit vs. deducted on fill against a live testnet pool (DESIGN.md §7).
+ * `feeRateScaled` is pool metadata's raw 1e9-scaled taker fee
+ * (`PoolMetadata.feeRateScaled`; 20_000_000 = 2%). Floor-of-total semantics —
+ * `quote × (1e9 + fee) / 1e9` — exactly matching the production app
+ * (`computeBidQuoteDeposit` in useTriexbookMulticoinOrders.ts) and
+ * TRIEX_SYSTEM_DESIGN §4. On-chain fees are computed per-fill (floored), so
+ * the floored total is always sufficient.
  */
 export function computeBidQuoteDeposit(
   price: bigint,
   quantity: bigint,
-  feeBps: number,
+  feeRateScaled: bigint,
 ): bigint {
   const quote = computeItemQuote(price, quantity)
-  const fee = ceilDiv(quote * BigInt(Math.trunc(feeBps)), BPS_DENOMINATOR)
-  return quote + fee
+  return (quote * (FEE_RATE_SCALING + feeRateScaled)) / FEE_RATE_SCALING
 }
