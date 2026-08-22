@@ -3,6 +3,7 @@ import {
   CollectionHubSchema,
   DiscoveryResultSchema,
   FillsPageSchema,
+  HubItemOrderbookSchema,
   HubItemsPageSchema,
   HubLocationSchema,
   HubVaultSchema,
@@ -23,6 +24,7 @@ import type {
   FillsPage,
   FillsParams,
   HistoryPageParams,
+  HubItemMarket,
   HubItemsPage,
   HubLocation,
   HubVaultInfo,
@@ -40,9 +42,9 @@ import type {
  * gateway). All reads go through here; auth is the `x-api-key` header.
  *
  * Endpoints and shapes are pinned against the published gateway surface
- * (RQ-1 resolved — see schemas.ts). Note `resolvePool` is keyed by
- * `collection_id` + `asset_id`; hub-scoped flows resolve the collection via
- * `hubVault()` first (the facade composes this).
+ * (RQ-1 resolved — see schemas.ts). Hub-scoped book reads go through
+ * `hubItemOrderbook()` (one call, pool + metadata resolved server-side);
+ * `resolvePool` remains for callers that already hold a `collection_id`.
  */
 export class IndexerClient {
   constructor(
@@ -158,6 +160,26 @@ export class IndexerClient {
       quote_type: params.quoteType,
     })
     return parseWith(PoolResolveSchema, data, 'resolvePool').poolId
+  }
+
+  /**
+   * #9 — one-call order book for an item at a trade hub: the gateway resolves
+   * the vault collection and pool server-side and returns the resting book
+   * with the pool metadata embedded. `poolId` is null (empty book, null
+   * metadata) when the hub trades but no market exists for the item yet.
+   * 404s (`HubNotFound`) when the hub has no trading vault.
+   */
+  async hubItemOrderbook(params: {
+    hubId: string
+    assetId: string
+    quoteType?: string
+  }): Promise<HubItemMarket> {
+    const data = await this.get(
+      `/v1/hubs/${encodeURIComponent(params.hubId)}/items/${encodeURIComponent(params.assetId)}/orderbook`,
+      { quote_type: params.quoteType },
+      TriexError.HubNotFound,
+    )
+    return parseWith(HubItemOrderbookSchema, data, 'hubItemOrderbook')
   }
 
   /** #9b — resting orders for a pool (bids high-first, asks low-first). */

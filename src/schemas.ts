@@ -161,6 +161,32 @@ export const PoolMetadataSchema = z
     feeRate: v.fee_rate,
   }))
 
+/**
+ * One-call market read for an item at a trade hub: vault linkage, resolved
+ * pool, resting book, and pool metadata in a single response. `pool_id` is
+ * null when the hub trades but no market exists for the item yet (the book
+ * is then empty and `metadata` null).
+ */
+export const HubItemOrderbookSchema = z
+  .object({
+    hub_id: z.string(),
+    collection_id: z.string(),
+    vault_config_id: z.string().nullable(),
+    pool_id: z.string().nullable(),
+    metadata: PoolMetadataSchema.nullable(),
+    bids: z.array(OrderbookOrderSchema),
+    asks: z.array(OrderbookOrderSchema),
+  })
+  .transform((v) => ({
+    hubId: v.hub_id,
+    collectionId: v.collection_id,
+    vaultConfigId: v.vault_config_id,
+    poolId: v.pool_id,
+    metadata: v.metadata,
+    bids: v.bids,
+    asks: v.asks,
+  }))
+
 // ─── Hubs (#4, #7, #8) ───────────────────────────────────────────────────────
 
 export const HubVaultSchema = z

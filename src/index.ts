@@ -96,6 +96,8 @@ export type {
   HubItemsPage,
   CollectionHub,
   Orderbook,
+  HubItemOrderbook,
+  HubItemMarket,
   OrderbookOrder,
   PoolMetadata,
   DiscoveryOrder,

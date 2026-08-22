@@ -10,6 +10,7 @@ import type {
   DiscoveryResultSchema,
   FillSchema,
   FillsPageSchema,
+  HubItemOrderbookSchema,
   HubItemSchema,
   HubItemsPageSchema,
   HubLocationSchema,
@@ -150,6 +151,26 @@ export interface Orderbook {
   bids: OrderbookOrder[]
   /** Asks, lowest first. */
   asks: OrderbookOrder[]
+}
+
+/**
+ * Wire result of the one-call hub-item market read (`poolId` null when the
+ * hub trades but no market exists for the item yet).
+ */
+export type HubItemMarket = z.output<typeof HubItemOrderbookSchema>
+
+/**
+ * Order book for one item at a trade hub, with the hub/pool context the
+ * single-call endpoint returns alongside the resting orders.
+ */
+export interface HubItemOrderbook extends Orderbook {
+  hubId: string
+  /** Item collection backing the hub's vault (PTB input, §6.1). */
+  collectionId: string
+  /** The hub vault's configuration object; null when not yet indexed. */
+  vaultConfigId: string | null
+  /** Pool metadata (decimals, fee rate, names); null if the indexer lacks it. */
+  metadata: PoolMetadata | null
 }
 
 /** Trade-hub detail — the vault descriptor + indexed location/ownership. */

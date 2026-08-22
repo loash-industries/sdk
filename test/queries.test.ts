@@ -142,30 +142,49 @@ describe('TriexClient.market composition', () => {
     indexerUrl: 'https://api.example.test',
   }
 
-  it('orderbook() chains hub vault → pool resolve → orderbook', async () => {
+  it('orderbook() fetches the combined hub-item endpoint in one call', async () => {
     const fetchMock = mockFetch([
-      { hub_id: HEX, collection_id: '0xc0ffee', vault_config_id: HEX },
-      { pool_id: '0xp001' },
-      { bids: [], asks: [] },
+      {
+        hub_id: HEX,
+        collection_id: '0xc0ffee',
+        vault_config_id: HEX,
+        pool_id: '0xp001',
+        metadata: null,
+        bids: [],
+        asks: [],
+      },
     ])
     const client = new TriexClient(config)
     const book = await client.market.orderbook({
       storageUnitId: HEX,
       assetId: '70810',
     })
-    expect(book).toEqual({ poolId: '0xp001', bids: [], asks: [] })
+    expect(book).toEqual({
+      hubId: HEX,
+      collectionId: '0xc0ffee',
+      vaultConfigId: HEX,
+      poolId: '0xp001',
+      metadata: null,
+      bids: [],
+      asks: [],
+    })
 
-    const calls = fetchMock.mock.calls.map((c: any[]) => String(c[0]))
-    expect(calls[0]).toContain(`/v1/hubs/${HEX}/vault`)
-    expect(calls[1]).toContain('/v1/pools/resolve')
-    expect(calls[1]).toContain('collection_id=0xc0ffee')
-    expect(calls[2]).toContain('/v1/pools/0xp001/orderbook')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(String(url)).toContain(`/v1/hubs/${HEX}/items/70810/orderbook`)
   })
 
   it('orderbook() throws PoolNotFound when no market exists', async () => {
     mockFetch([
-      { hub_id: HEX, collection_id: '0xc0ffee', vault_config_id: HEX },
-      { pool_id: null },
+      {
+        hub_id: HEX,
+        collection_id: '0xc0ffee',
+        vault_config_id: HEX,
+        pool_id: null,
+        metadata: null,
+        bids: [],
+        asks: [],
+      },
     ])
     const client = new TriexClient(config)
     await expect(

@@ -55,13 +55,13 @@ import type {
   FillsPage,
   FillsParams,
   HistoryPageParams,
+  HubItemOrderbook,
   HubItemsPage,
   InventoryBalances,
   LimitOrderParams,
   MarketOrderParams,
   ModifyOrderParams,
   OpenOrdersPage,
-  Orderbook,
   PackageIds,
   PoolMetadata,
   Sweepable,
@@ -609,15 +609,27 @@ class MarketApi {
   }
 
   /**
-   * #9 — order book for one item at a trade hub.
-   * @throws `HubNotFound` | `PoolNotFound` (see `resolvePool`).
+   * #9 — order book for one item at a trade hub. A single indexer call: the
+   * gateway resolves the hub's pool and returns the book with pool metadata
+   * embedded.
+   * @throws `HubNotFound` for an unknown hub; `PoolNotFound` when no market
+   *   exists for the pair.
    */
   async orderbook(params: {
     storageUnitId: string
     assetId: string
-  }): Promise<Orderbook> {
-    const poolId = await this.resolvePool(params)
-    return this.c.indexer.orderbook(poolId)
+  }): Promise<HubItemOrderbook> {
+    const book = await this.c.indexer.hubItemOrderbook({
+      hubId: params.storageUnitId,
+      assetId: params.assetId,
+    })
+    if (!book.poolId) {
+      throw new TriexClientError(
+        TriexError.PoolNotFound,
+        `No pool for item ${params.assetId} at hub ${params.storageUnitId}.`,
+      )
+    }
+    return { ...book, poolId: book.poolId }
   }
 
   /**

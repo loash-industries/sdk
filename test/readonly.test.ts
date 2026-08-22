@@ -29,18 +29,25 @@ describe('ReadOnlyClient', () => {
     indexerUrl: 'https://api.example.test',
   })
 
-  it('chains orderbook resolution like the full client', async () => {
+  it('fetches the combined hub-item orderbook in one call like the full client', async () => {
     const fetchMock = routeFetch([
       [
-        '/vault',
-        { hub_id: HEX, collection_id: '0xc0ffee', vault_config_id: HEX },
+        '/orderbook',
+        {
+          hub_id: HEX,
+          collection_id: '0xc0ffee',
+          vault_config_id: HEX,
+          pool_id: '0x' + '10'.repeat(32),
+          metadata: null,
+          bids: [],
+          asks: [],
+        },
       ],
-      ['/v1/pools/resolve', { pool_id: '0x' + '10'.repeat(32) }],
-      ['/orderbook', { bids: [], asks: [] }],
     ])
     const book = await ro.orderbook({ storageUnitId: HEX, assetId: '70810' })
     expect(book.poolId).toBe('0x' + '10'.repeat(32))
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(book.collectionId).toBe('0xc0ffee')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('parses the sweepable manifest', async () => {
