@@ -27,6 +27,11 @@ import type {
  * (address, balance manager id) are always explicit here since there is no
  * configured player. Currency (CRED) balances are fullnode reads and live on
  * `TriexClient.balances.currency()` only.
+ *
+ * ERRORS — every method throws `TriexClientError` with a stable `code`:
+ * `Unauthorized` (bad/missing key), `RateLimited` (CU budget; carries
+ * `retryAfterMs`), `IndexerError`, `UnexpectedResponse`, plus per-target
+ * `HubNotFound` / `PoolNotFound` / `BalanceManagerNotFound` on unknown ids.
  */
 export class ReadOnlyClient {
   readonly ids: PackageIds

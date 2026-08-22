@@ -89,6 +89,12 @@ import type {
  * deposits cover only the deficit (BM balance is consumed first), and every
  * order is atomic — deposit + proof + place in one transaction that rolls
  * back as a unit.
+ *
+ * ERRORS — every failure is a `TriexClientError` with a stable `code`. The
+ * per-method `@throws` tags below list method-specific codes; in addition,
+ * every indexer-backed method can throw `Unauthorized` (bad/missing key),
+ * `RateLimited` (CU budget exhausted; carries `retryAfterMs`),
+ * `IndexerError` (5xx/unexpected), and `UnexpectedResponse` (schema drift).
  */
 export class TriexClient {
   readonly suiClient: ClientWithCoreApi
@@ -136,7 +142,7 @@ export class TriexClient {
     const addr = override ?? this.address
     if (!addr) {
       throw new TriexClientError(
-        TriexError.ExecutorRequired,
+        TriexError.AddressRequired,
         'This operation needs the player address — set `address` in config or pass it per-call.',
       )
     }
@@ -239,14 +245,22 @@ function toTxResult(res: NormalizedExecution): TxResult {
 class AccountApi {
   constructor(private readonly c: TriexClient) {}
 
-  /** #1 read — the player's trading account, or null if none exists. */
+  /**
+   * #1 read — the player's trading account, or null if none exists.
+   * @throws `AddressRequired` when no address is configured or passed.
+   */
   async get(address?: string): Promise<TradingAccount | null> {
     const owner = this.c.requireAddress(address)
     const id = await this.c.resolveBalanceManagerId(owner)
     return id ? { balanceManagerId: id, owner } : null
   }
 
-  /** #1 write — idempotently create the balance manager if missing. */
+  /**
+   * #1 write — idempotently create the balance manager if missing.
+   * @throws `AddressRequired` | `ExecutorRequired` on missing config;
+   *   `TransactionFailed` on an on-chain abort; `UnexpectedResponse` when the
+   *   executor result carries no created-object info.
+   */
   async ensure(address?: string): Promise<EnsureAccountResult> {
     const owner = this.c.requireAddress(address)
     const existing = await this.c.resolveBalanceManagerId(owner)
@@ -269,7 +283,12 @@ class AccountApi {
     return { balanceManagerId: id, created: true }
   }
 
-  /** #5 — deposit CRED from the wallet into the balance manager. */
+  /**
+   * #5 — deposit CRED from the wallet into the balance manager.
+   * @throws `ValidationFailed` (non-positive amount); `AddressRequired` |
+   *   `ExecutorRequired`; `InsufficientBalance` when the wallet cannot cover
+   *   the amount; `TransactionFailed` on an on-chain abort.
+   */
   async depositCurrency(params: DepositCurrencyParams): Promise<TxResult> {
     if (params.amount <= 0n) {
       throw new TriexClientError(
@@ -292,7 +311,14 @@ class AccountApi {
     return this.c.finishBmTx(tx, bm, existingBmId, owner)
   }
 
-  /** #4 — deposit items (wallet receipts → hangar) into the balance manager. */
+  /**
+   * #4 — deposit items (wallet receipts → hangar) into the balance manager.
+   * @throws `AddressRequired` | `ExecutorRequired`; `HubNotFound` (unknown
+   *   hub); `ValidationFailed` (non-positive amount); `InsufficientBalance`
+   *   when receipts+hangar cannot cover; `CollectionMismatch` when receipts
+   *   live in a foreign collection; `CharacterNotFound` when hangar sourcing
+   *   is needed but no character resolves; `TransactionFailed` on-chain.
+   */
   async depositItems(params: DepositItemsParams): Promise<TxResult> {
     const owner = this.c.requireAddress()
     this.c.requireExecutor()
@@ -320,7 +346,13 @@ class AccountApi {
     return this.c.finishBmTx(tx, bm, existingBmId, owner)
   }
 
-  /** #13 — withdraw CRED from the balance manager to the wallet. */
+  /**
+   * #13 — withdraw CRED from the balance manager to the wallet. Withdraw-all
+   * on an empty balance manager is an on-chain no-op success.
+   * @throws `AddressRequired` | `ExecutorRequired`; `BalanceManagerNotFound`
+   *   when no trading account exists; `TransactionFailed` on-chain (e.g.
+   *   partial amount exceeding the balance).
+   */
   async withdrawCurrency(params?: WithdrawCurrencyParams): Promise<TxResult> {
     const owner = this.c.requireAddress()
     const balanceManagerId = await this.c.requireBalanceManagerId(owner)
@@ -335,7 +367,12 @@ class AccountApi {
     return toTxResult(await executeAndNormalize(executor, tx))
   }
 
-  /** #12 — withdraw items (in full) from the BM into the hangar at a hub. */
+  /**
+   * #12 — withdraw items (in full) from the BM into the hangar at a hub.
+   * @throws `AddressRequired` | `ExecutorRequired`; `BalanceManagerNotFound`;
+   *   `HubNotFound`; `CharacterNotFound` when no on-chain character resolves
+   *   (pass `characterId` explicitly); `TransactionFailed` on-chain.
+   */
   async withdrawItems(params: WithdrawItemsParams): Promise<TxResult> {
     const owner = this.c.requireAddress()
     const balanceManagerId = await this.c.requireBalanceManagerId(owner)
@@ -383,7 +420,11 @@ class AccountApi {
     return toTxResult(await executeAndNormalize(executor, tx))
   }
 
-  /** Claimable proceeds + idle BM items (indexer manifest, lags by seconds). */
+  /**
+   * Claimable proceeds + idle BM items (indexer manifest, lags by seconds).
+   * @throws `AddressRequired`; `BalanceManagerNotFound` when no trading
+   *   account exists.
+   */
   async sweepable(): Promise<Sweepable> {
     const owner = this.c.requireAddress()
     const balanceManagerId = await this.c.requireBalanceManagerId(owner)
@@ -395,6 +436,11 @@ class AccountApi {
    * Defaults to every pool the sweepable manifest reports as claimable; the
    * proceeds then show up in `balances.currency()` / BM item balances and can
    * be withdrawn.
+   */
+  /**
+   * @throws `AddressRequired` | `ExecutorRequired`; `BalanceManagerNotFound`;
+   *   `ValidationFailed` when nothing is settled to claim;
+   *   `TransactionFailed` on-chain.
    */
   async claimSettled(params?: ClaimSettledParams): Promise<TxResult> {
     const owner = this.c.requireAddress()
@@ -449,6 +495,10 @@ class BalancesApi {
    * `includeHangar: true` to also resolve the character's hangar slot
    * (`inventoryKey`) on-chain when not supplied explicitly.
    */
+  /**
+   * @throws `AddressRequired` when no address resolves; `HubNotFound` for an
+   *   unknown storage unit.
+   */
   async atHub(
     params: BalancesAtHubParams & { includeHangar?: boolean },
   ): Promise<InventoryBalances> {
@@ -477,6 +527,7 @@ class BalancesApi {
    * the indexer's inventory endpoint serves items only, and currency values
    * feed write-flow deficit math, which must be head-current (§12).
    */
+  /** @throws `AddressRequired`; fullnode transport errors pass through raw. */
   async currency(address?: string): Promise<CurrencyBalances> {
     const owner = this.c.requireAddress(address)
     const [wallet, balanceManagerId] = await Promise.all([
@@ -508,7 +559,10 @@ class MarketApi {
     return this.c.indexer.discovery(filters)
   }
 
-  /** #7 — trade-hub detail: vault descriptor + location (null if unrevealed). */
+  /**
+   * #7 — trade-hub detail: vault descriptor + location (null if unrevealed).
+   * @throws `HubNotFound` for an unknown hub id.
+   */
   async hub(hubId: string): Promise<TradeHubDetail> {
     const [vault, location] = await Promise.all([
       this.c.indexer.hubVault(hubId),
@@ -522,14 +576,19 @@ class MarketApi {
     }
   }
 
-  /** #8 — items with open orders at a trade hub. */
+  /**
+   * #8 — items with open orders at a trade hub.
+   * @throws `HubNotFound` for an unknown hub id.
+   */
   itemsAtHub(hubId: string): Promise<HubItemsPage> {
     return this.c.indexer.hubItems(hubId)
   }
 
   /**
    * #9a — resolve the pool for an item at a trade hub (hub → vault collection
-   * → pool). Throws `PoolNotFound` when no market exists for the pair.
+   * → pool).
+   * @throws `HubNotFound` for an unknown hub; `PoolNotFound` when no market
+   *   exists for the pair.
    */
   async resolvePool(params: {
     storageUnitId: string
@@ -549,7 +608,10 @@ class MarketApi {
     return poolId
   }
 
-  /** #9 — order book for one item at a trade hub. */
+  /**
+   * #9 — order book for one item at a trade hub.
+   * @throws `HubNotFound` | `PoolNotFound` (see `resolvePool`).
+   */
   async orderbook(params: {
     storageUnitId: string
     assetId: string
@@ -558,7 +620,10 @@ class MarketApi {
     return this.c.indexer.orderbook(poolId)
   }
 
-  /** #10/#11 — pool metadata (decimals, fee rate, hub linkage). */
+  /**
+   * #10/#11 — pool metadata (decimals, fee rate, hub linkage).
+   * @throws `PoolNotFound` for an unknown pool id.
+   */
   poolMetadata(poolId: string): Promise<PoolMetadata> {
     return this.c.indexer.poolMetadata(poolId)
   }
@@ -573,6 +638,12 @@ class OrdersApi {
    * #10 — place a limit order, atomically: [create BM if missing] → deposit
    * only the deficit (items for sells, CRED+fee for bids; BM balance consumed
    * first) → owner proof → place. Defaults to good-til-cancelled.
+   * @throws `ValidationFailed` (non-positive price/quantity);
+   *   `AddressRequired` | `ExecutorRequired`; `HubNotFound` | `PoolNotFound`;
+   *   `InsufficientBalance` when the wallet/hangar cannot fund the deficit;
+   *   `CollectionMismatch` | `CharacterNotFound` (sell funding);
+   *   `TransactionFailed` on an on-chain abort (message explains which —
+   *   max open orders, expired timestamp, …).
    */
   async limit(params: LimitOrderParams): Promise<TxResult> {
     if (params.quantity <= 0n || params.price <= 0n) {
@@ -645,6 +716,9 @@ class OrdersApi {
    * REQUIRE `quoteBudget` (worst-case cost incl. fees — see
    * `estimateMarketBuyCost`), topped up with the app's per-fill rounding
    * buffer. Unspent quote stays in the balance manager.
+   * @throws as `limit()`, plus `ValidationFailed` when a buy has no
+   *   `quoteBudget`; on-chain `TransactionFailed` includes empty-book /
+   *   slippage aborts.
    */
   async market(params: MarketOrderParams): Promise<TxResult> {
     if (params.quantity <= 0n) {
@@ -710,7 +784,12 @@ class OrdersApi {
     return this.c.finishBmTx(tx, bm, existingBmId, owner)
   }
 
-  /** Cancel one resting order (order id from `openOrders()` / discovery). */
+  /**
+   * Cancel one resting order (order id from `openOrders()` / discovery).
+   * @throws `AddressRequired` | `ExecutorRequired`; `BalanceManagerNotFound`;
+   *   `HubNotFound` | `PoolNotFound`; `TransactionFailed` — e.g. "Order not
+   *   found (EBookOrderNotFound)" when already filled/canceled.
+   */
   async cancel(params: CancelOrderParams): Promise<TxResult> {
     const { tx, bm, poolId, execute } = await this.beginCancelTx(params)
     const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
@@ -723,7 +802,10 @@ class OrdersApi {
     return execute()
   }
 
-  /** Cancel every resting order on one pool. */
+  /**
+   * Cancel every resting order on one pool (no-op success when none rest).
+   * @throws as `cancel()` minus the order-id abort.
+   */
   async cancelAll(params: CancelAllOrdersParams): Promise<TxResult> {
     const { tx, bm, poolId, execute } = await this.beginCancelTx(params)
     const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
@@ -731,7 +813,11 @@ class OrdersApi {
     return execute()
   }
 
-  /** Reduce a resting order's quantity (must stay below the original). */
+  /**
+   * Reduce a resting order's quantity (must stay below the original).
+   * @throws as `cancel()`, plus `ValidationFailed` (non-positive quantity)
+   *   and on-chain aborts for invalid new quantities.
+   */
   async modify(params: ModifyOrderParams): Promise<TxResult> {
     if (params.newQuantity <= 0n) {
       throw new TriexClientError(
@@ -751,21 +837,30 @@ class OrdersApi {
     return execute()
   }
 
-  /** #14 — the player's open orders (empty page when no BM exists yet). */
+  /**
+   * #14 — the player's open orders (empty page when no BM exists yet).
+   * @throws `AddressRequired`.
+   */
   async openOrders(params?: HistoryPageParams): Promise<OpenOrdersPage> {
     const bm = await this.ownBm()
     if (!bm) return { orders: [], nextCursor: null }
     return this.c.indexer.openOrders(bm, params)
   }
 
-  /** #14 — the player's fills. */
+  /**
+   * #14 — the player's fills.
+   * @throws `AddressRequired`.
+   */
   async fills(params?: FillsParams): Promise<FillsPage> {
     const bm = await this.ownBm()
     if (!bm) return { fills: [], nextCursor: null }
     return this.c.indexer.fills(bm, params)
   }
 
-  /** #14 — the player's trades. */
+  /**
+   * #14 — the player's trades.
+   * @throws `AddressRequired`.
+   */
   async trades(params?: TradesParams): Promise<TradesPage> {
     const bm = await this.ownBm()
     if (!bm) return { trades: [], nextCursor: null }

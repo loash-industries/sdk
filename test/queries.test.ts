@@ -70,16 +70,58 @@ describe('IndexerClient request building', () => {
     expect(url.searchParams.get('limit')).toBe('50')
   })
 
-  it('throws a typed IndexerError on non-2xx', async () => {
-    ;(global as any).fetch = jest.fn(async () => ({
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
-      json: async () => ({}),
-    }))
+  it('maps HTTP statuses to specific typed codes', async () => {
+    const respond = (
+      status: number,
+      statusText: string,
+      body: unknown,
+      headers?: Record<string, string>,
+    ) => {
+      ;(global as any).fetch = jest.fn(async () => ({
+        ok: false,
+        status,
+        statusText,
+        headers: { get: (k: string) => headers?.[k.toLowerCase()] ?? null },
+        json: async () => body,
+      }))
+    }
     const client = new IndexerClient('https://api.example.test', 'k')
+
+    // 401/403 → Unauthorized
+    respond(401, 'Unauthorized', { error: 'bad key' })
+    await expect(client.discovery()).rejects.toMatchObject({
+      code: TriexError.Unauthorized,
+      status: 401,
+    })
+
+    // 429 → RateLimited with retryAfterMs from Retry-After
+    respond(429, 'Too Many Requests', {}, { 'retry-after': '2' })
+    await expect(client.discovery()).rejects.toMatchObject({
+      code: TriexError.RateLimited,
+      status: 429,
+      retryAfterMs: 2000,
+    })
+
+    // 404 → per-endpoint code
+    respond(404, 'Not Found', { message: 'no such hub' })
     await expect(client.hubVault(HEX)).rejects.toMatchObject({
+      code: TriexError.HubNotFound,
+    })
+    respond(404, 'Not Found', {})
+    await expect(client.poolMetadata(HEX)).rejects.toMatchObject({
+      code: TriexError.PoolNotFound,
+    })
+    respond(404, 'Not Found', {})
+    await expect(client.openOrders(HEX)).rejects.toMatchObject({
+      code: TriexError.BalanceManagerNotFound,
+    })
+
+    // 5xx → IndexerError, with the server's message surfaced
+    respond(500, 'Internal Server Error', { message: 'db exploded' })
+    await expect(client.discovery()).rejects.toMatchObject({
       code: TriexError.IndexerError,
+      status: 500,
+      message: expect.stringContaining('db exploded'),
     })
   })
 

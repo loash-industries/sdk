@@ -143,8 +143,9 @@ await client.orders.cancelAll({ storageUnitId, assetId })
 
 ### Agentic / CLI error handling
 
-Every SDK failure is a `TriexClientError` with a stable `code`; on-chain aborts
-are translated into actionable text:
+Every SDK failure is a `TriexClientError` with a stable `code` — each method's
+`@throws` JSDoc lists exactly which codes it can raise, and on-chain aborts are
+translated into actionable text:
 
 ```ts
 import { TriexClientError, TriexError, explainMoveAbort } from '@trinaryex/sdk'
@@ -154,6 +155,7 @@ try {
 } catch (e) {
   if (!(e instanceof TriexClientError)) throw e
   switch (e.code) {
+    case TriexError.RateLimited:         // CU budget hit — wait e.retryAfterMs
     case TriexError.InsufficientBalance: // top up and retry
     case TriexError.PoolNotFound:        // no market for this item at this hub
     case TriexError.TransactionFailed:   // on-chain abort, e.message explains why
@@ -164,6 +166,19 @@ try {
 // Or translate raw Sui errors from anywhere:
 explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 ```
+
+| Code | Raised when | Recovery |
+|---|---|---|
+| `Unauthorized` | API key missing/revoked/wrong tier (HTTP 401/403) | fix `TRINARY_API_KEY` |
+| `RateLimited` | compute-unit budget exhausted (HTTP 429) | wait `e.retryAfterMs`, retry |
+| `IndexerError` | 5xx / unexpected HTTP failure (`e.status` set) | retry with backoff |
+| `UnexpectedResponse` | response didn't match the pinned schema | report — API drift |
+| `HubNotFound` / `PoolNotFound` / `BalanceManagerNotFound` | unknown id for the target resource | check inputs |
+| `InsufficientBalance` | wallet/hangar/BM can't fund the operation | deposit / top up |
+| `CollectionMismatch` | item receipts from a different deployment | wrong network/receipts |
+| `CharacterNotFound` | hangar flows need an on-chain character | pass `characterId` / create one |
+| `TransactionFailed` | on-chain abort (message carries the translated reason) | act on the message |
+| `AddressRequired` / `ExecutorRequired` / `ApiKeyRequired` / `ValidationFailed` | client-side config/input problems | fix locally |
 
 ## API surface
 

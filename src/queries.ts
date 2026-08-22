@@ -50,10 +50,16 @@ export class IndexerClient {
     private readonly apiKey: string,
   ) {}
 
-  /** GET `path` (+ optional query) and return parsed JSON. */
+  /**
+   * GET `path` (+ optional query) and return parsed JSON, mapping HTTP
+   * failures onto specific `TriexError` codes: 401/403 → `Unauthorized`,
+   * 429 → `RateLimited` (with `retryAfterMs`), 404 → the endpoint's
+   * `notFound` code when given, everything else → `IndexerError`.
+   */
   private async get<T = unknown>(
     path: string,
     query?: Record<string, string | number | boolean | undefined>,
+    notFound?: TriexError,
   ): Promise<T> {
     if (!this.apiKey) {
       throw new TriexClientError(
@@ -71,9 +77,49 @@ export class IndexerClient {
       headers: { 'x-api-key': this.apiKey, accept: 'application/json' },
     })
     if (!res.ok) {
+      // Surface the API's own message when it sent one (NestJS-style bodies).
+      let detail = ''
+      try {
+        const body: any = await res.json()
+        const msg = body?.message ?? body?.error ?? body?.reason
+        if (msg)
+          detail = ` — ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`
+      } catch {
+        // non-JSON body — ignore
+      }
+      const base = `Indexer ${res.status} ${res.statusText} for GET ${url.pathname}${detail}`
+
+      if (res.status === 401 || res.status === 403) {
+        throw new TriexClientError(
+          TriexError.Unauthorized,
+          `${base}. Check TRINARY_API_KEY and the key's access tier.`,
+          undefined,
+          res.status,
+        )
+      }
+      if (res.status === 429) {
+        const retryAfter = res.headers?.get?.('retry-after')
+        let retryAfterMs: number | undefined
+        if (retryAfter) {
+          const secs = Number(retryAfter)
+          retryAfterMs = Number.isFinite(secs)
+            ? secs * 1000
+            : Math.max(0, Date.parse(retryAfter) - Date.now()) || undefined
+        }
+        throw new TriexClientError(
+          TriexError.RateLimited,
+          `${base}. Compute-unit budget exhausted — back off${retryAfterMs ? ` ~${retryAfterMs}ms` : ''} and retry.`,
+          undefined,
+          res.status,
+          retryAfterMs,
+        )
+      }
+      if (res.status === 404 && notFound) {
+        throw new TriexClientError(notFound, base, undefined, res.status)
+      }
       throw new TriexClientError(
         TriexError.IndexerError,
-        `Indexer ${res.status} ${res.statusText} for GET ${url.pathname}`,
+        base,
         undefined,
         res.status,
       )
@@ -118,6 +164,8 @@ export class IndexerClient {
   async orderbook(poolId: string): Promise<Orderbook> {
     const data = await this.get(
       `/v1/pools/${encodeURIComponent(poolId)}/orderbook`,
+      undefined,
+      TriexError.PoolNotFound,
     )
     return { poolId, ...parseWith(OrderbookSchema, data, 'orderbook') }
   }
@@ -126,6 +174,8 @@ export class IndexerClient {
   async poolMetadata(poolId: string): Promise<PoolMetadata> {
     const data = await this.get(
       `/v1/pools/${encodeURIComponent(poolId)}/metadata`,
+      undefined,
+      TriexError.PoolNotFound,
     )
     return parseWith(PoolMetadataSchema, data, 'poolMetadata')
   }
@@ -137,7 +187,11 @@ export class IndexerClient {
    * and `vaultConfigId` (item deposit/withdraw PTBs).
    */
   async hubVault(hubId: string): Promise<HubVaultInfo> {
-    const data = await this.get(`/v1/hubs/${encodeURIComponent(hubId)}/vault`)
+    const data = await this.get(
+      `/v1/hubs/${encodeURIComponent(hubId)}/vault`,
+      undefined,
+      TriexError.HubNotFound,
+    )
     return parseWith(HubVaultSchema, data, 'hubVault')
   }
 
@@ -151,6 +205,8 @@ export class IndexerClient {
     try {
       const data = await this.get(
         `/v1/hubs/${encodeURIComponent(hubId)}/location`,
+        undefined,
+        TriexError.HubNotFound,
       )
       return parseWith(HubLocationSchema, data, 'hubLocation')
     } catch (e) {
@@ -161,7 +217,11 @@ export class IndexerClient {
 
   /** #8 — items with open orders at a trade hub. */
   async hubItems(hubId: string): Promise<HubItemsPage> {
-    const data = await this.get(`/v1/hubs/${encodeURIComponent(hubId)}/items`)
+    const data = await this.get(
+      `/v1/hubs/${encodeURIComponent(hubId)}/items`,
+      undefined,
+      TriexError.HubNotFound,
+    )
     return parseWith(HubItemsPageSchema, data, 'hubItems')
   }
 
@@ -169,6 +229,8 @@ export class IndexerClient {
   async collectionHub(collectionId: string): Promise<CollectionHub> {
     const data = await this.get(
       `/v1/collections/${encodeURIComponent(collectionId)}/hub`,
+      undefined,
+      TriexError.HubNotFound,
     )
     return parseWith(CollectionHubSchema, data, 'collectionHub')
   }
@@ -183,13 +245,17 @@ export class IndexerClient {
   async inventoryBalances(
     params: BalancesAtHubParams & { balanceManagerId?: string },
   ): Promise<InventoryBalances> {
-    const data = await this.get('/v1/inventory/balances', {
-      storage_unit_id: params.storageUnitId,
-      owner_address: params.address,
-      balance_manager_id: params.balanceManagerId,
-      inventory_key: params.inventoryKey,
-      vault_ids: params.vaultIds?.join(','),
-    })
+    const data = await this.get(
+      '/v1/inventory/balances',
+      {
+        storage_unit_id: params.storageUnitId,
+        owner_address: params.address,
+        balance_manager_id: params.balanceManagerId,
+        inventory_key: params.inventoryKey,
+        vault_ids: params.vaultIds?.join(','),
+      },
+      TriexError.HubNotFound,
+    )
     return parseWith(InventoryBalancesSchema, data, 'inventoryBalances')
   }
 
@@ -202,6 +268,7 @@ export class IndexerClient {
     const data = await this.get(
       `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/open-orders`,
       { before: params?.before, after: params?.after, limit: params?.limit },
+      TriexError.BalanceManagerNotFound,
     )
     return parseWith(OpenOrdersPageSchema, data, 'openOrders')
   }
@@ -219,6 +286,7 @@ export class IndexerClient {
         pool_id: params?.poolId,
         side: params?.side,
       },
+      TriexError.BalanceManagerNotFound,
     )
     return parseWith(FillsPageSchema, data, 'fills')
   }
@@ -231,6 +299,8 @@ export class IndexerClient {
   async sweepable(balanceManagerId: string): Promise<Sweepable> {
     const data = await this.get(
       `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/sweepable`,
+      undefined,
+      TriexError.BalanceManagerNotFound,
     )
     return parseWith(SweepableSchema, data, 'sweepable')
   }
@@ -248,6 +318,7 @@ export class IndexerClient {
         side: params?.side,
         asset_id: params?.assetId,
       },
+      TriexError.BalanceManagerNotFound,
     )
     return parseWith(TradesPageSchema, data, 'trades')
   }

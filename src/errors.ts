@@ -6,9 +6,22 @@
 export enum TriexError {
   /** A write was attempted but no `executor` was configured. */
   ExecutorRequired = 'TRIEX_EXECUTOR_REQUIRED',
+  /** The operation needs the player address (set `address` in config). */
+  AddressRequired = 'TRIEX_ADDRESS_REQUIRED',
   /** A read was attempted but no `apiKey` was configured. */
   ApiKeyRequired = 'TRIEX_API_KEY_REQUIRED',
-  /** The indexer returned a non-2xx response. */
+  /**
+   * The API key was rejected (HTTP 401/403) — missing, revoked, or lacking
+   * access to this route. Check `TRINARY_API_KEY` / the key's tier.
+   */
+  Unauthorized = 'TRIEX_UNAUTHORIZED',
+  /**
+   * Compute-unit budget exhausted (HTTP 429). Back off and retry —
+   * `retryAfterMs` carries the server's Retry-After hint when present.
+   * Discovery is the most expensive read (150 CU).
+   */
+  RateLimited = 'TRIEX_RATE_LIMITED',
+  /** The indexer returned an unexpected non-2xx response (5xx, unmapped 4xx). */
   IndexerError = 'TRIEX_INDEXER_ERROR',
   /** The indexer response did not match the expected schema. */
   UnexpectedResponse = 'TRIEX_UNEXPECTED_RESPONSE',
@@ -40,8 +53,10 @@ export class TriexClientError extends Error {
     public readonly code: TriexError,
     message: string,
     public readonly cause?: unknown,
-    /** HTTP status for `IndexerError`s, when the failure was an HTTP response. */
+    /** HTTP status, when the failure was an HTTP response. */
     public readonly status?: number,
+    /** Server-suggested wait before retrying (`RateLimited` only). */
+    public readonly retryAfterMs?: number,
   ) {
     super(message)
     this.name = 'TriexClientError'
