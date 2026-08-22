@@ -261,6 +261,42 @@ export const CollectionHubSchema = z
   .object({ hub_id: z.string(), collection_id: z.string() })
   .transform((v) => ({ hubId: v.hub_id, collectionId: v.collection_id }))
 
+// ─── Item search (#8a) ───────────────────────────────────────────────────────
+
+export const ItemRecipeComponentSchema = z
+  .object({ asset_id: z.string(), quantity: z.number() })
+  .transform((v) => ({ assetId: v.asset_id, quantity: v.quantity }))
+
+export const ItemRecipeSchema = z
+  .object({
+    output_quantity: z.number(),
+    components: z.array(ItemRecipeComponentSchema),
+  })
+  .transform((v) => ({
+    outputQuantity: v.output_quantity,
+    components: v.components,
+  }))
+
+export const ItemSearchResultSchema = z
+  .object({
+    asset_id: z.string(),
+    name: z.string().nullable(),
+    symbol: z.string().nullable(),
+    mass: z.number(),
+    recipes: z.array(ItemRecipeSchema),
+  })
+  .transform((v) => ({
+    assetId: v.asset_id,
+    name: v.name,
+    symbol: v.symbol,
+    mass: v.mass,
+    recipes: v.recipes,
+  }))
+
+export const ItemSearchPageSchema = z
+  .object({ data: z.array(ItemSearchResultSchema) })
+  .transform((v) => ({ items: v.data }))
+
 // ─── Inventory balances (#2) ─────────────────────────────────────────────────
 
 export const AssetBalanceSchema = z

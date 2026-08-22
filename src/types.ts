@@ -14,6 +14,10 @@ import type {
   HubItemSchema,
   HubItemsPageSchema,
   HubLocationSchema,
+  ItemRecipeComponentSchema,
+  ItemRecipeSchema,
+  ItemSearchPageSchema,
+  ItemSearchResultSchema,
   HubVaultSchema,
   InventoryBalancesSchema,
   OpenOrderSchema,
@@ -132,6 +136,10 @@ export type HubLocation = z.output<typeof HubLocationSchema>
 export type HubItem = z.output<typeof HubItemSchema>
 export type HubItemsPage = z.output<typeof HubItemsPageSchema>
 export type CollectionHub = z.output<typeof CollectionHubSchema>
+export type ItemRecipeComponent = z.output<typeof ItemRecipeComponentSchema>
+export type ItemRecipe = z.output<typeof ItemRecipeSchema>
+export type ItemSearchResult = z.output<typeof ItemSearchResultSchema>
+export type ItemSearchPage = z.output<typeof ItemSearchPageSchema>
 export type AssetBalance = z.output<typeof AssetBalanceSchema>
 export type InventoryBalances = z.output<typeof InventoryBalancesSchema>
 export type OpenOrder = z.output<typeof OpenOrderSchema>

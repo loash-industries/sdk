@@ -46,6 +46,55 @@ describe('IndexerClient request building', () => {
     expect((init.headers as Record<string, string>)['x-api-key']).toBe('sekret')
   })
 
+  it('searchItems sends q + limit and parses the results page', async () => {
+    const fetchMock = mockFetch([
+      {
+        data: [
+          {
+            asset_id: '84210',
+            name: 'Carbon Weave',
+            symbol: 'Manufacturing Component',
+            mass: 30000,
+            recipes: [
+              {
+                output_quantity: 1,
+                components: [{ asset_id: '78429', quantity: 4 }],
+              },
+            ],
+          },
+        ],
+      },
+    ])
+    const client = new IndexerClient('https://api.example.test', 'k')
+    const page = await client.searchItems('carbon', 5)
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(String(url)).toContain('/v1/assets/search')
+    expect(url.searchParams.get('q')).toBe('carbon')
+    expect(url.searchParams.get('limit')).toBe('5')
+    expect(page.items[0]).toEqual({
+      assetId: '84210',
+      name: 'Carbon Weave',
+      symbol: 'Manufacturing Component',
+      mass: 30000,
+      recipes: [
+        {
+          outputQuantity: 1,
+          components: [{ assetId: '78429', quantity: 4 }],
+        },
+      ],
+    })
+  })
+
+  it('searchItems omits limit when not given', async () => {
+    const fetchMock = mockFetch([{ data: [] }])
+    const client = new IndexerClient('https://api.example.test', 'k')
+    await client.searchItems('ore')
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.searchParams.has('limit')).toBe(false)
+  })
+
   it('resolvePool passes collection_id + asset_id and surfaces a null miss', async () => {
     const fetchMock = mockFetch([{ pool_id: null }])
     const client = new IndexerClient('https://api.example.test', 'k')

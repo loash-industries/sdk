@@ -5,6 +5,7 @@ import {
   FillsPageSchema,
   HubItemOrderbookSchema,
   HubItemsPageSchema,
+  ItemSearchPageSchema,
   HubLocationSchema,
   HubVaultSchema,
   InventoryBalancesSchema,
@@ -26,6 +27,7 @@ import type {
   HistoryPageParams,
   HubItemMarket,
   HubItemsPage,
+  ItemSearchPage,
   HubLocation,
   HubVaultInfo,
   InventoryBalances,
@@ -245,6 +247,12 @@ export class IndexerClient {
       TriexError.HubNotFound,
     )
     return parseWith(HubItemsPageSchema, data, 'hubItems')
+  }
+
+  /** #8a — search item types by partial name or exact numeric ID. */
+  async searchItems(query: string, limit?: number): Promise<ItemSearchPage> {
+    const data = await this.get('/v1/assets/search', { q: query, limit })
+    return parseWith(ItemSearchPageSchema, data, 'searchItems')
   }
 
   /** #7 — reverse lookup: vault collection → its trade hub. */

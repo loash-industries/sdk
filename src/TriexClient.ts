@@ -57,6 +57,7 @@ import type {
   HistoryPageParams,
   HubItemOrderbook,
   HubItemsPage,
+  ItemSearchPage,
   InventoryBalances,
   LimitOrderParams,
   MarketOrderParams,
@@ -582,6 +583,18 @@ class MarketApi {
    */
   itemsAtHub(hubId: string): Promise<HubItemsPage> {
     return this.c.indexer.hubItems(hubId)
+  }
+
+  /**
+   * #8a — resolve an item name to its `assetId`: search item types by
+   * partial, case-insensitive name (or exact numeric ID). Each match carries
+   * display metadata, mass, and crafting recipes; best matches first.
+   */
+  searchItems(
+    query: string,
+    opts?: { limit?: number },
+  ): Promise<ItemSearchPage> {
+    return this.c.indexer.searchItems(query, opts?.limit)
   }
 
   /**

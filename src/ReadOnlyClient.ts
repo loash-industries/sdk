@@ -10,6 +10,7 @@ import type {
   HistoryPageParams,
   HubItemOrderbook,
   HubItemsPage,
+  ItemSearchPage,
   InventoryBalances,
   OpenOrdersPage,
   PackageIds,
@@ -67,6 +68,18 @@ export class ReadOnlyClient {
   /** #8 — items with open orders at a trade hub. */
   itemsAtHub(hubId: string): Promise<HubItemsPage> {
     return this.indexer.hubItems(hubId)
+  }
+
+  /**
+   * #8a — resolve an item name to its `assetId`: search item types by
+   * partial, case-insensitive name (or exact numeric ID), with mass and
+   * crafting recipes per match.
+   */
+  searchItems(
+    query: string,
+    opts?: { limit?: number },
+  ): Promise<ItemSearchPage> {
+    return this.indexer.searchItems(query, opts?.limit)
   }
 
   /** #9a — resolve the pool for an item at a trade hub. */
