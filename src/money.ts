@@ -1,16 +1,17 @@
 /**
- * Money math for triexbook markets. Getting scaling / fees wrong silently
- * over- or under-funds orders, so this module is pure, deterministic, and the
- * primary unit-test target (see test/money.test.ts).
+ * Money math for Trinary Exchange CLOB markets (Move contracts:
+ * https://github.com/loash-industries/trinary-exchange). Getting scaling /
+ * fees wrong silently over- or under-funds orders, so this module is pure,
+ * deterministic, and the primary unit-test target (see test/money.test.ts).
  *
  * MVP trades item↔CRED via `multicoin_pool`, whose price scaling factor is `1`:
  *   quote = price * quantity
- * (Coin/currency-pair pools use TRIEXBOOK_PRICE_SCALING = 1e9; those are
+ * (Coin/currency-pair pools use TRIEX_PRICE_SCALING = 1e9; those are
  * out of MVP scope but the constant is kept for when they land.)
  */
 
 /** Price scaling for coin/currency-pair pools (`pool`). Not used by item pools. */
-export const TRIEXBOOK_PRICE_SCALING = 1_000_000_000n
+export const TRIEX_PRICE_SCALING = 1_000_000_000n
 
 /** Price scaling for item (multicoin) pools. */
 export const MULTICOIN_PRICE_SCALING = 1n

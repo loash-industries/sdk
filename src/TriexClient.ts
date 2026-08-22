@@ -157,7 +157,7 @@ export class TriexClient {
    */
   async resolveBalanceManagerId(address: string): Promise<string | null> {
     if (this.cachedBalanceManagerId) return this.cachedBalanceManagerId
-    const structType = `${this.ids.triexbook}::balance_manager::BalanceManager`
+    const structType = `${this.ids.triex}::balance_manager::BalanceManager`
     const core = (this.suiClient as any).core
     const page = await core.listOwnedObjects({
       owner: address,

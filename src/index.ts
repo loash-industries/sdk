@@ -28,7 +28,7 @@ export {
   computeBidQuoteDeposit,
   estimateMarketBuyCost,
   marketBuyRoundingBuffer,
-  TRIEXBOOK_PRICE_SCALING,
+  TRIEX_PRICE_SCALING,
   MULTICOIN_PRICE_SCALING,
   FEE_RATE_SCALING,
   GTC_EXPIRE,

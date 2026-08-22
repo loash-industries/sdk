@@ -18,8 +18,7 @@ export const CLOCK_ID = '0x6'
  * gateway; keep the shared-object IDs baked. See DESIGN.md §8 / RQ-2.
  */
 export const STILLNESS_PACKAGE_IDS: PackageIds = {
-  triexbook:
-    '0x291b9da738dffedd18d7c5049e5e6792270202e03f3c9d9db4c7097670bf6eb2',
+  triex: '0x291b9da738dffedd18d7c5049e5e6792270202e03f3c9d9db4c7097670bf6eb2',
   triexRegistry:
     '0x14a58f254b8243bf3f74c057d81cc310498b3d0fe3781650ad58405d7e5f17e4',
   multicoin:

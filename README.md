@@ -5,9 +5,10 @@
 
 The official TypeScript trading SDK for
 [**Trinary Exchange**](https://trinary.exchange/), the player-built
-**EVE Frontier marketplace** — a Sui-based, DeepBook-style order-book market
-for trading items and currency across EVE Frontier trade hubs. Players and
-bots read live **EVE Frontier market data** through the
+**EVE Frontier marketplace** — a Sui-based order-book market for trading
+items and currency across EVE Frontier trade hubs, built on the
+[Trinary Exchange CLOB Move contracts](https://github.com/loash-industries/trinary-exchange).
+Players and bots read live **EVE Frontier market data** through the
 [Trinary Exchange API](https://docs.trinary.exchange/) and trade by signing
 on-chain transactions with their own wallet or keypair.
 
@@ -251,6 +252,8 @@ node --env-file=.env scripts/integration.mjs  # write paths on testnet (uses gas
 - [API documentation](https://docs.trinary.exchange/) — REST reference,
   guides, and [API keys](https://docs.trinary.exchange/docs/api-keys) for the
   Trinary Exchange trading API
+- [Trinary Exchange CLOB contracts](https://github.com/loash-industries/trinary-exchange)
+  — the Sui Move order-book contracts this SDK talks to
 - [`@trinaryex/sdk` on npm](https://www.npmjs.com/package/@trinaryex/sdk)
 - [Design notes](./DESIGN.md) — architecture, scope, and verification history
 

@@ -14,11 +14,12 @@ import type { PackageIds } from './types'
  * (DESIGN.md §12).
  *
  * The unified (gRPC-era) Sui client takes dynamic-field names as BCS bytes and
- * returns values as BCS bytes, so the exact Move layouts are declared here:
- *   triexbook/sources/balance_manager.move
+ * returns values as BCS bytes, so the exact Move layouts are declared here
+ * (see the CLOB Move contracts: https://github.com/loash-industries/trinary-exchange):
+ *   sources/balance_manager.move
  *     `BalanceKey<phantom T> {}`                 (empty struct — one dummy bool)
  *     `MultiCoinBalanceKey { collection_id: ID, asset_id: u64 }`
- *   triexbook/sources/registry.move
+ *   sources/registry.move
  *     `MultiCoinCollectionKey {}`                (empty struct)
  *   multicoin/sources/multicoin.move
  *     `Balance { id: UID, collection: ID, asset_id: u64, amount: u64 }`
@@ -162,7 +163,7 @@ export async function getBalanceManagerCurrencyBalance(
   const balancesBagId = tryIdToString(balancesBag?.id)
   if (!balancesBagId) return 0n
 
-  const keyType = `${ids.triexbook}::balance_manager::BalanceKey<${ids.credCoinType}>`
+  const keyType = `${ids.triex}::balance_manager::BalanceKey<${ids.credCoinType}>`
   const df = await core(suiClient)
     .getDynamicField({
       parentId: balancesBagId,
@@ -188,7 +189,7 @@ export async function getBalanceManagerItemBalance(
   collectionId: string,
   assetId: bigint,
 ): Promise<{ hasKey: boolean; balance: bigint }> {
-  const keyType = `${ids.triexbook}::balance_manager::MultiCoinBalanceKey`
+  const keyType = `${ids.triex}::balance_manager::MultiCoinBalanceKey`
   const resp = await core(suiClient)
     .getDynamicObjectField({
       parentId: balanceManagerId,
@@ -206,14 +207,14 @@ export async function getBalanceManagerItemBalance(
 }
 
 /**
- * The registry's canonical MultiCoin collection id — the collection triexbook
+ * The registry's canonical MultiCoin collection id — the collection CLOB
  * markets trade against (singleton `MultiCoinCollectionKey` dynamic field).
  */
 export async function getRegistryMulticoinCollectionId(
   suiClient: ClientWithCoreApi,
   ids: PackageIds,
 ): Promise<string> {
-  const keyType = `${ids.triexbook}::registry::MultiCoinCollectionKey`
+  const keyType = `${ids.triex}::registry::MultiCoinCollectionKey`
   const resp = await core(suiClient)
     .getDynamicField({
       parentId: ids.triexRegistry,
