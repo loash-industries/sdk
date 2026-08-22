@@ -44,6 +44,8 @@ export enum TriexError {
   CharacterNotFound = 'TRIEX_CHARACTER_NOT_FOUND',
   /** The transaction executed but failed (aborted) on-chain. */
   TransactionFailed = 'TRIEX_TRANSACTION_FAILED',
+  /** A wait helper (`untilIndexed`) gave up before the condition held. */
+  Timeout = 'TRIEX_TIMEOUT',
   /** Placeholder — the code path is scaffolded but not yet implemented. */
   NotImplemented = 'TRIEX_NOT_IMPLEMENTED',
 }

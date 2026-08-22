@@ -2,11 +2,14 @@ import {
   aggregateLevels,
   bestAsk,
   bestBid,
+  bucketTrades,
   depth,
   midPrice,
   spread,
   vwap,
 } from '../src/book'
+import { untilIndexed } from '../src/wait'
+import { TriexError } from '../src/errors'
 import { iterateDiscovery, iterateFills } from '../src/paging'
 import type { Orderbook, OrderbookOrder } from '../src/types'
 
@@ -120,5 +123,76 @@ describe('pagination generators', () => {
     }
     expect(seen).toEqual([300, 200, 100])
     expect(befores).toEqual([undefined, 200, 100])
+  })
+})
+
+describe('bucketTrades', () => {
+  const t = (tradedAt: number, price: bigint, base: bigint) => ({
+    tradedAt,
+    price,
+    baseQuantity: base,
+    quoteQuantity: base * price,
+  })
+
+  it('builds OHLCV buckets aligned to the interval, oldest first', () => {
+    const candles = bucketTrades(
+      // deliberately unsorted
+      [
+        t(61_000, 12n, 1n),
+        t(1_000, 10n, 2n),
+        t(59_000, 8n, 1n),
+        t(30_000, 15n, 3n),
+      ],
+      60_000,
+    )
+    expect(candles).toEqual([
+      {
+        openTime: 0,
+        open: 10n,
+        high: 15n,
+        low: 8n,
+        close: 8n,
+        baseVolume: 6n,
+        quoteVolume: 20n + 45n + 8n,
+        tradeCount: 3,
+      },
+      {
+        openTime: 60_000,
+        open: 12n,
+        high: 12n,
+        low: 12n,
+        close: 12n,
+        baseVolume: 1n,
+        quoteVolume: 12n,
+        tradeCount: 1,
+      },
+    ])
+  })
+
+  it('returns no candles for no trades and rejects bad intervals', () => {
+    expect(bucketTrades([], 60_000)).toEqual([])
+    expect(() => bucketTrades([], 0)).toThrow()
+  })
+})
+
+describe('untilIndexed', () => {
+  it('resolves with the first truthy probe result', async () => {
+    let n = 0
+    const result = await untilIndexed(async () => (++n >= 3 ? 'found' : null), {
+      intervalMs: 1,
+      timeoutMs: 1000,
+    })
+    expect(result).toBe('found')
+    expect(n).toBe(3)
+  })
+
+  it('throws typed Timeout when the deadline passes', async () => {
+    await expect(
+      untilIndexed(async () => null, {
+        intervalMs: 5,
+        timeoutMs: 20,
+        label: 'x',
+      }),
+    ).rejects.toMatchObject({ code: TriexError.Timeout })
   })
 })

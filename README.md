@@ -98,16 +98,20 @@ const feed = await ro.discover({ assetId: '70810', side: 'sell' })
 ### Market analytics
 
 ```ts
-import { aggregateLevels, midPrice, spread, vwap, iterateTrades } from '@trinaryex/sdk'
+import { aggregateLevels, midPrice, spread, vwap, bucketTrades, iterateTrades } from '@trinaryex/sdk'
 
 const book = await ro.orderbook({ storageUnitId, assetId })
 console.log('mid', midPrice(book), 'spread', spread(book)?.bps, 'bps')
 console.log('bid levels', aggregateLevels(book.bids))
 
-// Stream a balance manager's full trade history (auto-pagination).
+// Stream a balance manager's full trade history (auto-pagination) …
+const history = []
 for await (const trade of iterateTrades(ro.indexer, balanceManagerId)) {
-  record(trade) // { price, baseQuantity, quoteQuantity, fee, side, tradedAt, … }
+  history.push(trade) // { price, baseQuantity, quoteQuantity, fee, side, tradedAt, … }
 }
+// … and chart it: the API has no price-history endpoint, so build candles
+// client-side.
+const hourly = bucketTrades(history, 60 * 60 * 1000) // OHLCV Candle[]
 ```
 
 ### Trading bot loop
@@ -124,8 +128,13 @@ await client.orders.limit({ storageUnitId, assetId, side: 'sell', price, quantit
 const est = estimateMarketBuyCost(book.asks, quantity, meta.feeRateScaled)
 await client.orders.market({ storageUnitId, assetId, side: 'buy', quantity, quoteBudget: est.total })
 
-// 2. Watch state (indexer, seconds behind head).
-const { orders } = await client.orders.openOrders()
+// 2. Watch state. The indexer trails the chain by seconds — untilIndexed()
+//    packages the poll-until-visible pattern (typed Timeout on give-up).
+import { untilIndexed } from '@trinaryex/sdk'
+const placed = await untilIndexed(async () => {
+  const { orders } = await client.orders.openOrders({ limit: 20 })
+  return orders.find((o) => o.assetId === assetId && o.side === 'sell')
+}, { label: 'the resting order' })
 const { fills } = await client.orders.fills({ after: lastSeen })
 
 // 3. After fills: proceeds sit SETTLED in the pool until claimed.
@@ -188,7 +197,7 @@ explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 | `balances` | `atHub` (items: warehouse/marketplace/hangar) · `currency` (CRED wallet + BM, fullnode) |
 | `market` | `discover` · `hub` · `itemsAtHub` · `resolvePool` · `orderbook` · `poolMetadata` |
 | `orders` | `limit` · `market` · `cancel` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
-| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `explainMoveAbort` · `toBase` / `fromBase` |
+| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `bucketTrades` (OHLCV) · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `untilIndexed` · `explainMoveAbort` · `toBase` / `fromBase` |
 
 Runnable examples live in [`examples/`](./examples).
 

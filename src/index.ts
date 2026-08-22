@@ -69,10 +69,12 @@ export {
   spread,
   depth,
   vwap,
+  bucketTrades,
 } from './book'
-export type { BookLevel } from './book'
+export type { BookLevel, Candle } from './book'
 export { iterateDiscovery, iterateFills, iterateTrades } from './paging'
 export type { IterateOptions } from './paging'
+export { untilIndexed } from './wait'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type {
