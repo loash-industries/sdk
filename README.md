@@ -1,9 +1,18 @@
 # @trinaryex/sdk
 
-The trading SDK for **Trinary Exchange** — a Sui-based, DeepBook-style market
-for the EVE Frontier game economy. Players and bots read market + account data
-through the [Trinary Exchange API](https://api.trinary.exchange) and trade by
-signing on-chain transactions with their own wallet or keypair.
+[![npm version](https://img.shields.io/npm/v/%40trinaryex%2Fsdk)](https://www.npmjs.com/package/@trinaryex/sdk)
+[![license: MIT](https://img.shields.io/npm/l/%40trinaryex%2Fsdk)](#license)
+
+The official TypeScript trading SDK for
+[**Trinary Exchange**](https://trinary.exchange/), the player-built
+**EVE Frontier marketplace** — a Sui-based, DeepBook-style order-book market
+for trading items and currency across EVE Frontier trade hubs. Players and
+bots read live **EVE Frontier market data** through the
+[Trinary Exchange API](https://docs.trinary.exchange/) and trade by signing
+on-chain transactions with their own wallet or keypair.
+
+- 🛰️ Browse the markets: **<https://trinary.exchange/>**
+- 📚 Full API documentation: **<https://docs.trinary.exchange/>**
 
 Built for exactly the things you'd want to build on an exchange:
 
@@ -12,9 +21,10 @@ Built for exactly the things you'd want to build on an exchange:
 - **CLI tools** — everything is plain async TypeScript with typed errors
 - **agentic trading** — stable error codes plus human-readable on-chain abort translation
 
-> **Status: pre-release.** Reads and the full write surface (deposits,
-> withdrawals, orders, cancels, claims) are implemented and unit-tested
-> against the production app's transaction composition. Targets **testnet**
+> **Status: v1.0.0 — released.** The full read and write surface (deposits,
+> withdrawals, orders, cancels, claims) is verified end-to-end against the
+> live gateway and chain: a scripted trading lifecycle with real fills, fees,
+> and settled-proceeds claims, on top of 95 unit tests. Targets **testnet**
 > (the `stillness` world). See [DESIGN.md](./DESIGN.md).
 
 ## Two planes, two auth models
@@ -226,13 +236,24 @@ slots) from the **fullnode**, head-current. Prefer ids returned from writes
 
 ```bash
 npm install
-npm run tscheck && npm test          # 70 unit tests
+npm run tscheck && npm test          # 95 unit tests
 npm run build
 
 # Live verification (needs .env — see .env.sample):
 node --env-file=.env scripts/smoke.mjs        # read surface vs the live gateway
 node --env-file=.env scripts/integration.mjs  # write paths on testnet (uses gas)
 ```
+
+## Links
+
+- [Trinary Exchange](https://trinary.exchange/) — the EVE Frontier
+  marketplace: live order books, trade hubs, and market data for the EVE
+  Frontier economy
+- [API documentation](https://docs.trinary.exchange/) — REST reference,
+  guides, and [API keys](https://docs.trinary.exchange/docs/api-keys) for the
+  Trinary Exchange trading API
+- [`@trinaryex/sdk` on npm](https://www.npmjs.com/package/@trinaryex/sdk)
+- [Design notes](./DESIGN.md) — architecture, scope, and verification history
 
 ## License
 

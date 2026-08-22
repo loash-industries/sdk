@@ -98,6 +98,12 @@
     "sui",
     "orderbook",
     "eve-frontier",
+    "eve-frontier-trading",
+    "eve-frontier-market",
+    "eve-frontier-marketplace",
+    "marketplace",
+    "market-data",
+    "trading-bot",
     "deepbook"
   ],
   "sideEffects": false,
