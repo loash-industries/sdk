@@ -67,9 +67,12 @@ export type TriexNetwork = 'testnet'
  * overridable via {@link TriexClientConfig.packageIds}.
  */
 export interface PackageIds {
-  /** triexbook package: balance_manager + multicoin_pool. */
-  triexbook: string
-  /** triexbook registry (shared object). */
+  /**
+   * Triex CLOB package: balance_manager + multicoin_pool. See the Move
+   * contracts at https://github.com/loash-industries/trinary-exchange.
+   */
+  triex: string
+  /** Triex CLOB registry (shared object). */
   triexRegistry: string
   /** multicoin package (defines the item `Balance` struct type). */
   multicoin: string

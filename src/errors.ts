@@ -85,8 +85,10 @@ export function notImplemented(what: string): never {
 // ─── On-chain abort translation ──────────────────────────────────────────────
 
 /**
- * Known triexbook Move abort codes → developer-facing explanations, keyed by
- * `module::code` (TRIEX_SYSTEM_DESIGN §11 — Transaction Abort Codes).
+ * Known CLOB Move abort codes (contracts:
+ * https://github.com/loash-industries/trinary-exchange) → developer-facing
+ * explanations, keyed by `module::code` (TRIEX_SYSTEM_DESIGN §11 —
+ * Transaction Abort Codes).
  */
 const MOVE_ABORTS: Record<string, string> = {
   'pool::12':
@@ -115,7 +117,7 @@ const MOVE_ABORTS: Record<string, string> = {
 
 /**
  * Translate a raw Sui execution error into a developer-readable explanation of
- * the triexbook abort, or null when the error is not a recognized Move abort.
+ * the CLOB abort, or null when the error is not a recognized Move abort.
  * Feed it anything: the thrown error, `effects.status.error`, or a string.
  */
 export function explainMoveAbort(error: unknown): string | null {

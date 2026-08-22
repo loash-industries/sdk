@@ -6,7 +6,8 @@ import type {
 import type { PackageIds } from './types'
 
 /**
- * Pure PTB builders for triexbook item (multicoin) trading. Each function
+ * Pure PTB builders for CLOB item (multicoin) trading (Move contracts:
+ * https://github.com/loash-industries/trinary-exchange). Each function
  * APPENDS Move calls to a caller-provided `tx` and returns any on-chain result
  * handles; none execute. The high-level client resolves object IDs (from the
  * indexer + fullnode) and composes these into atomic transactions.
@@ -25,7 +26,7 @@ export function newBalanceManager(
   ids: PackageIds,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triexbook}::balance_manager::new`,
+    target: `${ids.triex}::balance_manager::new`,
     arguments: [],
   })
 }
@@ -37,7 +38,7 @@ export function generateProofAsOwner(
   bm: TransactionObjectArgument,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triexbook}::balance_manager::generate_proof_as_owner`,
+    target: `${ids.triex}::balance_manager::generate_proof_as_owner`,
     arguments: [bm],
   })
 }
@@ -53,7 +54,7 @@ export function depositCoin(
   coinType: string = ids.credCoinType,
 ): void {
   tx.moveCall({
-    target: `${ids.triexbook}::balance_manager::deposit`,
+    target: `${ids.triex}::balance_manager::deposit`,
     typeArguments: [coinType],
     arguments: [bm, coin],
   })
@@ -67,7 +68,7 @@ export function depositMulticoinObject(
   itemObjectId: string,
 ): void {
   tx.moveCall({
-    target: `${ids.triexbook}::balance_manager::deposit_multicoin`,
+    target: `${ids.triex}::balance_manager::deposit_multicoin`,
     arguments: [bm, tx.object(itemObjectId)],
   })
 }
@@ -83,7 +84,7 @@ export function withdrawCoin(
   coinType: string = ids.credCoinType,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triexbook}::balance_manager::withdraw`,
+    target: `${ids.triex}::balance_manager::withdraw`,
     typeArguments: [coinType],
     arguments: [bm, tx.pure.u64(amount)],
   })
@@ -97,7 +98,7 @@ export function withdrawAllCoin(
   coinType: string = ids.credCoinType,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triexbook}::balance_manager::withdraw_all`,
+    target: `${ids.triex}::balance_manager::withdraw_all`,
     typeArguments: [coinType],
     arguments: [bm],
   })
@@ -112,7 +113,7 @@ export function withdrawAllMulticoin(
   assetId: bigint,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triexbook}::balance_manager::withdraw_all_multicoin`,
+    target: `${ids.triex}::balance_manager::withdraw_all_multicoin`,
     arguments: [bm, tx.pure.id(collectionId), tx.pure.u64(assetId)],
   })
 }
@@ -210,7 +211,7 @@ export function sourceItemsFromHangar(
   })
 
   tx.moveCall({
-    target: `${ids.triexbook}::balance_manager::deposit_multicoin`,
+    target: `${ids.triex}::balance_manager::deposit_multicoin`,
     arguments: [bm, receipt],
   })
 }
@@ -239,7 +240,7 @@ export function placeLimitOrderItem(
   args: PlaceLimitOrderArgs,
 ): void {
   tx.moveCall({
-    target: `${ids.triexbook}::multicoin_pool::place_limit_order`,
+    target: `${ids.triex}::multicoin_pool::place_limit_order`,
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
@@ -272,7 +273,7 @@ export function placeMarketOrderItem(
   args: PlaceMarketOrderArgs,
 ): void {
   tx.moveCall({
-    target: `${ids.triexbook}::multicoin_pool::place_market_order`,
+    target: `${ids.triex}::multicoin_pool::place_market_order`,
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
@@ -302,7 +303,7 @@ export function cancelOrderItem(
   },
 ): void {
   tx.moveCall({
-    target: `${ids.triexbook}::multicoin_pool::cancel_order`,
+    target: `${ids.triex}::multicoin_pool::cancel_order`,
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
@@ -325,7 +326,7 @@ export function cancelAllOrdersItem(
   },
 ): void {
   tx.moveCall({
-    target: `${ids.triexbook}::multicoin_pool::cancel_all_orders`,
+    target: `${ids.triex}::multicoin_pool::cancel_all_orders`,
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
@@ -352,7 +353,7 @@ export function modifyOrderItem(
   },
 ): void {
   tx.moveCall({
-    target: `${ids.triexbook}::multicoin_pool::modify_order`,
+    target: `${ids.triex}::multicoin_pool::modify_order`,
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
@@ -382,7 +383,7 @@ export function withdrawSettledAmounts(
   },
 ): void {
   tx.moveCall({
-    target: `${ids.triexbook}::multicoin_pool::withdraw_settled_amounts`,
+    target: `${ids.triex}::multicoin_pool::withdraw_settled_amounts`,
     typeArguments: [args.quoteCoinType ?? ids.credCoinType],
     arguments: [tx.object(args.poolId), args.bm, args.proof],
   })

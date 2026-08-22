@@ -10,8 +10,9 @@ swagger. Remaining: npm publish (CI release workflow ready; needs NPM_TOKEN + pu
 first module, with room to grow into a higher-level, full-featured client.
 **Audience:** players and bots trading on Trinary Exchange via an API key.
 **Target (MVP):** **testnet only**, the **`stillness`** tenant; **only the most-recent (v1)
-`triexbook` contracts** are supported. Item↔currency (CRED) markets via `multicoin_pool`
-("pools"); coin-pools are out of scope for now.
+[CLOB contracts](https://github.com/loash-industries/trinary-exchange)** are supported.
+Item↔currency (CRED) markets via `multicoin_pool` ("pools"); coin-pools are out of scope
+for now.
 **Models after:** [`@trinaryex/keyspace`](https://www.npmjs.com/package/@trinaryex/keyspace)
 (client + `executor` pattern, `queries`/`transactions` split, zod validation, vite build,
 semantic-release).
@@ -20,11 +21,11 @@ semantic-release).
 
 ## 1. What this SDK is (and isn't)
 
-Trinary Exchange is a Sui-based, DeepBook-style market for an EVE-Frontier game economy.
+Trinary Exchange is a Sui-based order-book market for an EVE-Frontier game economy.
 Players trade **items** (multicoin balances, priced in the **CRED** trade currency) and
 **currency** at **trade hubs** (Smart Storage Units / SSUs) through on-chain order books
-(the `triexbook` DeepBook fork), settling through a per-player **balance manager** (the
-on-chain trading account).
+(the [Trinary Exchange CLOB Move contracts](https://github.com/loash-industries/trinary-exchange)),
+settling through a per-player **balance manager** (the on-chain trading account).
 
 The SDK gives a player/bot one object to:
 
@@ -110,7 +111,7 @@ on the free/standard tier).
                     │     (fetch + x-api-key + zod validate)       │      (Postgres read models)
                     │                                              │
                     │   transactions.ts ──build PTB──► executor()  │───► player's wallet / keypair
-                    │     (pure @mysten/sui Transaction builders)  │      └─► Sui network (triexbook)
+                    │     (pure @mysten/sui Transaction builders)  │      └─► Sui network (CLOB contracts)
                     └────────────────────────────────────────────┘
 ```
 
@@ -139,7 +140,7 @@ executor: (tx) => signAndExecuteTransaction({ transaction: tx })
 
 Executor results are **normalized** (`execute.ts`): both the v2 core-client
 `TransactionResult` and the legacy `{ digest, objectChanges }` shape work, and on-chain
-aborts are rethrown as typed `TransactionFailed` errors with the triexbook abort code
+aborts are rethrown as typed `TransactionFailed` errors with the CLOB abort code
 translated (§11 of TRIEX_SYSTEM_DESIGN). Include `effects` + `objectTypes` (v2) or
 `objectChanges` (legacy) so created objects — e.g. a freshly-created `BalanceManager` —
 are captured for read-your-writes.
@@ -216,7 +217,7 @@ const client = new TriexClient({
   network: 'testnet',                            // selects package-id bundle
   executor: (tx) => signAndExecuteTransaction({ transaction: tx, options: { showObjectChanges: true } }),
   // packageIds optional — resolved from `network` defaults, overridable:
-  // packageIds: { triexbook, multicoin, warehouseReceipts, credCoinType, clock: '0x6', ... }
+  // packageIds: { triex, multicoin, warehouseReceipts, credCoinType, clock: '0x6', ... }
 })
 ```
 
@@ -279,18 +280,18 @@ pure functions `(args) => Transaction`; the facade fills object IDs from indexer
 
 | Builder | Move target | Notes |
 |---|---|---|
-| `newBalanceManager` | `${triexbook}::balance_manager::new()` | returns BM; `transferObjects([bm], self)` when freshly created |
-| `depositCoin` | `${triexbook}::balance_manager::deposit<T>(bm, coin)` | coin prepared via list/merge/split of wallet coins |
-| `depositMulticoinObject` | `${triexbook}::balance_manager::deposit_multicoin(bm, object)` | deposit an owned multicoin `Balance` object (wallet receipts) into BM |
-| `withdrawAllCoin` | `${triexbook}::balance_manager::withdraw_all<T>(bm)` → `transferObjects` | #13 |
-| `withdrawAllMulticoin` | `${triexbook}::balance_manager::withdraw_all_multicoin(bm, collectionId, assetId)` | #12 step 1 |
+| `newBalanceManager` | `${triex}::balance_manager::new()` | returns BM; `transferObjects([bm], self)` when freshly created |
+| `depositCoin` | `${triex}::balance_manager::deposit<T>(bm, coin)` | coin prepared via list/merge/split of wallet coins |
+| `depositMulticoinObject` | `${triex}::balance_manager::deposit_multicoin(bm, object)` | deposit an owned multicoin `Balance` object (wallet receipts) into BM |
+| `withdrawAllCoin` | `${triex}::balance_manager::withdraw_all<T>(bm)` → `transferObjects` | #13 |
+| `withdrawAllMulticoin` | `${triex}::balance_manager::withdraw_all_multicoin(bm, collectionId, assetId)` | #12 step 1 |
 | `redeemReceipt` | `${warehouseReceipts}::receipt::redeem_receipt(balance, ssu, character, vaultConfig, collection, isOwner)` | #12 step 2 (BM item → hangar) |
-| `ownerProof` | `${triexbook}::balance_manager::generate_proof_as_owner(bm)` | required before placing/withdrawing |
-| `placeLimitOrderItem` | `${triexbook}::multicoin_pool::place_limit_order<Quote>(pool, bm, proof, orderType, selfMatch, price, qty, isBid, expireTs, clock)` | items (multicoin) |
-| `placeMarketOrderItem` | `${triexbook}::multicoin_pool::place_market_order<Quote>(pool, bm, proof, selfMatch, qty, isBid, clock)` | items (multicoin) |
-| `cancelOrderItem` | `${triexbook}::multicoin_pool::cancel_order<Quote>(pool, bm, proof, orderId u64, clock)` | implemented (+ `cancel_all_orders`, `modify_order`) |
-| `withdrawCoin` | `${triexbook}::balance_manager::withdraw<T>(bm, amount)` | partial currency withdraw |
-| `withdrawSettledAmounts` | `${triexbook}::multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` | claim post-fill proceeds into the BM |
+| `ownerProof` | `${triex}::balance_manager::generate_proof_as_owner(bm)` | required before placing/withdrawing |
+| `placeLimitOrderItem` | `${triex}::multicoin_pool::place_limit_order<Quote>(pool, bm, proof, orderType, selfMatch, price, qty, isBid, expireTs, clock)` | items (multicoin) |
+| `placeMarketOrderItem` | `${triex}::multicoin_pool::place_market_order<Quote>(pool, bm, proof, selfMatch, qty, isBid, clock)` | items (multicoin) |
+| `cancelOrderItem` | `${triex}::multicoin_pool::cancel_order<Quote>(pool, bm, proof, orderId u64, clock)` | implemented (+ `cancel_all_orders`, `modify_order`) |
+| `withdrawCoin` | `${triex}::balance_manager::withdraw<T>(bm, amount)` | partial currency withdraw |
+| `withdrawSettledAmounts` | `${triex}::multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` | claim post-fill proceeds into the BM |
 
 > `<Quote>` is the CRED coin type (`credCoinType`). Item markets are `multicoin_pool`; the
 > item is identified by `collectionId` + `assetId` (u64), not a Move type parameter.
@@ -351,8 +352,8 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
 
 ## 7. Money math (`money.ts`)
 
-- **Coin (currency-pair) pools:** `quote = base * price / TRIEXBOOK_PRICE_SCALING`
-  where `TRIEXBOOK_PRICE_SCALING = 1_000_000_000` (1e9).
+- **Coin (currency-pair) pools:** `quote = base * price / TRIEX_PRICE_SCALING`
+  where `TRIEX_PRICE_SCALING = 1_000_000_000` (1e9).
 - **Multicoin (item) pools:** scaling factor `1` → `quote = price * quantity` (confirmed
   against the production app, which passes the unscaled price straight to
   `place_limit_order`; TRIEX_SYSTEM_DESIGN §7's blanket "all prices ×1e9" describes coin

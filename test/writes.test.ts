@@ -85,7 +85,7 @@ function captureExecutor(opts?: { createBm?: boolean }) {
             {
               type: 'created',
               objectId: BM_ID,
-              objectType: `${IDS.triexbook}::balance_manager::BalanceManager`,
+              objectType: `${IDS.triex}::balance_manager::BalanceManager`,
             },
           ]
         : [],
