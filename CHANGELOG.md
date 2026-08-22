@@ -1,3 +1,17 @@
+## 3.0.0 (2026-08-22)
+
+* Merge pull request #1 from loash-industries/chore/drop-deepbook-triexbook-branding ([98e23ef](https://github.com/loash-industries/sdk/commit/98e23ef)), closes [#1](https://github.com/loash-industries/sdk/issues/1)
+* chore: drop DeepBook/triexbook branding from docs and package IDs ([575a8c6](https://github.com/loash-industries/sdk/commit/575a8c6))
+
+### BREAKING CHANGE
+
+* PackageIds.triexbook is renamed to PackageIds.triex, and
+the exported TRIEXBOOK_PRICE_SCALING constant is renamed to
+TRIEX_PRICE_SCALING. Callers passing packageIds.triexbook as a config
+override or importing TRIEXBOOK_PRICE_SCALING must update to the new names.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+
 ## 2.0.0 (2026-08-22)
 
 * feat!: drop client-side OHLCV candles from the public surface ([67e903f](https://github.com/loash-industries/sdk/commit/67e903f))
