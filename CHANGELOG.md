@@ -1,3 +1,14 @@
+## 2.0.0 (2026-08-22)
+
+* feat!: drop client-side OHLCV candles from the public surface ([67e903f](https://github.com/loash-industries/sdk/commit/67e903f))
+* docs: refresh README for 1.0.0 and link the marketplace + API docs sites ([075e4f9](https://github.com/loash-industries/sdk/commit/075e4f9))
+
+### BREAKING CHANGE
+
+* `bucketTrades` and the `Candle` type are no longer exported.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+
 ## 1.0.0 (2026-08-22)
 
 * ci: adopt shared public-workflows validate/publish pipelines ([a0330c2](https://github.com/loash-industries/sdk/commit/a0330c2))
