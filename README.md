@@ -24,7 +24,7 @@ Built for exactly the things you'd want to build on an exchange:
 > **Status: v1.0.0 — released.** The full read and write surface (deposits,
 > withdrawals, orders, cancels, claims) is verified end-to-end against the
 > live gateway and chain: a scripted trading lifecycle with real fills, fees,
-> and settled-proceeds claims, on top of 95 unit tests. Targets **testnet**
+> and settled-proceeds claims, on top of 93 unit tests. Targets **testnet**
 > (the `stillness` world). See [DESIGN.md](./DESIGN.md).
 
 ## Two planes, two auth models
@@ -108,7 +108,7 @@ const feed = await ro.discover({ assetId: '70810', side: 'sell' })
 ### Market analytics
 
 ```ts
-import { aggregateLevels, midPrice, spread, vwap, bucketTrades, iterateTrades } from '@trinaryex/sdk'
+import { aggregateLevels, midPrice, spread, vwap, iterateTrades } from '@trinaryex/sdk'
 
 const book = await ro.orderbook({ storageUnitId, assetId })
 console.log('mid', midPrice(book), 'spread', spread(book)?.bps, 'bps')
@@ -119,9 +119,8 @@ const history = []
 for await (const trade of iterateTrades(ro.indexer, balanceManagerId)) {
   history.push(trade) // { price, baseQuantity, quoteQuantity, fee, side, tradedAt, … }
 }
-// … and chart it: the API has no price-history endpoint, so build candles
-// client-side.
-const hourly = bucketTrades(history, 60 * 60 * 1000) // OHLCV Candle[]
+// … and summarize it.
+console.log('lifetime VWAP', vwap(history))
 ```
 
 ### Trading bot loop
@@ -207,7 +206,7 @@ explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 | `balances` | `atHub` (items: warehouse/marketplace/hangar) · `currency` (CRED wallet + BM, fullnode) |
 | `market` | `discover` · `hub` · `itemsAtHub` · `resolvePool` · `orderbook` · `poolMetadata` |
 | `orders` | `limit` · `market` · `cancel` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
-| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `bucketTrades` (OHLCV) · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `untilIndexed` · `explainMoveAbort` · `toBase` / `fromBase` |
+| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `untilIndexed` · `explainMoveAbort` · `toBase` / `fromBase` |
 
 Runnable examples live in [`examples/`](./examples).
 
@@ -236,7 +235,7 @@ slots) from the **fullnode**, head-current. Prefer ids returned from writes
 
 ```bash
 npm install
-npm run tscheck && npm test          # 95 unit tests
+npm run tscheck && npm test          # 93 unit tests
 npm run build
 
 # Live verification (needs .env — see .env.sample):
