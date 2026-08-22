@@ -1,0 +1,11 @@
+name: Validate PR
+
+on: pull_request
+
+jobs:
+  validate-code:
+    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@v0.1.0
+    with:
+      node_version: "22"
+      npm_client: npm
+      typecheck_command: run tscheck

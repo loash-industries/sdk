@@ -1,0 +1,35 @@
+name: Publish
+
+# description: Validate, release and publish to npm via semantic-release
+permissions:
+  id-token: write
+  contents: write
+  actions: read
+  checks: write
+  issues: write
+  pull-requests: write
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-code:
+    if: github.actor != 'github-actions[bot]'
+    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@v0.1.0
+    with:
+      node_version: "22"
+      npm_client: npm
+      typecheck_command: run tscheck
+
+  release:
+    uses: loash-industries/public-workflows/.github/workflows/js-semantic-release.yml@main
+    needs: [ validate-code ]
+    with:
+      node_version: "22"
+      environment: prd
+      npm_client: npm
+    secrets:
+      GH_AUTH_TOKEN: ${{ secrets.GH_AUTH_TOKEN }}
+      NPM_TOKEN: ${{ secrets.TRINARYEX_NPM_TOKEN }}
