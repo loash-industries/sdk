@@ -1,3 +1,8 @@
+## 3.1.0 (2026-08-22)
+
+* Merge pull request #2 from loash-industries/feat/hub-item-orderbook ([c8816bd](https://github.com/loash-industries/sdk/commit/c8816bd)), closes [#2](https://github.com/loash-industries/sdk/issues/2)
+* feat: fetch hub-item order books in one indexer call ([7e87228](https://github.com/loash-industries/sdk/commit/7e87228)), closes [#6](https://github.com/loash-industries/sdk/issues/6) [#53](https://github.com/loash-industries/sdk/issues/53)
+
 ## 3.0.0 (2026-08-22)
 
 * Merge pull request #1 from loash-industries/chore/drop-deepbook-triexbook-branding ([98e23ef](https://github.com/loash-industries/sdk/commit/98e23ef)), closes [#1](https://github.com/loash-industries/sdk/issues/1)
