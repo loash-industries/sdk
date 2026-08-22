@@ -8,10 +8,10 @@ import type {
   FillsPage,
   FillsParams,
   HistoryPageParams,
+  HubItemOrderbook,
   HubItemsPage,
   InventoryBalances,
   OpenOrdersPage,
-  Orderbook,
   PackageIds,
   PoolMetadata,
   ReadOnlyClientConfig,
@@ -88,13 +88,26 @@ export class ReadOnlyClient {
     return poolId
   }
 
-  /** #9 — order book for one item at a trade hub. */
+  /**
+   * #9 — order book for one item at a trade hub. A single indexer call: the
+   * gateway resolves the hub's pool and returns the book with pool metadata
+   * embedded.
+   */
   async orderbook(params: {
     storageUnitId: string
     assetId: string
-  }): Promise<Orderbook> {
-    const poolId = await this.resolvePool(params)
-    return this.indexer.orderbook(poolId)
+  }): Promise<HubItemOrderbook> {
+    const book = await this.indexer.hubItemOrderbook({
+      hubId: params.storageUnitId,
+      assetId: params.assetId,
+    })
+    if (!book.poolId) {
+      throw new TriexClientError(
+        TriexError.PoolNotFound,
+        `No pool for item ${params.assetId} at hub ${params.storageUnitId}.`,
+      )
+    }
+    return { ...book, poolId: book.poolId }
   }
 
   /** #10/#11 — pool metadata (decimals, fee rate, hub linkage). */
