@@ -1,3 +1,7 @@
+## 3.2.0 (2026-08-22)
+
+* feat: add market.searchItems — resolve item names to asset IDs ([3d4de0e](https://github.com/loash-industries/sdk/commit/3d4de0e))
+
 ## 3.1.0 (2026-08-22)
 
 * Merge pull request #2 from loash-industries/feat/hub-item-orderbook ([c8816bd](https://github.com/loash-industries/sdk/commit/c8816bd)), closes [#2](https://github.com/loash-industries/sdk/issues/2)
