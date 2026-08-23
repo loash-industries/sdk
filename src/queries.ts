@@ -251,7 +251,7 @@ export class IndexerClient {
 
   /** #8a — search item types by partial name or exact numeric ID. */
   async searchItems(query: string, limit?: number): Promise<ItemSearchPage> {
-    const data = await this.get('/v1/assets/search', { q: query, limit })
+    const data = await this.get('/v1/world/items/search', { q: query, limit })
     return parseWith(ItemSearchPageSchema, data, 'searchItems')
   }
 

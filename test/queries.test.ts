@@ -69,7 +69,7 @@ describe('IndexerClient request building', () => {
     const page = await client.searchItems('carbon', 5)
 
     const [url] = fetchMock.mock.calls[0] as [URL]
-    expect(String(url)).toContain('/v1/assets/search')
+    expect(String(url)).toContain('/v1/world/items/search')
     expect(url.searchParams.get('q')).toBe('carbon')
     expect(url.searchParams.get('limit')).toBe('5')
     expect(page.items[0]).toEqual({
