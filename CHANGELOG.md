@@ -1,3 +1,7 @@
+## <small>3.2.1 (2026-08-23)</small>
+
+* fix(market): point searchItems at /v1/world/items/search ([67081d2](https://github.com/loash-industries/sdk/commit/67081d2))
+
 ## 3.2.0 (2026-08-22)
 
 * feat: add market.searchItems — resolve item names to asset IDs ([3d4de0e](https://github.com/loash-industries/sdk/commit/3d4de0e))
