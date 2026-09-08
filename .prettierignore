@@ -1,0 +1,6 @@
+coverage
+dist
+node_modules
+
+# Generated — formatting it would make `npm run check:error-codes` fail on every run.
+src/moveAbortCatalog.generated.ts

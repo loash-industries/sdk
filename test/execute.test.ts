@@ -57,7 +57,7 @@ describe('normalizeExecuteResult', () => {
             success: false,
             error: {
               message:
-                'MoveAbort(MoveLocation { module: ModuleId { address: 0x291b, name: Identifier("balance_manager") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3)',
+                'MoveAbort(MoveLocation { module: ModuleId { address: 0x291b, name: Identifier("trading_account") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3)',
             },
           },
         },

@@ -1,3 +1,11 @@
+import {
+  explainMoveAbortDetailed,
+  parseMoveAbort,
+  unpackAbortCode,
+  type MoveAbortExplanation,
+  type AbortCodeBits,
+} from './moveAbort'
+
 /**
  * Typed error surface for the SDK. Every failure the SDK raises is a
  * {@link TriexClientError} carrying a stable {@link TriexError} `code`, so
@@ -85,72 +93,22 @@ export function notImplemented(what: string): never {
 // ─── On-chain abort translation ──────────────────────────────────────────────
 
 /**
- * Known CLOB Move abort codes (contracts:
- * https://github.com/loash-industries/trinary-exchange) → developer-facing
- * explanations, keyed by `module::code` (TRIEX_SYSTEM_DESIGN §11 —
- * Transaction Abort Codes).
- */
-const MOVE_ABORTS: Record<string, string> = {
-  'pool::12':
-    'Slippage too high — the order price moved (EMinimumQuantityOutNotMet)',
-  'book::2': 'No liquidity available (EEmptyOrderbook)',
-  'order_info::5':
-    'POST-ONLY order would cross the book — use a plain limit order (EPOSTOrderCrossesOrderbook)',
-  'order_info::6':
-    'Not enough liquidity to fully fill a FOK order (EFOKOrderCannotBeFullyFilled)',
-  'order_info::8':
-    'Self-match would cancel your order (ESelfMatchingCancelTaker)',
-  'balance_manager::3':
-    'Balance manager holds insufficient currency — deposit more (EBalanceManagerBalanceTooLow)',
-  'balance_manager::7':
-    'Balance manager holds insufficient items (EMultiCoinBalanceTooLow)',
-  'state::2':
-    'Max 100 open orders per balance manager per pool reached (EMaxOpenOrders)',
-  'book::7':
-    'Modified quantity must be less than the original (ENewQuantityMustBeLessThanOriginal)',
-  'book::8':
-    'Order not found — already filled or canceled? (EBookOrderNotFound)',
-  'order_info::4': 'Invalid order restriction value (EInvalidOrderType)',
-  'order_info::0': 'Price out of valid range (EOrderInvalidPrice)',
-  'order_info::3': 'Expire timestamp is in the past (EInvalidExpireTimestamp)',
-}
-
-/**
- * Translate a raw Sui execution error into a developer-readable explanation of
- * the CLOB abort, or null when the error is not a recognized Move abort.
+ * Translate a raw Sui execution error into a developer-readable explanation of the
+ * CLOB abort, or null when the error is not a recognized Move abort.
  * Feed it anything: the thrown error, `effects.status.error`, or a string.
+ *
+ * Backed by a catalog generated from the contract sources, so it covers every abort
+ * constant the contracts declare rather than a hand-kept subset. Use
+ * {@link explainMoveAbortDetailed} when you need the module, code and constant
+ * separately instead of one prose string.
  */
 export function explainMoveAbort(error: unknown): string | null {
-  const text =
-    typeof error === 'string'
-      ? error
-      : error instanceof Error
-        ? error.message
-        : JSON.stringify(error ?? '')
-  // Matches the shapes Sui errors arrive in:
-  //  - `MoveAbort(MoveLocation { … name: Identifier("book") … }, 2)` (quotes
-  //    possibly backslash-escaped inside JSON-stringified errors)
-  //  - `…::book::fn…, abort code: 2` and the reversed pre-submit resolution
-  //    form `MoveAbort in Nth command, abort code: 8, in '0x…::book::fn'`
-  //  - structured `module … book … abort_code: 2`
-  let module: string | undefined
-  let code: string | undefined
-  let m = /Identifier\(\\*"([a-z_]+)\\*"\)[\s\S]*?},?\s*(\d+)\)/.exec(text)
-  if (m) [, module, code] = m
-  if (!module) {
-    m = /::([a-z_]+)::[a-z_]+[^,]*,\s*abort code:?\s*(\d+)/i.exec(text)
-    if (m) [, module, code] = m
-  }
-  if (!module) {
-    m = /abort code:?\s*(\d+)[\s\S]*?::([a-z_]+)::[a-z_]+/i.exec(text)
-    if (m) [, code, module] = m
-  }
-  if (!module) {
-    m = /module:?\s*'?"?([a-z_]+)'?"?[\s\S]*?abort_code:?\s*"?(\d+)"?/i.exec(
-      text,
-    )
-    if (m) [, module, code] = m
-  }
-  if (!module || !code) return null
-  return MOVE_ABORTS[`${module}::${code}`] ?? null
+  const detail = explainMoveAbortDetailed(error)
+  if (!detail || !detail.explanation) return null
+  return detail.constant
+    ? `${detail.explanation} (${detail.constant})`
+    : detail.explanation
 }
+
+export { explainMoveAbortDetailed, parseMoveAbort, unpackAbortCode }
+export type { MoveAbortExplanation, AbortCodeBits }

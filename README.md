@@ -184,7 +184,19 @@ try {
 
 // Or translate raw Sui errors from anywhere:
 explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
+
+// …or get the parts separately instead of one prose string:
+explainMoveAbortDetailed(rawError)
+// { module: 'order_info', constant: 'EPOSTOrderCrossesOrderbook', code: 5,
+//   explanation: 'POST-ONLY order would cross the book — use a plain limit order',
+//   resolution: 'resolved', source: 'packages/triex/sources/book/order_info.move:18', … }
 ```
+
+A failed transaction's `effects.status.error` carries only the raw `u64` abort code —
+no constant name — so the SDK parses that string and resolves the code against
+`MOVE_ABORT_CATALOG`, generated from the contract sources. `resolution` tells you
+whether the abort was `resolved`, came from a dependency package
+(`external-module`), or is a code the catalog doesn't know yet (`unknown-code`).
 
 | Code | Raised when | Recovery |
 |---|---|---|
@@ -193,6 +205,7 @@ explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 | `IndexerError` | 5xx / unexpected HTTP failure (`e.status` set) | retry with backoff |
 | `UnexpectedResponse` | response didn't match the pinned schema | report — API drift |
 | `HubNotFound` / `PoolNotFound` / `BalanceManagerNotFound` | unknown id for the target resource | check inputs |
+| `TransactionFailed` | the transaction aborted on-chain | `e.message` carries the decoded abort |
 | `InsufficientBalance` | wallet/hangar/BM can't fund the operation | deposit / top up |
 | `CollectionMismatch` | item receipts from a different deployment | wrong network/receipts |
 | `CharacterNotFound` | hangar flows need an on-chain character | pass `characterId` / create one |
@@ -207,7 +220,7 @@ explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 | `balances` | `atHub` (items: warehouse/marketplace/hangar) · `currency` (CRED wallet + BM, fullnode) |
 | `market` | `discover` · `hub` · `itemsAtHub` · `resolvePool` · `orderbook` · `poolMetadata` |
 | `orders` | `limit` · `market` · `cancel` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
-| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `untilIndexed` · `explainMoveAbort` · `toBase` / `fromBase` |
+| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
 
 Runnable examples live in [`examples/`](./examples).
 
@@ -236,13 +249,31 @@ slots) from the **fullnode**, head-current. Prefer ids returned from writes
 
 ```bash
 npm install
-npm run tscheck && npm test          # 93 unit tests
+npm run tscheck && npm test          # 114 unit tests
 npm run build
 
 # Live verification (needs .env — see .env.sample):
 node --env-file=.env scripts/smoke.mjs        # read surface vs the live gateway
 node --env-file=.env scripts/integration.mjs  # write paths on testnet (uses gas)
 ```
+
+### Regenerating the abort catalog
+
+`src/moveAbortCatalog.generated.ts` is generated from the Move sources in the
+[contracts repo](https://github.com/loash-industries/trinary-exchange). It is
+committed, so building and testing the SDK never needs that checkout — only
+regenerating does, after an error constant is added, removed or renumbered:
+
+```bash
+npm run generate:error-codes                              # assumes ../trinary-exchange
+npm run generate:error-codes -- --contracts <path>        # or $TRIEX_CONTRACTS
+npm run check:error-codes                                 # fail if the catalog is stale
+```
+
+`check:error-codes` needs the contracts checkout, so it is a local/release step
+rather than a CI one. Drift is caught in CI a different way: the curated messages in
+`src/moveAbort.ts` are keyed by `MoveAbortName`, a union generated from the
+contracts, so a renamed or deleted constant fails `npm run tscheck`.
 
 ## Links
 

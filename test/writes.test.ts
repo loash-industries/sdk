@@ -672,7 +672,7 @@ describe('marketBuyRoundingBuffer', () => {
 describe('explainMoveAbort', () => {
   it('translates known module::code aborts', () => {
     const raw =
-      'MoveAbort(MoveLocation { module: ModuleId { address: 0x291b, name: Identifier("balance_manager") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3) in command 2'
+      'MoveAbort(MoveLocation { module: ModuleId { address: 0x291b, name: Identifier("trading_account") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3) in command 2'
     expect(explainMoveAbort(raw)).toContain('insufficient currency')
     expect(explainMoveAbort(new Error(raw))).toContain('deposit more')
   })
