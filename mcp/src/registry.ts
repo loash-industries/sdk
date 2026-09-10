@@ -21,21 +21,6 @@ export const EXCLUDED_SDK_PATHS: Record<string, string> = {
 }
 
 /**
- * TypeScript-`private` helpers on the SDK client namespaces.
- *
- * `private` is erased at compile time, so runtime reflection still sees these
- * on the prototype. They are not public API and are not candidates for tools.
- * If the SDK ever promotes one to public, remove it here and the parity gate
- * will demand a tool for it.
- */
-export const INTERNAL_SDK_PATHS: string[] = [
-  'orders.beginCancelTx',
-  'orders.depositQuoteDeficit',
-  'orders.ownBm',
-  'orders.requirePool',
-]
-
-/**
  * Tools for a given server mode. `read` mode never even registers the prepare
  * tools, so a read-only deployment is read-only by construction and its
  * `tools/list` says so.

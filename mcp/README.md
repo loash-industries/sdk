@@ -110,10 +110,36 @@ npm ci
 npm test          # unit, parity, schema-snapshot and tenancy suites
 npm run tscheck
 npm run lint:check && npm run prettier:check
+npm run check:parity   # readable lock-step report (builds first)
 npm run build && npm start
 ```
 
-The **parity test** walks the SDK's public client surface and fails when a method has neither a tool nor an explicit entry in `EXCLUDED_SDK_PATHS`/`INTERNAL_SDK_PATHS` — so this server cannot silently fall behind the SDK. The **schema snapshot** turns any consumer-visible input change into a reviewable diff.
+### Lock-step with the SDK
+
+The tool surface is checked against the SDK's **shipped type declarations**, not against a hand-maintained list. `scripts/sdk-surface.mjs` parses `@trinaryex/sdk`'s `.d.ts` with the TypeScript compiler, which gives three things for free:
+
+- `private` helpers are excluded **structurally** — nothing to keep in sync;
+- each method's **return type classifies it**: `Promise<TxResult>` (or `EnsureAccountResult`) is a write, everything else is a read;
+- it describes the **published contract**, which is what consumers actually see.
+
+The check then enforces that every SDK method is either wrapped by a tool **of the matching kind** — writes by a `prepare_*` tool, reads by a read tool — or listed in `EXCLUDED_SDK_PATHS` with a reason. Covering a write with a read tool fails just as loudly as not covering it at all.
+
+`npm run check:parity` prints the full report:
+
+```
+SDK surface: 25 methods (14 read, 11 write)
+MCP tools:   23  ·  explicitly excluded: 2
+
+  ✓ write orders.limit               prepare_limit_order
+  ✓ read  market.orderbook           market_orderbook
+  – read  market.resolvePool         (excluded)
+  …
+MCP covers the SDK surface in lock-step.
+```
+
+The same checks run in `test/parity.test.ts` on every PR — and that suite includes cases driving the comparison with doctored inputs, so the gate is proven to fail when it should. CI runs it on **all** PRs, not just ones touching `mcp/`, because the drift it catches usually originates in an SDK change.
+
+The **schema snapshot** turns any consumer-visible input change into a reviewable diff.
 
 ## License
 

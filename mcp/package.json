@@ -1,7 +1,7 @@
 {
   "name": "@trinaryex/mcp",
   "version": "3.2.1",
-  "description": "Keyless, multi-tenant MCP server for Trinary Exchange — market reads and unsigned transaction preparation for EVE Frontier trading agents.",
+  "description": "Keyless, multi-tenant MCP server for Trinary Exchange \u2014 market reads and unsigned transaction preparation for EVE Frontier trading agents.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,6 +14,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "check:parity": "npm run build && node scripts/check-parity.mjs",
     "start": "node dist/index.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:cov": "node --experimental-vm-modules node_modules/.bin/jest --ci --coverage --reporters=default --reporters=jest-junit",
@@ -57,16 +58,31 @@
   },
   "jest": {
     "preset": "ts-jest/presets/default-esm",
-    "moduleFileExtensions": ["js", "mjs", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "mjs",
+      "json",
+      "ts"
+    ],
     "testRegex": ".test.ts$",
     "transform": {
-      "^.+\\.ts$": ["ts-jest", { "useESM": true, "diagnostics": false }]
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "useESM": true,
+          "diagnostics": false
+        }
+      ]
     },
-    "extensionsToTreatAsEsm": [".ts"],
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
-    "collectCoverageFrom": ["src/**/*.{ts,js}"],
+    "collectCoverageFrom": [
+      "src/**/*.{ts,js}"
+    ],
     "testEnvironment": "node",
     "coverageDirectory": "./coverage"
   },
