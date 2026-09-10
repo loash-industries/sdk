@@ -22,6 +22,12 @@ docker run -p 8080:8080 \
 
 Point an MCP client at `POST /mcp` and send your API key as `x-api-key`.
 
+The image is published to GHCR by the release workflow, tagged with the version
+it wraps and `latest`, and built for `linux/amd64` and `linux/arm64`. It runs
+unprivileged as `node`, carries a `/healthz` HEALTHCHECK, and ships with SBOM
+and provenance attestations — the same supply-chain posture as the npm package.
+Build it yourself with `docker build -t triex-mcp mcp/` from the repo root.
+
 ## Configuration
 
 All configuration is **non-secret** — note the absence of any key, address, or database setting.
