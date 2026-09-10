@@ -1,3 +1,8 @@
+## <small>3.3.1 (2026-09-10)</small>
+
+* Merge pull request #4 from loash-industries/fix/mcp-provenance-repository ([8136129](https://github.com/loash-industries/sdk/commit/8136129)), closes [#4](https://github.com/loash-industries/sdk/issues/4)
+* fix(mcp): declare repository metadata for provenance publishing ([494bfe9](https://github.com/loash-industries/sdk/commit/494bfe9))
+
 ## 3.3.0 (2026-09-10)
 
 * Merge pull request #3 from loash-industries/feat/mcp-server ([5551f83](https://github.com/loash-industries/sdk/commit/5551f83)), closes [#3](https://github.com/loash-industries/sdk/issues/3)
