@@ -1,3 +1,9 @@
+## 3.4.0 (2026-09-10)
+
+* Merge pull request #5 from loash-industries/fix/mcp-provenance-repository ([bd5350e](https://github.com/loash-industries/sdk/commit/bd5350e)), closes [#5](https://github.com/loash-industries/sdk/issues/5)
+* feat(mcp): enforce lock-step on arguments, not just method coverage ([0a30ef2](https://github.com/loash-industries/sdk/commit/0a30ef2))
+* feat(sdk): check every request against the gateway's published contract ([b57939d](https://github.com/loash-industries/sdk/commit/b57939d))
+
 ## <small>3.3.1 (2026-09-10)</small>
 
 * Merge pull request #4 from loash-industries/fix/mcp-provenance-repository ([8136129](https://github.com/loash-industries/sdk/commit/8136129)), closes [#4](https://github.com/loash-industries/sdk/issues/4)

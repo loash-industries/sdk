@@ -1,6 +1,6 @@
 {
   "name": "@trinaryex/sdk",
-  "version": "3.3.1",
+  "version": "3.4.0",
   "description": "Trading SDK for Trinary Exchange — market data, order books, and on-chain trading (Sui) for bots, analytics tools, and CLIs.",
   "type": "module",
   "main": "dist/index.js",
