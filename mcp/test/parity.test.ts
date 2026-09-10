@@ -1,6 +1,7 @@
 import {
   diffParams,
   diffSurface,
+  readKeyspaceSurface,
   readSdkSurface,
 } from '../scripts/sdk-surface.mjs'
 import type { SdkMethod, ToolLike } from '../scripts/sdk-surface.mjs'
@@ -22,7 +23,9 @@ import {
  * is wrapped by a tool of the correct kind, and a tool input the SDK does not
  * accept fails CI until it is renamed, dropped, or waived with a reason.
  */
-const surface = readSdkSurface()
+const sdkSurface = readSdkSurface()
+const keyspaceSurface = readKeyspaceSurface()
+const surface = [...sdkSurface, ...keyspaceSurface]
 const diff = diffSurface(surface, ALL_TOOLS as ToolLike[], EXCLUDED_SDK_PATHS)
 const params = diffParams(
   surface,

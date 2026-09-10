@@ -48,6 +48,8 @@ export interface SurfaceDiff {
 }
 
 export declare function sdkDeclarationPath(): string
+export declare function keyspaceDeclarationPath(): string
+export declare function readKeyspaceSurface(declarationPath?: string): SdkMethod[]
 export declare function readSdkSurface(declarationPath?: string): SdkMethod[]
 export declare function diffSurface(
   surface: SdkMethod[],

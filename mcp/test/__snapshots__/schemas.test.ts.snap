@@ -49,6 +49,36 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "keyspace_get_acl": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "aclId": {
+        "description": "Keyspace object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "aclId",
+    ],
+    "type": "object",
+  },
+  "keyspace_list_accessible": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "Sui address to look up. Public data; no signature involved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "address",
+    ],
+    "type": "object",
+  },
   "market_discover": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
