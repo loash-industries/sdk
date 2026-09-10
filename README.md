@@ -236,13 +236,47 @@ slots) from the **fullnode**, head-current. Prefer ids returned from writes
 
 ```bash
 npm install
-npm run tscheck && npm test          # 93 unit tests
+npm run tscheck && npm test          # unit tests, including the gateway gate
 npm run build
+
+# Contract checks (no API key needed — /swagger.json is public):
+npm run check:gateway                # against the vendored contract
+npm run check:gateway -- --live      # against api.trinary.exchange right now
+npm run refresh:gateway              # update the vendored copy
 
 # Live verification (needs .env — see .env.sample):
 node --env-file=.env scripts/smoke.mjs        # read surface vs the live gateway
 node --env-file=.env scripts/integration.mjs  # write paths on testnet (uses gas)
 ```
+
+### Lock-step with the gateway
+
+Every request this SDK issues is checked against the gateway's **published
+OpenAPI document**, not against a hand-maintained list.
+`scripts/gateway-surface.mjs` reads the contract on one side and parses
+`src/queries.ts` with the TypeScript compiler on the other, then compares them.
+Because call sites are read statically, the check needs no API key, no network
+and no live account — it runs inside the unit-test budget.
+
+Drift comes in two shapes, and only one announces itself:
+
+- **A moved endpoint** 404s on the first real call. Loud, easy.
+- **A renamed query parameter** does not. A gateway ignores keys it does not
+  recognise rather than rejecting them, so the request still returns `200` with
+  a full body — a filter that stopped filtering is indistinguishable from a
+  filter that matched everything, and every layer above believes it asked a
+  narrower question than it did.
+
+The gate reports four things: endpoints the contract does not publish, query
+parameters the endpoint does not declare, required parameters the SDK never
+sends, and call sites too dynamic to read statically — that last one counts as
+a gap in coverage rather than a pass.
+
+`test/gateway.test.ts` runs it against a vendored copy of the contract, so PR
+CI stays hermetic and deterministic, and drives the comparison with doctored
+inputs to prove the gate fails when it should. A vendored copy cannot see the
+gateway moving underneath us, so a scheduled job runs the same check against
+the live document — see `.github/workflows/gateway_drift.yml`.
 
 ## Links
 
