@@ -1,0 +1,17 @@
+name: Validate PR (MCP)
+
+# The MCP package wraps the SDK's public client surface, and its parity test
+# fails when a method gains no tool. That check is only useful if it runs on
+# SDK changes too — so this workflow is deliberately NOT path-filtered.
+on: pull_request
+
+jobs:
+  validate-mcp:
+    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@v0.1.0
+    with:
+      node_version: "22"
+      npm_client: npm
+      typecheck_command: run tscheck
+      working_directory: mcp
+      tests_report_path: mcp/junit.xml
+      tests_coverage_path: mcp/coverage/

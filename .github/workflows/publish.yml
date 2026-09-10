@@ -33,3 +33,105 @@ jobs:
     secrets:
       GH_AUTH_TOKEN: ${{ secrets.GH_AUTH_TOKEN }}
       NPM_TOKEN: ${{ secrets.TRINARYEX_NPM_TOKEN }}
+
+  # ── MCP server ─────────────────────────────────────────────────────────────
+  # Published as a separate npm package and container image, but never as part
+  # of the SDK tarball. Its version MIRRORS the SDK's exactly, so
+  # @trinaryex/mcp@X.Y.Z always names the @trinaryex/sdk@X.Y.Z it wraps.
+
+  validate-mcp:
+    if: github.actor != 'github-actions[bot]'
+    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@v0.1.0
+    with:
+      node_version: "22"
+      npm_client: npm
+      typecheck_command: run tscheck
+      working_directory: mcp
+      tests_report_path: mcp/junit.xml
+      tests_coverage_path: mcp/coverage/
+
+  publish-mcp:
+    needs: [release, validate-mcp]
+    runs-on: ubuntu-latest
+    environment: prd
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout the released commit
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve the SDK version to mirror
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "@trinaryex/mcp@$VERSION" version >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "@trinaryex/mcp@$VERSION is already published — nothing to do."
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+            echo "Publishing @trinaryex/mcp@$VERSION to mirror the SDK."
+          fi
+
+      - name: Pin the MCP version and its SDK dependency
+        if: steps.version.outputs.already_published == 'false'
+        working-directory: mcp
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = process.env.VERSION;
+            pkg.dependencies['@trinaryex/sdk'] = process.env.VERSION;
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          npm install --no-audit --no-fund --package-lock-only
+
+      - name: Build
+        if: steps.version.outputs.already_published == 'false'
+        working-directory: mcp
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Publish to npm
+        if: steps.version.outputs.already_published == 'false'
+        working-directory: mcp
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.TRINARYEX_NPM_TOKEN }}
+
+      - name: Set up Docker Buildx
+        if: steps.version.outputs.already_published == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.version.outputs.already_published == 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the container image
+        if: steps.version.outputs.already_published == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: mcp
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/triex-mcp:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/triex-mcp:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
