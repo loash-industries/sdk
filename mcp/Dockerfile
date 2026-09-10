@@ -35,6 +35,14 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 COPY --from=build --chown=node:node /app/dist ./dist
 
+# The workload charts run the server as `… 2>&1 | tee -a /var/log/app/app.log`
+# so a promtail sidecar can ship logs while stdout still reaches `kubectl logs`.
+# Created here, as root, because the server runs unprivileged and cannot make a
+# directory under /var/log itself. Without it `tee` fails: logs still pass
+# through, but every pod logs a spurious error at start-up and the pipeline
+# masks the process's real exit code.
+RUN mkdir -p /var/log/app && chown node:node /var/log/app
+
 # The server holds no key material and no credential store; it still runs
 # unprivileged, and the image ships no shell-accessible secrets.
 USER node
