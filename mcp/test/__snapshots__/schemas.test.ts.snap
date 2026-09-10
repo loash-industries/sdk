@@ -1,0 +1,597 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
+{
+  "account_balances_at_hub": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "balanceManagerId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "balanceManagerId",
+      "storageUnitId",
+    ],
+    "type": "object",
+  },
+  "account_resolve": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "address",
+    ],
+    "type": "object",
+  },
+  "account_sweepable": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "balanceManagerId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "balanceManagerId",
+    ],
+    "type": "object",
+  },
+  "market_discover": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "type": "string",
+      },
+      "cursor": {
+        "type": "string",
+      },
+      "hubId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "limit": {
+        "exclusiveMinimum": 0,
+        "maximum": 200,
+        "type": "integer",
+      },
+    },
+    "type": "object",
+  },
+  "market_hub": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "hubId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "hubId",
+    ],
+    "type": "object",
+  },
+  "market_items_at_hub": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "hubId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "hubId",
+    ],
+    "type": "object",
+  },
+  "market_orderbook": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "type": "string",
+      },
+      "depth": {
+        "exclusiveMinimum": 0,
+        "maximum": 200,
+        "type": "integer",
+      },
+      "storageUnitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "storageUnitId",
+      "assetId",
+    ],
+    "type": "object",
+  },
+  "market_pool_metadata": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "poolId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "poolId",
+    ],
+    "type": "object",
+  },
+  "market_search_items": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "cursor": {
+        "type": "string",
+      },
+      "limit": {
+        "exclusiveMinimum": 0,
+        "maximum": 200,
+        "type": "integer",
+      },
+      "query": {
+        "description": "Item name or partial name.",
+        "minLength": 1,
+        "type": "string",
+      },
+    },
+    "required": [
+      "query",
+    ],
+    "type": "object",
+  },
+  "orders_fills": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "balanceManagerId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "cursor": {
+        "type": "string",
+      },
+      "limit": {
+        "exclusiveMinimum": 0,
+        "maximum": 200,
+        "type": "integer",
+      },
+    },
+    "required": [
+      "balanceManagerId",
+    ],
+    "type": "object",
+  },
+  "orders_open": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "balanceManagerId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "cursor": {
+        "type": "string",
+      },
+      "limit": {
+        "exclusiveMinimum": 0,
+        "maximum": 200,
+        "type": "integer",
+      },
+    },
+    "required": [
+      "balanceManagerId",
+    ],
+    "type": "object",
+  },
+  "orders_trades": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "balanceManagerId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "cursor": {
+        "type": "string",
+      },
+      "limit": {
+        "exclusiveMinimum": 0,
+        "maximum": 200,
+        "type": "integer",
+      },
+    },
+    "required": [
+      "balanceManagerId",
+    ],
+    "type": "object",
+  },
+  "prepare_cancel_all_orders": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "EVE Frontier item asset id, e.g. "70810".",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "description": "Trade hub / storage unit object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "storageUnitId",
+      "assetId",
+    ],
+    "type": "object",
+  },
+  "prepare_cancel_order": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "EVE Frontier item asset id, e.g. "70810".",
+        "type": "string",
+      },
+      "orderId": {
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "description": "Trade hub / storage unit object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "storageUnitId",
+      "assetId",
+      "orderId",
+    ],
+    "type": "object",
+  },
+  "prepare_claim_settled": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "poolIds": {
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_create_account": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_deposit_currency": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "description": "CRED in base units (6 decimals).",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "amount",
+    ],
+    "type": "object",
+  },
+  "prepare_deposit_items": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "items": {
+        "description": "Items to deposit, by asset id and whole-unit amount.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "amount": {
+              "pattern": "^\\d+$",
+              "type": "string",
+            },
+            "assetId": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "assetId",
+            "amount",
+          ],
+          "type": "object",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "storageUnitId",
+      "items",
+    ],
+    "type": "object",
+  },
+  "prepare_limit_order": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "EVE Frontier item asset id, e.g. "70810".",
+        "type": "string",
+      },
+      "expireAt": {
+        "description": "Unix ms; omit for good-til-cancelled.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "orderType": {
+        "description": "0=LIMIT, 1=IOC, 2=FOK, 3=POST_ONLY.",
+        "maximum": 3,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "price": {
+        "description": "CRED base units per item.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quantity": {
+        "description": "Whole item units; must be a multiple of lot size.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quoteDeposit": {
+        "description": "Override the computed CRED deposit for a bid.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "selfMatchingOption": {
+        "maximum": 2,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "side": {
+        "enum": [
+          "buy",
+          "sell",
+        ],
+        "type": "string",
+      },
+      "storageUnitId": {
+        "description": "Trade hub / storage unit object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "storageUnitId",
+      "assetId",
+      "side",
+      "price",
+      "quantity",
+    ],
+    "type": "object",
+  },
+  "prepare_market_order": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "EVE Frontier item asset id, e.g. "70810".",
+        "type": "string",
+      },
+      "quantity": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quoteBudget": {
+        "description": "Required for buys: worst-case CRED spend including fees.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "selfMatchingOption": {
+        "maximum": 2,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "side": {
+        "enum": [
+          "buy",
+          "sell",
+        ],
+        "type": "string",
+      },
+      "storageUnitId": {
+        "description": "Trade hub / storage unit object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "storageUnitId",
+      "assetId",
+      "side",
+      "quantity",
+    ],
+    "type": "object",
+  },
+  "prepare_modify_order": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "EVE Frontier item asset id, e.g. "70810".",
+        "type": "string",
+      },
+      "newQuantity": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "orderId": {
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "description": "Trade hub / storage unit object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "storageUnitId",
+      "assetId",
+      "orderId",
+      "newQuantity",
+    ],
+    "type": "object",
+  },
+  "prepare_withdraw_currency": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_withdraw_items": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "characterId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "items": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "type": "string",
+            },
+          },
+          "required": [
+            "assetId",
+          ],
+          "type": "object",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "storageUnitId",
+      "items",
+    ],
+    "type": "object",
+  },
+}
+`;
