@@ -2,6 +2,11 @@
   "name": "@trinaryex/mcp",
   "version": "3.2.1",
   "description": "Keyless, multi-tenant MCP server for Trinary Exchange \u2014 market reads and unsigned transaction preparation for EVE Frontier trading agents.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loash-industries/sdk.git",
+    "directory": "mcp"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
