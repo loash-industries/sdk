@@ -1,3 +1,12 @@
+## 3.3.0 (2026-09-10)
+
+* Merge pull request #3 from loash-industries/feat/mcp-server ([5551f83](https://github.com/loash-industries/sdk/commit/5551f83)), closes [#3](https://github.com/loash-industries/sdk/issues/3)
+* feat(mcp): add keyless MCP server that prepares unsigned transactions ([1b19e06](https://github.com/loash-industries/sdk/commit/1b19e06))
+* feat(mcp): enforce kind-aware lock-step coverage of the SDK surface ([906e9db](https://github.com/loash-industries/sdk/commit/906e9db))
+* fix(ci): grant the MCP validate workflow the permissions its reusable job needs ([2cb907a](https://github.com/loash-industries/sdk/commit/2cb907a))
+* fix(ci): grant the SDK validate workflow the permissions its reusable job needs ([0370dac](https://github.com/loash-industries/sdk/commit/0370dac))
+* fix(test): keep root jest from collecting the mcp package's tests ([2e44429](https://github.com/loash-industries/sdk/commit/2e44429))
+
 ## <small>3.2.1 (2026-08-23)</small>
 
 * fix(market): point searchItems at /v1/world/items/search ([67081d2](https://github.com/loash-industries/sdk/commit/67081d2))
