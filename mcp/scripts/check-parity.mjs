@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 // Fails when the MCP tool surface has drifted from the SDK it wraps.
 //
+// Drift has two shapes and this checks both: a method that gained no tool
+// (coverage), and a tool that offers an argument its method does not take
+// (arguments). The second is the quieter failure — nothing rejects an unknown
+// property, so the tool answers successfully while ignoring what it was asked.
+//
 // Run with `npm run check:parity`. The same checks run in the test suite, so
 // CI enforces them on every PR; this script exists to give a readable report
 // while developing, and to be callable from other tooling.
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { diffSurface, readSdkSurface } from './sdk-surface.mjs'
+import { diffParams, diffSurface, readSdkSurface } from './sdk-surface.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const registryPath = join(here, '..', 'dist', 'registry.js')
@@ -17,9 +22,11 @@ if (!existsSync(registryPath)) {
   process.exit(2)
 }
 
-const { ALL_TOOLS, EXCLUDED_SDK_PATHS } = await import(registryPath)
+const { ALL_TOOLS, EXCLUDED_SDK_PATHS, GLOBAL_SYNTHETIC_PARAMS } =
+  await import(registryPath)
 const surface = readSdkSurface()
 const diff = diffSurface(surface, ALL_TOOLS, EXCLUDED_SDK_PATHS)
+const params = diffParams(surface, ALL_TOOLS, GLOBAL_SYNTHETIC_PARAMS)
 
 const counts = {
   sdkMethods: surface.length,
@@ -31,7 +38,10 @@ const counts = {
 
 console.log(
   `SDK surface: ${counts.sdkMethods} methods (${counts.reads} read, ${counts.writes} write)\n` +
-    `MCP tools:   ${counts.tools}  ·  explicitly excluded: ${counts.excluded}\n`,
+    `MCP tools:   ${counts.tools}  ·  explicitly excluded: ${counts.excluded}\n` +
+    `Parameters:  ${surface.reduce((n, m) => n + m.params.length, 0)} across the surface  ·  ` +
+    `waivers: ${Object.keys(GLOBAL_SYNTHETIC_PARAMS).length} global + ` +
+    `${ALL_TOOLS.reduce((n, t) => n + Object.keys(t.syntheticParams ?? {}).length + Object.keys(t.derivedParams ?? {}).length, 0)} per-tool\n`,
 )
 
 console.log(
@@ -83,6 +93,38 @@ if (diff.staleExclusions.length) {
   problems.push(
     'Exclusions for SDK methods that no longer exist:\n' +
       diff.staleExclusions.map((p) => `  ${p}`).join('\n'),
+  )
+}
+
+if (params.unknown.length) {
+  problems.push(
+    'Tool inputs the SDK method does not accept (silently ignored at runtime):\n' +
+      params.unknown
+        .map(
+          (u) =>
+            `  ${u.tool}.${u.param} — ${u.sdkPath} accepts: ${u.accepted.join(', ') || '(nothing)'}\n` +
+            `      rename it to the SDK's own name, drop it, or declare it in syntheticParams with a reason`,
+        )
+        .join('\n'),
+  )
+}
+
+if (params.missingRequired.length) {
+  problems.push(
+    'Required SDK parameters no tool input supplies:\n' +
+      params.missingRequired
+        .map(
+          (m) =>
+            `  ${m.tool} never supplies ${m.sdkPath}(${m.param}) — accept it, or declare it in derivedParams with its source`,
+        )
+        .join('\n'),
+  )
+}
+
+if (params.stale.length) {
+  problems.push(
+    'Parameter waivers that no longer hold:\n' +
+      params.stale.map((s) => `  ${s.tool}.${s.param} ${s.why}`).join('\n'),
   )
 }
 

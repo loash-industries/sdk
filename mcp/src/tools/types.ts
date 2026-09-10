@@ -18,5 +18,19 @@ export interface ToolDef {
   /** Dotted path of the SDK method this delegates to, e.g. `orders.limit`. */
   sdkPath: string
   inputShape: ZodRawShape
+  /**
+   * Inputs with no SDK counterpart, each mapped to why it exists.
+   *
+   * The parity gate rejects any input its SDK method does not accept, because
+   * an unrecognised property is dropped in transit rather than refused — the
+   * caller gets a cheerful, silently unfiltered answer. Anything legitimately
+   * MCP-level belongs here, in writing.
+   */
+  syntheticParams?: Record<string, string>
+  /**
+   * Required SDK parameters the handler supplies itself instead of accepting
+   * from the caller, each mapped to where the value comes from.
+   */
+  derivedParams?: Record<string, string>
   handler: (ctx: RequestContext, args: any) => Promise<ToolResponse>
 }

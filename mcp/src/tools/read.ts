@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import { ok } from '../result.js'
-import { objectId, pagingShape, suiAddress } from '../schemas.js'
+import {
+  cursorPagingShape,
+  historyPagingShape,
+  objectId,
+  searchPagingShape,
+  suiAddress,
+} from '../schemas.js'
 import type { ToolDef } from './types.js'
 
 /**
@@ -13,13 +19,20 @@ export const readTools: ToolDef[] = [
     name: 'market_discover',
     title: 'Discover markets',
     description:
-      'List active orders across trade hubs, optionally filtered. Use this to find where an item is trading.',
+      'List active orders across trade hubs, optionally filtered. Use this to find where an item is trading, or to scan several hubs in one call.',
     kind: 'read',
     sdkPath: 'market.discover',
     inputShape: {
       assetId: z.string().optional(),
-      hubId: objectId.optional(),
-      ...pagingShape,
+      storageUnitIds: z
+        .array(objectId)
+        .min(1)
+        .max(20)
+        .optional()
+        .describe('Restrict to these trade hubs. Omit to scan every hub.'),
+      side: z.enum(['buy', 'sell', 'both']).optional(),
+      publicOnly: z.boolean().optional(),
+      ...cursorPagingShape,
     },
     handler: async (ctx, args) => ok(await ctx.readClient().discover(args)),
   },
@@ -32,7 +45,7 @@ export const readTools: ToolDef[] = [
     sdkPath: 'market.searchItems',
     inputShape: {
       query: z.string().min(1).describe('Item name or partial name.'),
-      ...pagingShape,
+      ...searchPagingShape,
     },
     handler: async (ctx, args) => {
       const { query, ...rest } = args
@@ -69,7 +82,6 @@ export const readTools: ToolDef[] = [
     inputShape: {
       storageUnitId: objectId,
       assetId: z.string(),
-      depth: z.number().int().positive().max(200).optional(),
     },
     handler: async (ctx, args) => ok(await ctx.readClient().orderbook(args)),
   },
@@ -134,7 +146,7 @@ export const readTools: ToolDef[] = [
     description: 'Resting orders for a trading account.',
     kind: 'read',
     sdkPath: 'orders.openOrders',
-    inputShape: { balanceManagerId: objectId, ...pagingShape },
+    inputShape: { balanceManagerId: objectId, ...historyPagingShape },
     handler: async (ctx, args) => {
       const { balanceManagerId, ...rest } = args
       return ok(await ctx.readClient().openOrders(balanceManagerId, rest))
@@ -146,7 +158,7 @@ export const readTools: ToolDef[] = [
     description: "This account's side of each match, most recent first.",
     kind: 'read',
     sdkPath: 'orders.fills',
-    inputShape: { balanceManagerId: objectId, ...pagingShape },
+    inputShape: { balanceManagerId: objectId, ...historyPagingShape },
     handler: async (ctx, args) => {
       const { balanceManagerId, ...rest } = args
       return ok(await ctx.readClient().fills(balanceManagerId, rest))
@@ -158,7 +170,7 @@ export const readTools: ToolDef[] = [
     description: 'Completed trades for a trading account.',
     kind: 'read',
     sdkPath: 'orders.trades',
-    inputShape: { balanceManagerId: objectId, ...pagingShape },
+    inputShape: { balanceManagerId: objectId, ...historyPagingShape },
     handler: async (ctx, args) => {
       const { balanceManagerId, ...rest } = args
       return ok(await ctx.readClient().trades(balanceManagerId, rest))
