@@ -1,3 +1,13 @@
+## 3.5.0 (2026-09-10)
+
+* Merge pull request #6 from loash-industries/build/mcp-container-image ([18380c7](https://github.com/loash-industries/sdk/commit/18380c7)), closes [#6](https://github.com/loash-industries/sdk/issues/6)
+* Merge pull request #7 from loash-industries/fix/mcp-provenance-repository ([bce84ef](https://github.com/loash-industries/sdk/commit/bce84ef)), closes [#7](https://github.com/loash-industries/sdk/issues/7)
+* Merge pull request #8 from loash-industries/feat/mcp-keyspace-reads ([68d51e4](https://github.com/loash-industries/sdk/commit/68d51e4)), closes [#8](https://github.com/loash-industries/sdk/issues/8)
+* chore(deps): bump @trinaryex/keyspace to 8.3.1 ([f263d82](https://github.com/loash-industries/sdk/commit/f263d82))
+* feat(mcp): add keyless Keyspace lookup tools ([4d2fcb4](https://github.com/loash-industries/sdk/commit/4d2fcb4))
+* build(mcp): publish a multi-arch, attested container image ([60f96af](https://github.com/loash-industries/sdk/commit/60f96af))
+* build(mcp): publish a multi-arch, attested container image ([f1a8885](https://github.com/loash-industries/sdk/commit/f1a8885))
+
 ## 3.4.0 (2026-09-10)
 
 * Merge pull request #5 from loash-industries/fix/mcp-provenance-repository ([bd5350e](https://github.com/loash-industries/sdk/commit/bd5350e)), closes [#5](https://github.com/loash-industries/sdk/issues/5)
