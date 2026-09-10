@@ -31,10 +31,41 @@ export const hubAssetShape = {
   assetId: z.string().describe('EVE Frontier item asset id, e.g. "70810".'),
 }
 
-export const pagingShape = {
+const limitShape = {
   limit: z.number().int().positive().max(200).optional(),
+}
+
+/**
+ * Paging comes in two flavours and they are not interchangeable.
+ *
+ * Discovery is cursor-paged; order history is windowed by timestamp. Offering
+ * a `cursor` on a history read is worse than offering no paging at all — the
+ * SDK drops the property it does not recognise, so a caller that pages by
+ * cursor re-reads page one forever and nothing reports a problem.
+ */
+export const cursorPagingShape = {
+  ...limitShape,
   cursor: z.string().optional(),
 }
+
+export const historyPagingShape = {
+  ...limitShape,
+  before: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Unix ms upper bound, exclusive.'),
+  after: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Unix ms lower bound, exclusive.'),
+}
+
+/** Item search takes a limit and nothing else. */
+export const searchPagingShape = limitShape
 
 /** Parse a decimal string into a bigint after zod has validated its shape. */
 export function big(value: string): bigint {

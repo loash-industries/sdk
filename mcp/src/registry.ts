@@ -7,6 +7,20 @@ import type { ServerMode } from './env.js'
 export const ALL_TOOLS: ToolDef[] = [...readTools, ...prepareTools]
 
 /**
+ * Inputs any tool may declare without an SDK counterpart.
+ *
+ * `sender` is the only word this server adds to the SDK's vocabulary, and it
+ * exists precisely because the server is keyless: the SDK takes the signing
+ * address from client configuration, whereas here every request names the
+ * address its transaction is built for. That is what lets one instance serve a
+ * whole fleet without holding anyone's key.
+ */
+export const GLOBAL_SYNTHETIC_PARAMS: Record<string, string> = {
+  sender:
+    'The address a prepared transaction is built for; per-request because this server is keyless and multi-tenant.',
+}
+
+/**
  * SDK client methods deliberately not exposed as tools, with the reason.
  *
  * The parity test walks the SDK's public client surface and fails on anything

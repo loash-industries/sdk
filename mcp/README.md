@@ -116,19 +116,34 @@ npm run build && npm start
 
 ### Lock-step with the SDK
 
-The tool surface is checked against the SDK's **shipped type declarations**, not against a hand-maintained list. `scripts/sdk-surface.mjs` parses `@trinaryex/sdk`'s `.d.ts` with the TypeScript compiler, which gives three things for free:
+The tool surface is checked against the SDK's **shipped type declarations**, not against a hand-maintained list. `scripts/sdk-surface.mjs` parses `@trinaryex/sdk`'s `.d.ts` with the TypeScript compiler, which gives four things for free:
 
 - `private` helpers are excluded **structurally** — nothing to keep in sync;
 - each method's **return type classifies it**: `Promise<TxResult>` (or `EnsureAccountResult`) is a write, everything else is a read;
+- each method's **parameter types resolve** to the property names it accepts, following them into sibling declaration files;
 - it describes the **published contract**, which is what consumers actually see.
 
-The check then enforces that every SDK method is either wrapped by a tool **of the matching kind** — writes by a `prepare_*` tool, reads by a read tool — or listed in `EXCLUDED_SDK_PATHS` with a reason. Covering a write with a read tool fails just as loudly as not covering it at all.
+Lock-step is enforced in two dimensions.
+
+**Coverage.** Every SDK method is either wrapped by a tool **of the matching kind** — writes by a `prepare_*` tool, reads by a read tool — or listed in `EXCLUDED_SDK_PATHS` with a reason. Covering a write with a read tool fails just as loudly as not covering it at all.
+
+**Arguments.** Every tool input must be a parameter its SDK method actually accepts. This catches the quieter drift: an unrecognised property is not refused anywhere, it is dropped in transit, so the tool answers successfully while ignoring what it was asked. A `hubId` filter on a method that filters by `storageUnitIds` returned the entire market; a `cursor` on a timestamp-windowed read paged forever over page one. Both type-checked, and both passed a coverage-only gate.
+
+Two escape hatches exist, and each demands a written reason:
+
+- `GLOBAL_SYNTHETIC_PARAMS`, or a tool's `syntheticParams` — inputs that are genuinely MCP-level rather than SDK-level. `sender` is the only global one, and it exists precisely because this server is keyless.
+- a tool's `derivedParams` — required SDK parameters the handler supplies itself instead of accepting from the caller.
+
+The waivers are themselves checked: one naming a real SDK parameter, or one the tool no longer declares, fails as a stale claim.
+
+Read tools resolve against `ReadOnlyClient` as well as the namespaced APIs, since that is the client they actually call.
 
 `npm run check:parity` prints the full report:
 
 ```
 SDK surface: 25 methods (14 read, 11 write)
 MCP tools:   23  ·  explicitly excluded: 2
+Parameters:  74 across the surface  ·  waivers: 1 global + 0 per-tool
 
   ✓ write orders.limit               prepare_limit_order
   ✓ read  market.orderbook           market_orderbook
