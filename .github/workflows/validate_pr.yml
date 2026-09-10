@@ -1,5 +1,13 @@
 name: Validate PR
 
+# The called reusable workflow requests these scopes; a caller that does not
+# grant them fails at startup before any job runs.
+permissions:
+  id-token: write
+  contents: read
+  checks: write
+  actions: read
+
 on: pull_request
 
 jobs:
