@@ -73,6 +73,10 @@
       "ts"
     ],
     "testRegex": ".test.ts$",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "<rootDir>/mcp/"
+    ],
     "transform": {
       "^.+\\.ts$": [
         "ts-jest",
