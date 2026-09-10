@@ -1,5 +1,6 @@
 import { SuiGrpcClient } from '@mysten/sui/grpc'
 import type { ClientWithCoreApi } from '@mysten/sui/client'
+import { ReadOnlyAclClient } from '@trinaryex/keyspace'
 import { ReadOnlyClient, TriexClient } from '@trinaryex/sdk'
 import { captureExecutor } from './capture.js'
 import type { ServerConfig } from './env.js'
@@ -19,6 +20,14 @@ export interface RequestContext {
    * capture executor, so it can build but never submit.
    */
   writeClient(sender: string): TriexClient
+  /**
+   * A Keyspace lookup client bound to this caller's key.
+   *
+   * Read-only by construction: it carries no `sealClient`, `executor` or
+   * `storageAdapter`, so the write and decrypt surfaces are unreachable.
+   * Decryption needs a wallet signature and belongs with whoever holds the key.
+   */
+  keyspaceClient(): ReadOnlyAclClient
   /** The shared, credential-free Sui client used for PTB resolution. */
   suiClient(): ClientWithCoreApi
 }
@@ -55,6 +64,12 @@ export function createContext(
     apiKey,
     config,
     suiClient: sui,
+    keyspaceClient: () =>
+      new ReadOnlyAclClient({
+        suiClient: sui() as never,
+        apiKey,
+        ...(config.indexerUrl ? { indexerUrl: config.indexerUrl } : {}),
+      }),
     readClient: () =>
       new ReadOnlyClient({
         apiKey,

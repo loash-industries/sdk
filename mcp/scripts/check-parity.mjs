@@ -12,7 +12,12 @@
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { diffParams, diffSurface, readSdkSurface } from './sdk-surface.mjs'
+import {
+  diffParams,
+  diffSurface,
+  readKeyspaceSurface,
+  readSdkSurface,
+} from './sdk-surface.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const registryPath = join(here, '..', 'dist', 'registry.js')
@@ -24,7 +29,9 @@ if (!existsSync(registryPath)) {
 
 const { ALL_TOOLS, EXCLUDED_SDK_PATHS, GLOBAL_SYNTHETIC_PARAMS } =
   await import(registryPath)
-const surface = readSdkSurface()
+// Both wrapped packages are checked by one gate: the SDK's trading client and
+// the keyspace package's read-only lookup client.
+const surface = [...readSdkSurface(), ...readKeyspaceSurface()]
 const diff = diffSurface(surface, ALL_TOOLS, EXCLUDED_SDK_PATHS)
 const params = diffParams(surface, ALL_TOOLS, GLOBAL_SYNTHETIC_PARAMS)
 

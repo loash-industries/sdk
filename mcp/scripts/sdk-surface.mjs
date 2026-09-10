@@ -36,26 +36,40 @@ const NAMESPACE_CLASSES = {
 const READ_ONLY_CLASS = 'ReadOnlyClient'
 
 /**
- * Return types that mark a method as a WRITE — one that builds and submits a
+ * The keyspace package's read-only client.
+ *
+ * Keyspace decryption needs a wallet signature, so it can never live in this
+ * keyless server. Its *lookup* half can: `getAccessibleAcls` is the one call
+ * that needs the Trinary API key and no signature at all, which puts it on
+ * exactly the same auth plane as every other tool here.
+ */
+const KEYSPACE_CLASS = 'ReadOnlyAclClient'
+
+/**
+ * Return types that mark a WRITE — one that builds and submits a
  * transaction, and therefore needs a `prepare_*` tool rather than a read tool.
  */
 const WRITE_RETURN_TYPES = new Set(['TxResult', 'EnsureAccountResult'])
 
 /**
- * Absolute path to the SDK's TriexClient declaration file.
+ * Absolute path to a declaration file inside an installed package.
  *
- * The package publishes an `exports` map with no CJS entry, so
- * `require.resolve` cannot see it; and `import.meta.resolve` is unavailable
+ * These packages publish an `exports` map with no CJS entry, so
+ * `require.resolve` cannot see them; and `import.meta.resolve` is unavailable
  * inside Jest's ESM context. Try the ESM resolver, then fall back to walking
  * up for node_modules, so the script and the test suite share one resolver.
+ *
+ * @param {string} packageName  e.g. `@trinaryex/sdk`
+ * @param {string} fileName     declaration file within the package's dist
+ * @param {string[]} segments   the package name split for the directory walk
  */
-export function sdkDeclarationPath() {
+function resolvePackageDeclaration(packageName, fileName, segments) {
   const candidates = []
 
   if (typeof import.meta.resolve === 'function') {
     try {
-      const entry = fileURLToPath(import.meta.resolve('@trinaryex/sdk'))
-      candidates.push(join(dirname(entry), 'TriexClient.d.ts'))
+      const entry = fileURLToPath(import.meta.resolve(packageName))
+      candidates.push(join(dirname(entry), fileName))
     } catch {
       // fall through to the filesystem walk
     }
@@ -63,19 +77,25 @@ export function sdkDeclarationPath() {
 
   let dir = dirname(fileURLToPath(import.meta.url))
   for (let i = 0; i < 6; i += 1) {
-    candidates.push(
-      join(dir, 'node_modules', '@trinaryex', 'sdk', 'dist', 'TriexClient.d.ts'),
-    )
+    candidates.push(join(dir, 'node_modules', ...segments, 'dist', fileName))
     dir = dirname(dir)
   }
 
   const found = candidates.find((candidate) => existsSync(candidate))
   if (!found) {
     throw new Error(
-      'Could not locate @trinaryex/sdk type declarations — is the package installed?',
+      `Could not locate ${packageName} type declarations — is the package installed?`,
     )
   }
   return found
+}
+
+/** Absolute path to the SDK's TriexClient declaration file. */
+export function sdkDeclarationPath() {
+  return resolvePackageDeclaration('@trinaryex/sdk', 'TriexClient.d.ts', [
+    '@trinaryex',
+    'sdk',
+  ])
 }
 
 function returnTypeText(method, source) {
@@ -196,6 +216,56 @@ function flatClassMethods(file, className, checker) {
     }
   }
   return methods
+}
+
+/** Absolute path to the keyspace package's AclClient declarations. */
+export function keyspaceDeclarationPath() {
+  return resolvePackageDeclaration('@trinaryex/keyspace', 'AclClient.d.ts', [
+    '@trinaryex',
+    'keyspace',
+  ])
+}
+
+/**
+ * The keyspace surface this server can legitimately wrap: every public method
+ * of `ReadOnlyAclClient`. All of them are reads — the package's write and
+ * decrypt surfaces need an executor or a `signPersonalMessage` callback, and
+ * are unreachable from a keyless server by construction.
+ *
+ * @returns {{path: string, namespace: string, method: string,
+ *            kind: 'read', returns: string,
+ *            params: {name: string, optional: boolean}[]}[]} sorted by path
+ */
+export function readKeyspaceSurface(declarationPath = keyspaceDeclarationPath()) {
+  const program = ts.createProgram([declarationPath], {
+    noEmit: true,
+    skipLibCheck: true,
+    target: ts.ScriptTarget.ES2022,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+  })
+  const checker = program.getTypeChecker()
+  const file = program.getSourceFile(declarationPath)
+  if (!file) {
+    throw new Error(`TypeScript could not load ${declarationPath}`)
+  }
+
+  const methods = flatClassMethods(file, KEYSPACE_CLASS, checker)
+  const surface = [...methods.entries()].map(([method, params]) => ({
+    path: `keyspace.${method}`,
+    namespace: 'keyspace',
+    method,
+    kind: 'read',
+    returns: 'unknown',
+    params,
+  }))
+
+  if (surface.length === 0) {
+    throw new Error(
+      `No ${KEYSPACE_CLASS} methods found in ${declarationPath} — the declaration layout changed and this parser needs updating.`,
+    )
+  }
+
+  return surface.sort((a, b) => a.path.localeCompare(b.path))
 }
 
 /**

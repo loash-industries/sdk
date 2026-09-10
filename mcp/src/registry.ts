@@ -1,10 +1,15 @@
+import { keyspaceTools } from './tools/keyspace.js'
 import { prepareTools } from './tools/prepare.js'
 import { readTools } from './tools/read.js'
 import type { ToolDef } from './tools/types.js'
 import type { ServerMode } from './env.js'
 
 /** Every tool this server can expose, in a stable order. */
-export const ALL_TOOLS: ToolDef[] = [...readTools, ...prepareTools]
+export const ALL_TOOLS: ToolDef[] = [
+  ...readTools,
+  ...keyspaceTools,
+  ...prepareTools,
+]
 
 /**
  * Inputs any tool may declare without an SDK counterpart.
@@ -30,6 +35,12 @@ export const GLOBAL_SYNTHETIC_PARAMS: Record<string, string> = {
 export const EXCLUDED_SDK_PATHS: Record<string, string> = {
   'market.resolvePool':
     'Internal plumbing — pool ids are resolved inside the tools that need them.',
+  'keyspace.hasAccess':
+    'A membership check callable from the readPrincipals that keyspace_get_acl already returns; add a tool if callers want it server-side.',
+  'keyspace.getStaleEntries':
+    'Staleness is already reported per entry by keyspace_get_acl, which returns EntryMeta.isStale for every entry.',
+  'keyspace.isEntryStale':
+    'Single-entry form of keyspace.getStaleEntries; same reason — keyspace_get_acl already carries isStale.',
   'balances.currency':
     'Wallet CRED balance is a plain Sui coin read; account_balances_at_hub covers the trading-account view.',
 }
@@ -40,5 +51,5 @@ export const EXCLUDED_SDK_PATHS: Record<string, string> = {
  * `tools/list` says so.
  */
 export function toolsForMode(mode: ServerMode): ToolDef[] {
-  return mode === 'read' ? readTools : ALL_TOOLS
+  return mode === 'read' ? [...readTools, ...keyspaceTools] : ALL_TOOLS
 }
