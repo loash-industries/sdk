@@ -1,3 +1,7 @@
+## 3.9.0 (2026-09-11)
+
+* feat(mcp): expose CRED balances and the star map ([21c9a9b](https://github.com/loash-industries/sdk/commit/21c9a9b))
+
 ## 3.8.0 (2026-09-11)
 
 * test(sdk): cover balances.currency, including the no-account path ([3ae1c7b](https://github.com/loash-industries/sdk/commit/3ae1c7b))
