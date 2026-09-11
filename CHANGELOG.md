@@ -1,3 +1,7 @@
+## 3.7.0 (2026-09-11)
+
+* feat(mcp): add the location tools and require sdk 3.6.0 ([d1508ed](https://github.com/loash-industries/sdk/commit/d1508ed))
+
 ## 3.6.0 (2026-09-11)
 
 * feat(sdk): wrap the gateway's location surface ([71f46c4](https://github.com/loash-industries/sdk/commit/71f46c4))
