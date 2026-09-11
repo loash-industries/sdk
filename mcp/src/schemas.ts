@@ -64,6 +64,15 @@ export const historyPagingShape = {
     .describe('Unix ms lower bound, exclusive.'),
 }
 
+/**
+ * The location listings declare `limit` as 1–100 in the gateway contract, so
+ * they get their own bound rather than borrowing the looser shared one.
+ */
+export const locationPagingShape = {
+  limit: z.number().int().positive().max(100).optional(),
+  cursor: z.string().optional(),
+}
+
 /** Item search takes a limit and nothing else. */
 export const searchPagingShape = limitShape
 

@@ -21,6 +21,26 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "account_owners": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "balanceManagerIds": {
+        "description": "BalanceManager object ids (max 200).",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "maxItems": 200,
+        "minItems": 1,
+        "type": "array",
+      },
+    },
+    "required": [
+      "balanceManagerIds",
+    ],
+    "type": "object",
+  },
   "account_resolve": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -79,6 +99,46 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "market_assemblies_enriched": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assemblyIds": {
+        "description": "Assembly Sui object ids (max 200).",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "maxItems": 200,
+        "minItems": 1,
+        "type": "array",
+      },
+    },
+    "required": [
+      "assemblyIds",
+    ],
+    "type": "object",
+  },
+  "market_assembly_owners": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assemblyIds": {
+        "description": "Assembly Sui object ids (max 200).",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "maxItems": 200,
+        "minItems": 1,
+        "type": "array",
+      },
+    },
+    "required": [
+      "assemblyIds",
+    ],
+    "type": "object",
+  },
   "market_discover": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -132,6 +192,77 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "market_hub_locations": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "cursor": {
+        "type": "string",
+      },
+      "hasVault": {
+        "description": "Only hubs that have trading initialised (a vault exists).",
+        "type": "boolean",
+      },
+      "limit": {
+        "exclusiveMinimum": 0,
+        "maximum": 100,
+        "type": "integer",
+      },
+      "solarSystemId": {
+        "description": "Numeric solar system id, e.g. 30000142.",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991,
+        "type": "integer",
+      },
+      "tenant": {
+        "description": "Tenant (shard) to restrict to.",
+        "type": "string",
+      },
+    },
+    "type": "object",
+  },
+  "market_hubs_enriched": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "hubIds": {
+        "description": "Trade hub object ids (max 200).",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "maxItems": 200,
+        "minItems": 1,
+        "type": "array",
+      },
+    },
+    "required": [
+      "hubIds",
+    ],
+    "type": "object",
+  },
+  "market_item_locations": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "EVE Frontier item asset id, e.g. "70810".",
+        "type": "string",
+      },
+      "cursor": {
+        "type": "string",
+      },
+      "limit": {
+        "exclusiveMinimum": 0,
+        "maximum": 100,
+        "type": "integer",
+      },
+    },
+    "required": [
+      "assetId",
+    ],
+    "type": "object",
+  },
   "market_items_at_hub": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -143,6 +274,55 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     },
     "required": [
       "hubId",
+    ],
+    "type": "object",
+  },
+  "market_nearby_hubs": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "Only hubs with open orders for this item type.",
+        "type": "string",
+      },
+      "hubId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "rangeLy": {
+        "description": "Search radius in light years (default and max 3500).",
+        "exclusiveMinimum": 0,
+        "maximum": 3500,
+        "type": "number",
+      },
+    },
+    "required": [
+      "hubId",
+    ],
+    "type": "object",
+  },
+  "market_nearby_hubs_by_system": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "Only hubs with open orders for this item type.",
+        "type": "string",
+      },
+      "rangeLy": {
+        "description": "Search radius in light years (default and max 3500).",
+        "exclusiveMinimum": 0,
+        "maximum": 3500,
+        "type": "number",
+      },
+      "solarSystem": {
+        "description": "Solar system id or name to search from, e.g. "Nod".",
+        "minLength": 1,
+        "type": "string",
+      },
+    },
+    "required": [
+      "solarSystem",
     ],
     "type": "object",
   },
@@ -195,6 +375,27 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     },
     "required": [
       "query",
+    ],
+    "type": "object",
+  },
+  "market_solar_system_names": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "solarSystemIds": {
+        "description": "Numeric solar system ids (max 200).",
+        "items": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "maxItems": 200,
+        "minItems": 1,
+        "type": "array",
+      },
+    },
+    "required": [
+      "solarSystemIds",
     ],
     "type": "object",
   },

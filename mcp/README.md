@@ -56,6 +56,8 @@ All configuration is **non-secret** — note the absence of any key, address, or
 
 **Read** — `market_discover`, `market_search_items`, `market_hub`, `market_items_at_hub`, `market_orderbook`, `market_pool_metadata`, `account_resolve`, `account_balances_at_hub`, `account_sweepable`, `orders_open`, `orders_fills`, `orders_trades`.
 
+**Locations** — `market_hub_locations`, `market_item_locations`, `market_nearby_hubs`, `market_nearby_hubs_by_system`, `market_hubs_enriched`, `market_assembly_owners`, `market_assemblies_enriched`, `market_solar_system_names`, `account_owners`. These answer *where is it* and *who owns it*: start from `market_hub_locations` or `market_item_locations` when you hold no hub id, then `market_nearby_hubs` to widen the search. All are read tools.
+
 **Prepare** — `prepare_create_account`, `prepare_deposit_currency`, `prepare_deposit_items`, `prepare_withdraw_currency`, `prepare_withdraw_items`, `prepare_claim_settled`, `prepare_limit_order`, `prepare_market_order`, `prepare_cancel_order`, `prepare_cancel_all_orders`, `prepare_modify_order`.
 
 u64-ish values (prices, quantities, amounts) cross the MCP boundary as **decimal strings**, never JSON numbers.

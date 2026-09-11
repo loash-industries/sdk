@@ -3,6 +3,7 @@ import { ok } from '../result.js'
 import {
   cursorPagingShape,
   historyPagingShape,
+  locationPagingShape,
   objectId,
   searchPagingShape,
   suiAddress,
@@ -97,6 +98,160 @@ export const readTools: ToolDef[] = [
       ok(await ctx.readClient().poolMetadata(args.poolId)),
   },
   {
+    name: 'market_hub_locations',
+    title: 'List hub locations',
+    description:
+      'Every indexed trade hub and where it sits, cursor-paged. This is the entry point when you have no hub id yet — filter by solar system, tenant, or hasVault to see only hubs where trading is actually initialised.',
+    kind: 'read',
+    sdkPath: 'market.hubLocations',
+    inputShape: {
+      solarSystemId: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Numeric solar system id, e.g. 30000142.'),
+      tenant: z.string().optional().describe('Tenant (shard) to restrict to.'),
+      hasVault: z
+        .boolean()
+        .optional()
+        .describe('Only hubs that have trading initialised (a vault exists).'),
+      ...locationPagingShape,
+    },
+    handler: async (ctx, args) => ok(await ctx.readClient().hubLocations(args)),
+  },
+  {
+    name: 'market_item_locations',
+    title: 'Find where an item is sold',
+    description:
+      'Trade hub locations currently offering an item for sale, cursor-paged. Answers "where can I buy this" before market_orderbook prices it at one hub.',
+    kind: 'read',
+    sdkPath: 'market.itemLocations',
+    inputShape: {
+      assetId: z.string().describe('EVE Frontier item asset id, e.g. "70810".'),
+      ...locationPagingShape,
+    },
+    handler: async (ctx, args) => {
+      const { assetId, ...rest } = args
+      return ok(await ctx.readClient().itemLocations(assetId, rest))
+    },
+  },
+  {
+    name: 'market_nearby_hubs',
+    title: 'Find hubs near a hub',
+    description:
+      'Trade hubs within a light-year radius of another hub, optionally only those with open orders for one item. The origin hub must publish a location — use market_nearby_hubs_by_system when it does not.',
+    kind: 'read',
+    sdkPath: 'market.nearbyHubs',
+    inputShape: {
+      hubId: objectId,
+      rangeLy: z
+        .number()
+        .positive()
+        .max(3500)
+        .optional()
+        .describe('Search radius in light years (default and max 3500).'),
+      assetId: z
+        .string()
+        .optional()
+        .describe('Only hubs with open orders for this item type.'),
+    },
+    handler: async (ctx, args) => ok(await ctx.readClient().nearbyHubs(args)),
+  },
+  {
+    name: 'market_nearby_hubs_by_system',
+    title: 'Find hubs near a solar system',
+    description:
+      'The same proximity search as market_nearby_hubs, centred on a solar system id or name instead of a hub. Use it when the origin hub is private and publishes no location.',
+    kind: 'read',
+    sdkPath: 'market.nearbyHubsBySystem',
+    inputShape: {
+      solarSystem: z
+        .string()
+        .min(1)
+        .describe('Solar system id or name to search from, e.g. "Nod".'),
+      rangeLy: z
+        .number()
+        .positive()
+        .max(3500)
+        .optional()
+        .describe('Search radius in light years (default and max 3500).'),
+      assetId: z
+        .string()
+        .optional()
+        .describe('Only hubs with open orders for this item type.'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().nearbyHubsBySystem(args)),
+  },
+  {
+    name: 'market_hubs_enriched',
+    title: 'Batch hub detail',
+    description:
+      'Location, market count, and last storage activity for up to 200 hubs in one call — the batch form of market_hub for scanning a watchlist. Does not resolve solar system names; pass the ids to market_solar_system_names for those.',
+    kind: 'read',
+    sdkPath: 'market.hubsEnriched',
+    inputShape: {
+      hubIds: z
+        .array(objectId)
+        .min(1)
+        .max(200)
+        .describe('Trade hub object ids (max 200).'),
+    },
+    handler: async (ctx, args) => ok(await ctx.readClient().hubsEnriched(args)),
+  },
+  {
+    name: 'market_assembly_owners',
+    title: 'Resolve assembly owners',
+    description:
+      'Owner wallet address for up to 200 assembly (in-game structure) object ids, resolved on-chain.',
+    kind: 'read',
+    sdkPath: 'market.assemblyOwners',
+    inputShape: {
+      assemblyIds: z
+        .array(objectId)
+        .min(1)
+        .max(200)
+        .describe('Assembly Sui object ids (max 200).'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().assemblyOwners(args)),
+  },
+  {
+    name: 'market_assemblies_enriched',
+    title: 'Resolve assembly owners and names',
+    description:
+      'market_assembly_owners plus the owner character and the assembly name, for up to 200 assembly object ids.',
+    kind: 'read',
+    sdkPath: 'market.assembliesEnriched',
+    inputShape: {
+      assemblyIds: z
+        .array(objectId)
+        .min(1)
+        .max(200)
+        .describe('Assembly Sui object ids (max 200).'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().assembliesEnriched(args)),
+  },
+  {
+    name: 'market_solar_system_names',
+    title: 'Name solar systems',
+    description:
+      'Display names for up to 200 numeric solar system ids. Pair with market_hubs_enriched, which returns ids without names.',
+    kind: 'read',
+    sdkPath: 'market.solarSystemNames',
+    inputShape: {
+      solarSystemIds: z
+        .array(z.number().int().positive())
+        .min(1)
+        .max(200)
+        .describe('Numeric solar system ids (max 200).'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().solarSystemNames(args)),
+  },
+  {
     name: 'account_resolve',
     title: 'Resolve a trading account',
     description:
@@ -139,6 +294,23 @@ export const readTools: ToolDef[] = [
     inputShape: { balanceManagerId: objectId },
     handler: async (ctx, args) =>
       ok(await ctx.readClient().sweepable(args.balanceManagerId)),
+  },
+  {
+    name: 'account_owners',
+    title: 'Resolve trading account owners',
+    description:
+      'Who owns these trading accounts, for up to 200 BalanceManager ids — how a counterparty id from the order book gets a name. `owner` is tagged: `player:<wallet>` for a character-owned account, `ou:<org_id>` for an organization-owned one.',
+    kind: 'read',
+    sdkPath: 'account.owners',
+    inputShape: {
+      balanceManagerIds: z
+        .array(objectId)
+        .min(1)
+        .max(200)
+        .describe('BalanceManager object ids (max 200).'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().accountOwners(args)),
   },
   {
     name: 'orders_open',
