@@ -1,3 +1,8 @@
+## 3.8.0 (2026-09-11)
+
+* test(sdk): cover balances.currency, including the no-account path ([3ae1c7b](https://github.com/loash-industries/sdk/commit/3ae1c7b))
+* feat(sdk): add the spatial (star map) surface ([2be4e19](https://github.com/loash-industries/sdk/commit/2be4e19))
+
 ## 3.7.0 (2026-09-11)
 
 * feat(mcp): add the location tools and require sdk 3.6.0 ([d1508ed](https://github.com/loash-industries/sdk/commit/d1508ed))
