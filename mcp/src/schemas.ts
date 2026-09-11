@@ -11,6 +11,17 @@ export const u64 = z
   .string()
   .regex(/^\d+$/, 'expected a non-negative integer as a decimal string')
 
+/**
+ * A signed integer as a decimal string — star-map coordinates in metres.
+ *
+ * Same reason as `u64`: these run past 2^53 and a JSON number would round
+ * them. Unlike `u64` they can be negative, the galactic origin being in the
+ * middle of the map rather than at a corner.
+ */
+export const decimalInt = z
+  .string()
+  .regex(/^-?\d+$/, 'expected an integer as a decimal string')
+
 export const suiAddress = z
   .string()
   .regex(/^0x[0-9a-fA-F]{1,64}$/, 'expected a 0x-prefixed Sui address')

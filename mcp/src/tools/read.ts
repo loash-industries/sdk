@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { ok } from '../result.js'
 import {
   cursorPagingShape,
+  decimalInt,
   historyPagingShape,
   locationPagingShape,
   objectId,
@@ -252,6 +253,133 @@ export const readTools: ToolDef[] = [
       ok(await ctx.readClient().solarSystemNames(args)),
   },
   {
+    name: 'spatial_system',
+    title: 'Get a solar system',
+    description:
+      'Coordinates, constellation and region for one solar system, by name or numeric id — "EHK-KH7" and "30000142" both resolve. Coordinates are metres as decimal strings; they exceed 2^53 and would lose precision as JSON numbers.',
+    kind: 'read',
+    sdkPath: 'spatial.system',
+    inputShape: {
+      solarSystem: z
+        .string()
+        .min(1)
+        .describe('Solar system name (case-insensitive) or numeric id.'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().spatialSystem(args.solarSystem)),
+  },
+  {
+    name: 'spatial_systems',
+    title: 'Look up many solar systems',
+    description:
+      'Resolve up to 100 solar systems in one call. Pass solarSystemIds OR solarSystemNames, never both. Identifiers that match nothing are omitted rather than returned as nulls, so compare `count` against how many you asked for to spot misses.',
+    kind: 'read',
+    sdkPath: 'spatial.systems',
+    inputShape: {
+      solarSystemIds: z
+        .array(z.number().int().positive())
+        .min(1)
+        .max(100)
+        .optional()
+        .describe('Numeric solar system ids (max 100). Omit if using names.'),
+      solarSystemNames: z
+        .array(z.string().min(1))
+        .min(1)
+        .max(100)
+        .optional()
+        .describe('Solar system names (max 100). Omit if using ids.'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().spatialSystems(args)),
+  },
+  {
+    name: 'spatial_nearby_systems',
+    title: 'Find systems near a system',
+    description:
+      'Solar systems within a light-year radius of another system, nearest first. The origin system is excluded from the results. Use this to answer "what is in jump range of here".',
+    kind: 'read',
+    sdkPath: 'spatial.nearbySystems',
+    inputShape: {
+      solarSystem: z
+        .string()
+        .min(1)
+        .describe('Origin system name or numeric id.'),
+      radiusLy: z
+        .number()
+        .positive()
+        .max(10_000)
+        .describe('Search radius in light years (max 10,000).'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(1000)
+        .optional()
+        .describe('Systems to return, nearest first (default 100, max 1000).'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().spatialNearbySystems(args)),
+  },
+  {
+    name: 'spatial_systems_near_coordinates',
+    title: 'Find systems near a point',
+    description:
+      'The same radius search around an arbitrary point in space, for an origin that is not itself a solar system — a ship or structure position read from the chain. Unlike spatial_nearby_systems this can include the system containing the point. x, y and z are metres as decimal strings.',
+    kind: 'read',
+    sdkPath: 'spatial.systemsNearCoordinates',
+    inputShape: {
+      x: decimalInt.describe('X coordinate of the origin, in metres.'),
+      y: decimalInt.describe('Y coordinate of the origin, in metres.'),
+      z: decimalInt.describe('Z coordinate of the origin, in metres.'),
+      radiusLy: z
+        .number()
+        .positive()
+        .max(10_000)
+        .describe('Search radius in light years (max 10,000).'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(1000)
+        .optional()
+        .describe('Systems to return, nearest first (default 100, max 1000).'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().spatialSystemsNearCoordinates(args)),
+  },
+  {
+    name: 'spatial_autocomplete_systems',
+    title: 'Autocomplete system names',
+    description:
+      'Solar systems whose name starts with the given prefix, alphabetically. Returns identifiers only and is served from an in-memory index, so prefer it over spatial_system when resolving a partial name the user typed.',
+    kind: 'read',
+    sdkPath: 'spatial.autocompleteSystems',
+    inputShape: {
+      query: z.string().min(1).describe('Name prefix, case-insensitive.'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(50)
+        .optional()
+        .describe('Suggestions to return (default 10, max 50).'),
+    },
+    handler: async (ctx, args) => {
+      const { query, ...rest } = args
+      return ok(await ctx.readClient().spatialAutocompleteSystems(query, rest))
+    },
+  },
+  {
+    name: 'spatial_stats',
+    title: 'Get star-map coverage',
+    description:
+      'How many solar systems the coordinate index holds, and whether it is loaded. Use it to confirm which dataset results came from before caching them.',
+    kind: 'read',
+    sdkPath: 'spatial.stats',
+    inputShape: {},
+    handler: async (ctx) => ok(await ctx.readClient().spatialStats()),
+  },
+  {
     name: 'account_resolve',
     title: 'Resolve a trading account',
     description:
@@ -283,6 +411,19 @@ export const readTools: ToolDef[] = [
           .readClient()
           .balancesAtHub(args.balanceManagerId, args.storageUnitId),
       ),
+  },
+  {
+    name: 'account_currency_balances',
+    title: 'Check CRED balances',
+    description:
+      'CRED held by an address: loose in the wallet, and deposited inside its trading account. Works for an address that has no trading account yet — that answers with the wallet total, a zero deposited balance, and a null balanceManagerId, which is the signal to call prepare_create_account. Read head-current from the fullnode, so it reflects transactions the indexer has not caught up with yet. Amounts are base units as decimal strings.',
+    kind: 'read',
+    sdkPath: 'balances.currency',
+    inputShape: {
+      address: suiAddress.describe('Sui address whose CRED to read.'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.writeClient(args.address).balances.currency(args.address)),
   },
   {
     name: 'account_sweepable',

@@ -21,6 +21,21 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "account_currency_balances": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "Sui address whose CRED to read.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "address",
+    ],
+    "type": "object",
+  },
   "account_owners": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -857,6 +872,144 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "sender",
       "storageUnitId",
       "items",
+    ],
+    "type": "object",
+  },
+  "spatial_autocomplete_systems": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "limit": {
+        "description": "Suggestions to return (default 10, max 50).",
+        "exclusiveMinimum": 0,
+        "maximum": 50,
+        "type": "integer",
+      },
+      "query": {
+        "description": "Name prefix, case-insensitive.",
+        "minLength": 1,
+        "type": "string",
+      },
+    },
+    "required": [
+      "query",
+    ],
+    "type": "object",
+  },
+  "spatial_nearby_systems": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "limit": {
+        "description": "Systems to return, nearest first (default 100, max 1000).",
+        "exclusiveMinimum": 0,
+        "maximum": 1000,
+        "type": "integer",
+      },
+      "radiusLy": {
+        "description": "Search radius in light years (max 10,000).",
+        "exclusiveMinimum": 0,
+        "maximum": 10000,
+        "type": "number",
+      },
+      "solarSystem": {
+        "description": "Origin system name or numeric id.",
+        "minLength": 1,
+        "type": "string",
+      },
+    },
+    "required": [
+      "solarSystem",
+      "radiusLy",
+    ],
+    "type": "object",
+  },
+  "spatial_stats": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object",
+  },
+  "spatial_system": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "solarSystem": {
+        "description": "Solar system name (case-insensitive) or numeric id.",
+        "minLength": 1,
+        "type": "string",
+      },
+    },
+    "required": [
+      "solarSystem",
+    ],
+    "type": "object",
+  },
+  "spatial_systems": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "solarSystemIds": {
+        "description": "Numeric solar system ids (max 100). Omit if using names.",
+        "items": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "maxItems": 100,
+        "minItems": 1,
+        "type": "array",
+      },
+      "solarSystemNames": {
+        "description": "Solar system names (max 100). Omit if using ids.",
+        "items": {
+          "minLength": 1,
+          "type": "string",
+        },
+        "maxItems": 100,
+        "minItems": 1,
+        "type": "array",
+      },
+    },
+    "type": "object",
+  },
+  "spatial_systems_near_coordinates": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "limit": {
+        "description": "Systems to return, nearest first (default 100, max 1000).",
+        "exclusiveMinimum": 0,
+        "maximum": 1000,
+        "type": "integer",
+      },
+      "radiusLy": {
+        "description": "Search radius in light years (max 10,000).",
+        "exclusiveMinimum": 0,
+        "maximum": 10000,
+        "type": "number",
+      },
+      "x": {
+        "description": "X coordinate of the origin, in metres.",
+        "pattern": "^-?\\d+$",
+        "type": "string",
+      },
+      "y": {
+        "description": "Y coordinate of the origin, in metres.",
+        "pattern": "^-?\\d+$",
+        "type": "string",
+      },
+      "z": {
+        "description": "Z coordinate of the origin, in metres.",
+        "pattern": "^-?\\d+$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "x",
+      "y",
+      "z",
+      "radiusLy",
     ],
     "type": "object",
   },

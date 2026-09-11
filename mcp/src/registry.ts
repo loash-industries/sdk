@@ -41,8 +41,6 @@ export const EXCLUDED_SDK_PATHS: Record<string, string> = {
     'Staleness is already reported per entry by keyspace_get_acl, which returns EntryMeta.isStale for every entry.',
   'keyspace.isEntryStale':
     'Single-entry form of keyspace.getStaleEntries; same reason — keyspace_get_acl already carries isStale.',
-  'balances.currency':
-    'Wallet CRED balance is a plain Sui coin read; account_balances_at_hub covers the trading-account view.',
 }
 
 /**

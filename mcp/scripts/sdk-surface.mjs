@@ -23,6 +23,7 @@ const NAMESPACE_CLASSES = {
   BalancesApi: 'balances',
   MarketApi: 'market',
   OrdersApi: 'orders',
+  SpatialApi: 'spatial',
 }
 
 /**
