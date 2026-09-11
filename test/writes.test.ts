@@ -685,3 +685,125 @@ describe('explainMoveAbort', () => {
     ).toBeNull()
   })
 })
+
+// ─── balances.currency ───────────────────────────────────────────────────────
+
+/**
+ * CRED balances, read head-current from the fullnode.
+ *
+ * The branch that matters most is the one a new player is in: a wallet with
+ * CRED and no trading account at all. That has to answer, not throw — it is
+ * the state every account starts in, and the answer ("you hold X, none of it
+ * is deposited, you have no balance manager") is exactly what tells a caller
+ * to create one.
+ */
+describe('balances.currency', () => {
+  const credBalance = (amount: bigint) => bcs.u64().serialize(amount).toBytes()
+
+  it('reports wallet CRED and a null balance manager when none exists', async () => {
+    const sui = fakeSuiClient({
+      listCoins: () => ({ objects: [{ balance: '700' }, { balance: '50' }] }),
+      listOwnedObjects: () => bmPage(null),
+      getObject: () => {
+        throw new Error('must not read a balance manager that does not exist')
+      },
+    })
+
+    const balances = await client(sui, jest.fn()).balances.currency()
+
+    expect(balances).toEqual({
+      wallet: 750n,
+      balanceManager: 0n,
+      balanceManagerId: null,
+    })
+  })
+
+  it('adds the balance manager holding once one exists', async () => {
+    const sui = fakeSuiClient({
+      listCoins: () => ({ objects: [{ balance: '100' }] }),
+      listOwnedObjects: () => bmPage(BM_ID),
+      getObject: () => ({
+        object: { json: { balances: { id: { id: '0x' + 'ba'.repeat(32) } } } },
+      }),
+      getDynamicField: () => ({
+        dynamicField: { value: { bcs: credBalance(4200n) } },
+      }),
+    })
+
+    const balances = await client(sui, jest.fn()).balances.currency()
+
+    expect(balances).toEqual({
+      wallet: 100n,
+      balanceManager: 4200n,
+      balanceManagerId: BM_ID,
+    })
+  })
+
+  it('reports zeroes rather than failing for an untouched address', async () => {
+    const sui = fakeSuiClient({
+      listCoins: () => ({ objects: [] }),
+      listOwnedObjects: () => bmPage(null),
+    })
+
+    expect(await client(sui, jest.fn()).balances.currency()).toEqual({
+      wallet: 0n,
+      balanceManager: 0n,
+      balanceManagerId: null,
+    })
+  })
+
+  it('treats a balance manager with no CRED entry as zero, not an error', async () => {
+    const sui = fakeSuiClient({
+      listCoins: () => ({ objects: [{ balance: '9' }] }),
+      listOwnedObjects: () => bmPage(BM_ID),
+      getObject: () => ({
+        object: { json: { balances: { id: { id: '0x' + 'ba'.repeat(32) } } } },
+      }),
+      // A BM that has never held CRED has no dynamic field for it.
+      getDynamicField: () => {
+        throw new Error('dynamic field not found')
+      },
+    })
+
+    const balances = await client(sui, jest.fn()).balances.currency()
+    expect(balances.balanceManager).toBe(0n)
+    expect(balances.balanceManagerId).toBe(BM_ID)
+  })
+
+  it('reads an explicit address without needing a configured one', async () => {
+    const other = '0x' + 'ee'.repeat(32)
+    const seen: string[] = []
+    const sui = fakeSuiClient({
+      listCoins: (args: any) => {
+        seen.push(args.owner)
+        return { objects: [{ balance: '3' }] }
+      },
+      listOwnedObjects: (args: any) => {
+        seen.push(args.owner)
+        return bmPage(null)
+      },
+    })
+
+    const ro = new TriexClient({
+      suiClient: sui,
+      apiKey: 'k',
+      indexerUrl: 'https://api.example.test',
+    })
+    const balances = await ro.balances.currency(other)
+
+    expect(balances.wallet).toBe(3n)
+    expect(seen).toEqual([other, other])
+  })
+
+  it('requires an address when neither config nor call supplies one', async () => {
+    const sui = fakeSuiClient({})
+    const ro = new TriexClient({
+      suiClient: sui,
+      apiKey: 'k',
+      indexerUrl: 'https://api.example.test',
+    })
+    await expect(ro.balances.currency()).rejects.toMatchObject({
+      code: TriexError.AddressRequired,
+    })
+  })
+})
