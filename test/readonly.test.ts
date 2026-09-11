@@ -125,6 +125,73 @@ describe('IndexerClient remaining param mappings', () => {
   })
 })
 
+/**
+ * The location reads are what a keyless scanner (and the MCP server) actually
+ * calls, so they have to be reachable from ReadOnlyClient — not only from the
+ * namespaced trading client — and land on the same endpoints.
+ */
+describe('ReadOnlyClient location reads', () => {
+  const ro = new ReadOnlyClient({
+    apiKey: 'k',
+    indexerUrl: 'https://api.example.test',
+  })
+
+  it('reaches every location endpoint from the read-only surface', async () => {
+    const cases: Array<[() => Promise<unknown>, string, unknown]> = [
+      [
+        () => ro.hubLocations({ tenant: 'nova' }),
+        '/v1/hubs/locations',
+        { data: [], next_cursor: null },
+      ],
+      [
+        () => ro.itemLocations('70810'),
+        '/v1/items/70810/locations',
+        { data: [], next_cursor: null },
+      ],
+      [() => ro.nearbyHubs({ hubId: HEX }), `/v1/hubs/${HEX}/nearby`, []],
+      [
+        () => ro.nearbyHubsBySystem({ solarSystem: 'Nod' }),
+        '/v1/hubs/nearby-by-system',
+        [],
+      ],
+      [() => ro.hubsEnriched({ hubIds: [HEX] }), '/v1/hubs/enriched', []],
+      [
+        () => ro.assemblyOwners({ assemblyIds: ['0xa'] }),
+        '/v1/assemblies/owners',
+        [],
+      ],
+      [
+        () => ro.assembliesEnriched({ assemblyIds: ['0xa'] }),
+        '/v1/assemblies/enriched',
+        [],
+      ],
+      [
+        () => ro.solarSystemNames({ solarSystemIds: [1] }),
+        '/v1/solar-systems/names',
+        [],
+      ],
+      [
+        () => ro.accountOwners({ balanceManagerIds: [HEX] }),
+        '/v1/balance-managers/owners',
+        [],
+      ],
+    ]
+
+    for (const [call, path, payload] of cases) {
+      const fetchMock = routeFetch([[path, payload]])
+      await call()
+      expect((fetchMock.mock.calls[0][0] as URL).pathname).toBe(path)
+    }
+  })
+
+  it('unwraps the batch params the tools pass as objects', async () => {
+    const fetchMock = routeFetch([['/v1/hubs/enriched', []]])
+    await ro.hubsEnriched({ hubIds: [HEX, '0xabc'] })
+    const url = fetchMock.mock.calls[0][0] as URL
+    expect(url.searchParams.get('ids')).toBe(`${HEX},0xabc`)
+  })
+})
+
 describe('iterateTrades', () => {
   it('advances the before bound like fills', async () => {
     const pages = [

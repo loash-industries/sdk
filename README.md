@@ -203,9 +203,10 @@ explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 
 | Group | Methods |
 |---|---|
-| `account` | `get` · `ensure` · `depositCurrency` · `depositItems` · `withdrawCurrency` · `withdrawItems` · `sweepable` · `claimSettled` |
+| `account` | `get` · `ensure` · `depositCurrency` · `depositItems` · `withdrawCurrency` · `withdrawItems` · `sweepable` · `claimSettled` · `owners` |
 | `balances` | `atHub` (items: warehouse/marketplace/hangar) · `currency` (CRED wallet + BM, fullnode) |
 | `market` | `discover` · `hub` · `itemsAtHub` · `resolvePool` · `orderbook` · `poolMetadata` |
+| `market` (locations) | `hubLocations` · `itemLocations` · `nearbyHubs` · `nearbyHubsBySystem` · `hubsEnriched` · `assemblyOwners` · `assembliesEnriched` · `solarSystemNames` |
 | `orders` | `limit` · `market` · `cancel` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
 | helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `untilIndexed` · `explainMoveAbort` · `toBase` / `fromBase` |
 

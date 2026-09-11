@@ -201,25 +201,35 @@ export const HubVaultSchema = z
     vaultConfigId: v.vault_config_id,
   }))
 
-export const HubLocationSchema = z
-  .object({
-    hub_id: z.string(),
-    assembly_item_id: z.string(),
-    assembly_tenant: z.string(),
-    type_id: z.string(),
-    owner_cap_id: z.string(),
-    owner: z.string().nullable(),
-    solar_system: z.string(),
-    x: z.string(),
-    y: z.string(),
-    z: z.string(),
-    updated_at: z.number(),
-    tx_digest: z.string(),
-    is_public: z.boolean(),
-    region_id: z.number().nullable(),
-    solar_system_name: z.string().nullable(),
-  })
-  .transform((v) => ({
+/**
+ * The placement fields every hub-location read returns, shared verbatim by
+ * `/hubs/{id}/location`, `/hubs/locations`, `/items/{id}/locations`,
+ * `/hubs/*nearby*` and `/hubs/enriched`. Each of those adds its own fields on
+ * top (a resolved system name, a distance, market counts) — the common core is
+ * factored out so the five stay in step when the gateway extends it.
+ */
+const hubPlacementShape = {
+  hub_id: z.string(),
+  assembly_item_id: z.string(),
+  assembly_tenant: z.string(),
+  type_id: z.string(),
+  owner_cap_id: z.string(),
+  owner: z.string().nullable(),
+  solar_system: z.string(),
+  x: z.string(),
+  y: z.string(),
+  z: z.string(),
+  updated_at: z.number(),
+  tx_digest: z.string(),
+  is_public: z.boolean(),
+  region_id: z.number().nullable(),
+}
+
+type HubPlacementWire = z.infer<z.ZodObject<typeof hubPlacementShape>>
+
+/** Wire → domain for the shared placement core. */
+function hubPlacement(v: HubPlacementWire) {
+  return {
     hubId: v.hub_id,
     assemblyItemId: v.assembly_item_id,
     assemblyTenant: v.assembly_tenant,
@@ -228,6 +238,7 @@ export const HubLocationSchema = z
     owner: v.owner,
     /** Numeric solar-system id as a string; empty when unindexed. */
     solarSystemId: v.solar_system,
+    /** Coordinates in metres, as decimal strings (they exceed f64 precision). */
     x: v.x,
     y: v.y,
     z: v.z,
@@ -235,7 +246,56 @@ export const HubLocationSchema = z
     txDigest: v.tx_digest,
     isPublic: v.is_public,
     regionId: v.region_id,
+  }
+}
+
+export const HubLocationSchema = z
+  .object({
+    ...hubPlacementShape,
+    solar_system_name: z.string().nullable(),
+  })
+  .transform((v) => ({
+    ...hubPlacement(v),
     solarSystemName: v.solar_system_name,
+  }))
+
+/** A cursor-paged list of hub locations, as both listing endpoints return. */
+export const HubLocationPageSchema = z
+  .object({
+    data: z.array(HubLocationSchema),
+    next_cursor: z.string().nullable(),
+  })
+  .transform((v) => ({ locations: v.data, nextCursor: v.next_cursor }))
+
+/** A hub location plus its distance from the search origin. */
+export const NearbyHubSchema = z
+  .object({
+    ...hubPlacementShape,
+    solar_system_name: z.string().nullable(),
+    distance_ly: z.string(),
+  })
+  .transform((v) => ({
+    ...hubPlacement(v),
+    solarSystemName: v.solar_system_name,
+    /** Distance from the search origin in light years, as a decimal string. */
+    distanceLy: v.distance_ly,
+  }))
+
+/**
+ * A hub location plus market counts and last storage activity. Note the
+ * gateway does NOT resolve `solar_system_name` on this endpoint — pair it with
+ * `solarSystemNames()` when a display name is needed.
+ */
+export const HubEnrichedSchema = z
+  .object({
+    ...hubPlacementShape,
+    pool_count: z.number(),
+    last_activity_at: z.number().nullable(),
+  })
+  .transform((v) => ({
+    ...hubPlacement(v),
+    poolCount: v.pool_count,
+    lastActivityAt: v.last_activity_at,
   }))
 
 export const HubItemSchema = z
@@ -260,6 +320,62 @@ export const HubItemsPageSchema = z
 export const CollectionHubSchema = z
   .object({ hub_id: z.string(), collection_id: z.string() })
   .transform((v) => ({ hubId: v.hub_id, collectionId: v.collection_id }))
+
+// ─── Locations: on-chain resolution helpers ─────────────────────────────────
+//
+// The gateway's location surface answers "where is this / who owns this" for
+// three id families. Each is a batch read (max 200 ids, server-side cache), so
+// the SDK exposes them as list-in/list-out rather than per-id calls.
+
+export const AssemblyOwnerSchema = z
+  .object({ assembly_id: z.string(), owner: z.string().nullable() })
+  .transform((v) => ({ assemblyId: v.assembly_id, owner: v.owner }))
+
+export const AssemblyEnrichedSchema = z
+  .object({
+    assembly_id: z.string(),
+    owner: z.string().nullable(),
+    owner_character_name: z.string().nullable(),
+    owner_character_id: z.string().nullable(),
+    assembly_name: z.string().nullable(),
+  })
+  .transform((v) => ({
+    assemblyId: v.assembly_id,
+    owner: v.owner,
+    ownerCharacterName: v.owner_character_name,
+    ownerCharacterId: v.owner_character_id,
+    assemblyName: v.assembly_name,
+  }))
+
+export const BalanceManagerOwnerSchema = z
+  .object({
+    balance_manager_id: z.string(),
+    owner: z.string().nullable(),
+    owner_name: z.string().nullable(),
+    root_ou_id: z.string().nullable(),
+  })
+  .transform((v) => ({
+    balanceManagerId: v.balance_manager_id,
+    /**
+     * TAGGED, not a bare address: `player:<wallet>` for a character-owned
+     * balance manager, `ou:<org_id>` for an organization-owned one. Null when
+     * the indexer could not resolve it.
+     */
+    owner: v.owner,
+    ownerName: v.owner_name,
+    /** Top-level org when `owner` is a sub-organization; null otherwise. */
+    rootOuId: v.root_ou_id,
+  }))
+
+export const SolarSystemNameSchema = z
+  .object({
+    solar_system_id: z.number(),
+    solar_system_name: z.string().nullable(),
+  })
+  .transform((v) => ({
+    solarSystemId: v.solar_system_id,
+    solarSystemName: v.solar_system_name,
+  }))
 
 // ─── Item search (#8a) ───────────────────────────────────────────────────────
 

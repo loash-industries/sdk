@@ -1,23 +1,34 @@
+import { z } from 'zod'
 import { TriexClientError, TriexError } from './errors'
 import {
+  AssemblyEnrichedSchema,
+  AssemblyOwnerSchema,
+  BalanceManagerOwnerSchema,
   CollectionHubSchema,
   DiscoveryResultSchema,
   FillsPageSchema,
+  HubEnrichedSchema,
   HubItemOrderbookSchema,
   HubItemsPageSchema,
   ItemSearchPageSchema,
+  HubLocationPageSchema,
   HubLocationSchema,
   HubVaultSchema,
   InventoryBalancesSchema,
+  NearbyHubSchema,
   OpenOrdersPageSchema,
   OrderbookSchema,
   PoolMetadataSchema,
   PoolResolveSchema,
+  SolarSystemNameSchema,
   SweepableSchema,
   TradesPageSchema,
   parseWith,
 } from './schemas'
 import type {
+  AssemblyEnriched,
+  AssemblyOwner,
+  BalanceManagerOwner,
   BalancesAtHubParams,
   CollectionHub,
   DiscoveryFilters,
@@ -25,15 +36,23 @@ import type {
   FillsPage,
   FillsParams,
   HistoryPageParams,
+  HubEnriched,
   HubItemMarket,
   HubItemsPage,
   ItemSearchPage,
   HubLocation,
+  HubLocationFilters,
+  HubLocationPage,
   HubVaultInfo,
   InventoryBalances,
+  LocationPageParams,
+  NearbyHub,
+  NearbyHubsParams,
+  NearbyHubsBySystemParams,
   OpenOrdersPage,
   Orderbook,
   PoolMetadata,
+  SolarSystemName,
   Sweepable,
   TradesPage,
   TradesParams,
@@ -239,6 +258,78 @@ export class IndexerClient {
     }
   }
 
+  /**
+   * Every indexed hub location, cursor-paged. The counterpart to
+   * `hubLocation()`: that answers "where is this hub", this answers "which
+   * hubs are there". Filters narrow by solar system, tenant, or whether the
+   * hub has trading initialised at all.
+   */
+  async hubLocations(filters?: HubLocationFilters): Promise<HubLocationPage> {
+    const data = await this.get('/v1/hubs/locations', {
+      limit: filters?.limit,
+      cursor: filters?.cursor,
+      solar_system: filters?.solarSystemId,
+      tenant: filters?.tenant,
+      has_vault: filters?.hasVault,
+    })
+    return parseWith(HubLocationPageSchema, data, 'hubLocations')
+  }
+
+  /**
+   * Hub locations currently offering an item for sale, cursor-paged — the
+   * "where can I buy this" read. `assetId` is the item's numeric type id.
+   */
+  async itemLocations(
+    assetId: string,
+    params?: LocationPageParams,
+  ): Promise<HubLocationPage> {
+    const data = await this.get(
+      `/v1/items/${encodeURIComponent(assetId)}/locations`,
+      { limit: params?.limit, cursor: params?.cursor },
+    )
+    return parseWith(HubLocationPageSchema, data, 'itemLocations')
+  }
+
+  /**
+   * Hubs within a light-year radius of another hub, optionally restricted to
+   * hubs with open orders for one item. The gateway does NOT sort by distance
+   * (verified live) — sort on `distanceLy` if order matters.
+   *
+   * Requires the origin hub to publish a location — a private hub 404s
+   * (`HubNotFound`); `nearbyHubsBySystem()` is the way in for those.
+   */
+  async nearbyHubs(params: NearbyHubsParams): Promise<NearbyHub[]> {
+    const data = await this.get(
+      `/v1/hubs/${encodeURIComponent(params.hubId)}/nearby`,
+      { range: params.rangeLy, type_id: params.assetId },
+      TriexError.HubNotFound,
+    )
+    return parseWith(z.array(NearbyHubSchema), data, 'nearbyHubs')
+  }
+
+  /** Same search as `nearbyHubs()`, centred on a solar system id or name. */
+  async nearbyHubsBySystem(
+    params: NearbyHubsBySystemParams,
+  ): Promise<NearbyHub[]> {
+    const data = await this.get('/v1/hubs/nearby-by-system', {
+      system_id: params.solarSystem,
+      range: params.rangeLy,
+      type_id: params.assetId,
+    })
+    return parseWith(z.array(NearbyHubSchema), data, 'nearbyHubsBySystem')
+  }
+
+  /**
+   * Location, market count, and last storage activity for up to 200 hubs in
+   * one call — the batch form of `hubLocation()`, for scanning a watchlist.
+   * Unlike the single-hub read this one does NOT resolve `solarSystemName`.
+   */
+  async hubsEnriched(hubIds: string[]): Promise<HubEnriched[]> {
+    if (hubIds.length === 0) return []
+    const data = await this.get('/v1/hubs/enriched', { ids: hubIds.join(',') })
+    return parseWith(z.array(HubEnrichedSchema), data, 'hubsEnriched')
+  }
+
   /** #8 — items with open orders at a trade hub. */
   async hubItems(hubId: string): Promise<HubItemsPage> {
     const data = await this.get(
@@ -263,6 +354,64 @@ export class IndexerClient {
       TriexError.HubNotFound,
     )
     return parseWith(CollectionHubSchema, data, 'collectionHub')
+  }
+
+  // ─── Locations: batch on-chain resolution (max 200 ids each) ──────────────
+
+  /**
+   * Owner wallet for each assembly object id — the on-chain lookup behind
+   * "whose structure is this". Cached upstream for five minutes.
+   */
+  async assemblyOwners(assemblyIds: string[]): Promise<AssemblyOwner[]> {
+    if (assemblyIds.length === 0) return []
+    const data = await this.get('/v1/assemblies/owners', {
+      ids: assemblyIds.join(','),
+    })
+    return parseWith(z.array(AssemblyOwnerSchema), data, 'assemblyOwners')
+  }
+
+  /** `assemblyOwners()` plus the owner's character and the assembly's name. */
+  async assembliesEnriched(assemblyIds: string[]): Promise<AssemblyEnriched[]> {
+    if (assemblyIds.length === 0) return []
+    const data = await this.get('/v1/assemblies/enriched', {
+      ids: assemblyIds.join(','),
+    })
+    return parseWith(
+      z.array(AssemblyEnrichedSchema),
+      data,
+      'assembliesEnriched',
+    )
+  }
+
+  /**
+   * Owner for each balance manager id, tagged `player:<wallet>` or
+   * `ou:<org_id>` — how a counterparty on the book is put to a name.
+   */
+  async balanceManagerOwners(
+    balanceManagerIds: string[],
+  ): Promise<BalanceManagerOwner[]> {
+    if (balanceManagerIds.length === 0) return []
+    const data = await this.get('/v1/balance-managers/owners', {
+      ids: balanceManagerIds.join(','),
+    })
+    return parseWith(
+      z.array(BalanceManagerOwnerSchema),
+      data,
+      'balanceManagerOwners',
+    )
+  }
+
+  /**
+   * Display names for numeric solar system ids. The paged location reads
+   * resolve their own names; `hubsEnriched()` does not, so this is how that
+   * result set gets human-readable.
+   */
+  async solarSystemNames(solarSystemIds: number[]): Promise<SolarSystemName[]> {
+    if (solarSystemIds.length === 0) return []
+    const data = await this.get('/v1/solar-systems/names', {
+      ids: solarSystemIds.join(','),
+    })
+    return parseWith(z.array(SolarSystemNameSchema), data, 'solarSystemNames')
   }
 
   // ─── Inventory (#2 — items only; CRED reads live on the fullnode) ─────────

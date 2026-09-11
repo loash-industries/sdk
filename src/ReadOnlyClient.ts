@@ -2,20 +2,31 @@ import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
 import { IndexerClient } from './queries'
 import type {
+  AssemblyEnriched,
+  AssemblyOwner,
+  BalanceManagerOwner,
   BalancesAtHubParams,
   DiscoveryFilters,
   DiscoveryResult,
   FillsPage,
   FillsParams,
   HistoryPageParams,
+  HubEnriched,
   HubItemOrderbook,
   HubItemsPage,
+  HubLocationFilters,
+  HubLocationPage,
   ItemSearchPage,
   InventoryBalances,
+  LocationPageParams,
+  NearbyHub,
+  NearbyHubsParams,
+  NearbyHubsBySystemParams,
   OpenOrdersPage,
   PackageIds,
   PoolMetadata,
   ReadOnlyClientConfig,
+  SolarSystemName,
   Sweepable,
   TradeHubDetail,
   TradesPage,
@@ -126,6 +137,70 @@ export class ReadOnlyClient {
   /** #10/#11 — pool metadata (decimals, fee rate, hub linkage). */
   poolMetadata(poolId: string): Promise<PoolMetadata> {
     return this.indexer.poolMetadata(poolId)
+  }
+
+  /**
+   * Every indexed hub location, cursor-paged — the universe-wide counterpart
+   * to `hub()`. Narrow with `solarSystemId`, `tenant`, or `hasVault`.
+   */
+  hubLocations(filters?: HubLocationFilters): Promise<HubLocationPage> {
+    return this.indexer.hubLocations(filters)
+  }
+
+  /** Where an item is currently for sale, cursor-paged. */
+  itemLocations(
+    assetId: string,
+    opts?: LocationPageParams,
+  ): Promise<HubLocationPage> {
+    return this.indexer.itemLocations(assetId, opts)
+  }
+
+  /**
+   * Hubs within `rangeLy` light years of a hub (default and max 3500).
+   * @throws `HubNotFound` when the origin hub publishes no location.
+   */
+  nearbyHubs(params: NearbyHubsParams): Promise<NearbyHub[]> {
+    return this.indexer.nearbyHubs(params)
+  }
+
+  /** The same proximity search centred on a solar system id or name. */
+  nearbyHubsBySystem(params: NearbyHubsBySystemParams): Promise<NearbyHub[]> {
+    return this.indexer.nearbyHubsBySystem(params)
+  }
+
+  /** Batch hub detail — location, market count, last activity (max 200). */
+  hubsEnriched(params: { hubIds: string[] }): Promise<HubEnriched[]> {
+    return this.indexer.hubsEnriched(params.hubIds)
+  }
+
+  /** Owner wallet for up to 200 assembly (structure) object ids. */
+  assemblyOwners(params: { assemblyIds: string[] }): Promise<AssemblyOwner[]> {
+    return this.indexer.assemblyOwners(params.assemblyIds)
+  }
+
+  /** `assemblyOwners()` plus owner character and assembly name. */
+  assembliesEnriched(params: {
+    assemblyIds: string[]
+  }): Promise<AssemblyEnriched[]> {
+    return this.indexer.assembliesEnriched(params.assemblyIds)
+  }
+
+  /** Display names for up to 200 numeric solar system ids. */
+  solarSystemNames(params: {
+    solarSystemIds: number[]
+  }): Promise<SolarSystemName[]> {
+    return this.indexer.solarSystemNames(params.solarSystemIds)
+  }
+
+  /**
+   * Who owns these trading accounts (max 200). `owner` is TAGGED —
+   * `player:<wallet>` or `ou:<org_id>` — since an account may belong to an
+   * organization rather than a character.
+   */
+  accountOwners(params: {
+    balanceManagerIds: string[]
+  }): Promise<BalanceManagerOwner[]> {
+    return this.indexer.balanceManagerOwners(params.balanceManagerIds)
   }
 
   /** #2 — hub-scoped item balances for an explicit address / BM / hangar key. */

@@ -42,6 +42,9 @@ import {
   withdrawSettledAmounts,
 } from './transactions'
 import type {
+  AssemblyEnriched,
+  AssemblyOwner,
+  BalanceManagerOwner,
   BalancesAtHubParams,
   CancelAllOrdersParams,
   CancelOrderParams,
@@ -55,16 +58,24 @@ import type {
   FillsPage,
   FillsParams,
   HistoryPageParams,
+  HubEnriched,
   HubItemOrderbook,
   HubItemsPage,
+  HubLocationFilters,
+  HubLocationPage,
   ItemSearchPage,
   InventoryBalances,
   LimitOrderParams,
+  LocationPageParams,
   MarketOrderParams,
   ModifyOrderParams,
+  NearbyHub,
+  NearbyHubsParams,
+  NearbyHubsBySystemParams,
   OpenOrdersPage,
   PackageIds,
   PoolMetadata,
+  SolarSystemName,
   Sweepable,
   TradeHubDetail,
   TradesPage,
@@ -433,6 +444,20 @@ class AccountApi {
   }
 
   /**
+   * Who owns these trading accounts — up to 200 balance manager ids per call.
+   *
+   * `owner` comes back TAGGED (`player:<wallet>` or `ou:<org_id>`) rather than
+   * as a bare address, because an account can belong to an organization as
+   * easily as to a character. This is how a counterparty id from the order
+   * book or a fill turns into a name.
+   */
+  owners(params: {
+    balanceManagerIds: string[]
+  }): Promise<BalanceManagerOwner[]> {
+    return this.c.indexer.balanceManagerOwners(params.balanceManagerIds)
+  }
+
+  /**
    * Claim settled (post-fill) proceeds from pools into the balance manager.
    * Defaults to every pool the sweepable manifest reports as claimable; the
    * proceeds then show up in `balances.currency()` / BM item balances and can
@@ -651,6 +676,72 @@ class MarketApi {
    */
   poolMetadata(poolId: string): Promise<PoolMetadata> {
     return this.c.indexer.poolMetadata(poolId)
+  }
+
+  // ─── Locations ─────────────────────────────────────────────────────────────
+
+  /**
+   * Every indexed hub location, cursor-paged — the universe-wide counterpart
+   * to `hub()`. Narrow with `solarSystemId`, `tenant`, or `hasVault` (only
+   * hubs where trading is actually initialised).
+   */
+  hubLocations(filters?: HubLocationFilters): Promise<HubLocationPage> {
+    return this.c.indexer.hubLocations(filters)
+  }
+
+  /**
+   * Where an item is currently for sale, cursor-paged: the hub locations with
+   * open sell orders for `assetId`. Pair with `orderbook()` to price one.
+   */
+  itemLocations(
+    assetId: string,
+    opts?: LocationPageParams,
+  ): Promise<HubLocationPage> {
+    return this.c.indexer.itemLocations(assetId, opts)
+  }
+
+  /**
+   * Hubs within `rangeLy` light years of a hub (default and max 3500),
+   * optionally only those with open orders for one item.
+   * @throws `HubNotFound` when the origin hub publishes no location — use
+   *   `nearbyHubsBySystem()` for a private origin.
+   */
+  nearbyHubs(params: NearbyHubsParams): Promise<NearbyHub[]> {
+    return this.c.indexer.nearbyHubs(params)
+  }
+
+  /** The same proximity search centred on a solar system id or name. */
+  nearbyHubsBySystem(params: NearbyHubsBySystemParams): Promise<NearbyHub[]> {
+    return this.c.indexer.nearbyHubsBySystem(params)
+  }
+
+  /**
+   * Batch hub detail for a watchlist — location, market count, and last
+   * storage activity for up to 200 hubs in one call. Cheaper than a `hub()`
+   * per id, at the cost of the vault descriptor and the resolved system name
+   * (feed the ids to `solarSystemNames()` for the latter).
+   */
+  hubsEnriched(params: { hubIds: string[] }): Promise<HubEnriched[]> {
+    return this.c.indexer.hubsEnriched(params.hubIds)
+  }
+
+  /** Owner wallet for up to 200 assembly (structure) object ids. */
+  assemblyOwners(params: { assemblyIds: string[] }): Promise<AssemblyOwner[]> {
+    return this.c.indexer.assemblyOwners(params.assemblyIds)
+  }
+
+  /** `assemblyOwners()` plus owner character and assembly name. */
+  assembliesEnriched(params: {
+    assemblyIds: string[]
+  }): Promise<AssemblyEnriched[]> {
+    return this.c.indexer.assembliesEnriched(params.assemblyIds)
+  }
+
+  /** Display names for up to 200 numeric solar system ids. */
+  solarSystemNames(params: {
+    solarSystemIds: number[]
+  }): Promise<SolarSystemName[]> {
+    return this.c.indexer.solarSystemNames(params.solarSystemIds)
   }
 }
 

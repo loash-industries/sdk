@@ -250,6 +250,17 @@ client.market.resolvePool({ storageUnitId, assetId }): Promise<string>  // #9a (
 client.market.orderbook({ storageUnitId, assetId }): Promise<Orderbook>  // #9 (resting orders, not levels)
 client.market.poolMetadata(poolId): Promise<PoolMetadata>             // #10/#11 (decimals + 1e9-scaled fee)
 
+// locations — "where is it / who owns it" (Marketplace | Locations)
+client.market.hubLocations(filters?): Promise<HubLocationPage>        // every indexed hub, cursor-paged
+client.market.itemLocations(assetId, opts?): Promise<HubLocationPage> // hubs selling one item
+client.market.nearbyHubs({ hubId, rangeLy?, assetId? }): Promise<NearbyHub[]>          // ≤3500 ly
+client.market.nearbyHubsBySystem({ solarSystem, rangeLy?, assetId? }): Promise<NearbyHub[]>  // private origin
+client.market.hubsEnriched({ hubIds }): Promise<HubEnriched[]>        // batch ≤200: + poolCount/lastActivityAt
+client.market.assemblyOwners({ assemblyIds }): Promise<AssemblyOwner[]>        // batch ≤200
+client.market.assembliesEnriched({ assemblyIds }): Promise<AssemblyEnriched[]> // batch ≤200: + character/name
+client.market.solarSystemNames({ solarSystemIds }): Promise<SolarSystemName[]> // batch ≤200
+client.account.owners({ balanceManagerIds }): Promise<BalanceManagerOwner[]>   // batch ≤200: player:/ou: tagged
+
 // order status (#14) — epoch-ms before/after paging
 client.orders.openOrders(params?): Promise<OpenOrdersPage>
 client.orders.fills(params?): Promise<FillsPage>

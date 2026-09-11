@@ -306,3 +306,189 @@ describe('error surface', () => {
     expect(err).toBeInstanceOf(Error)
   })
 })
+
+/**
+ * The `Marketplace | Locations` surface.
+ *
+ * These reads exist to answer "where is it / who owns it", and every one of
+ * them is a query-parameter mapping away from being silently wrong: the
+ * gateway ignores keys it does not recognise, so a misnamed filter returns a
+ * cheerful, fully unfiltered 200. The assertions below pin the wire names.
+ */
+describe('IndexerClient location reads', () => {
+  const client = new IndexerClient('https://api.example.test', 'k')
+
+  /** One hub-placement row, as the gateway sends it. */
+  const placement = {
+    hub_id: HEX,
+    assembly_item_id: '84955',
+    assembly_tenant: 'nova',
+    type_id: '84955',
+    owner_cap_id: '0xcap',
+    owner: '0xowner',
+    solar_system: '30000142',
+    x: '-91233855488',
+    y: '7137397760',
+    z: '120689905664',
+    updated_at: 1755043200000,
+    tx_digest: 'AbC123',
+    is_public: true,
+    region_id: 10000002,
+  }
+
+  it('maps hubLocations filters to the spec parameter names', async () => {
+    const fetchMock = mockFetch([{ data: [], next_cursor: null }])
+    await client.hubLocations({
+      solarSystemId: 30000142,
+      tenant: 'nova',
+      hasVault: true,
+      limit: 25,
+      cursor: 'MTAw',
+    })
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/hubs/locations')
+    expect(url.searchParams.get('solar_system')).toBe('30000142')
+    expect(url.searchParams.get('tenant')).toBe('nova')
+    expect(url.searchParams.get('has_vault')).toBe('true')
+    expect(url.searchParams.get('limit')).toBe('25')
+    expect(url.searchParams.get('cursor')).toBe('MTAw')
+  })
+
+  it('parses a location page into camelCase with its cursor', async () => {
+    mockFetch([
+      {
+        data: [{ ...placement, solar_system_name: 'Nod' }],
+        next_cursor: 'MTAw',
+      },
+    ])
+    const page = await client.hubLocations()
+    expect(page.nextCursor).toBe('MTAw')
+    expect(page.locations[0]).toMatchObject({
+      hubId: HEX,
+      assemblyTenant: 'nova',
+      solarSystemId: '30000142',
+      solarSystemName: 'Nod',
+      isPublic: true,
+      regionId: 10000002,
+      txDigest: 'AbC123',
+    })
+  })
+
+  it('puts the item id in the path, not the query, for itemLocations', async () => {
+    const fetchMock = mockFetch([{ data: [], next_cursor: null }])
+    await client.itemLocations('70810', { limit: 10 })
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/items/70810/locations')
+    expect(url.searchParams.get('limit')).toBe('10')
+    expect(url.searchParams.has('item_id')).toBe(false)
+  })
+
+  it('sends range and type_id for a nearby search and keeps the distance', async () => {
+    const fetchMock = mockFetch([
+      [{ ...placement, solar_system_name: 'Nod', distance_ly: '42.5' }],
+    ])
+    const hubs = await client.nearbyHubs({
+      hubId: HEX,
+      rangeLy: 500,
+      assetId: '70810',
+    })
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe(`/v1/hubs/${HEX}/nearby`)
+    expect(url.searchParams.get('range')).toBe('500')
+    expect(url.searchParams.get('type_id')).toBe('70810')
+    expect(hubs[0].distanceLy).toBe('42.5')
+    expect(hubs[0].hubId).toBe(HEX)
+  })
+
+  it('sends the system origin as system_id for the by-system search', async () => {
+    const fetchMock = mockFetch([[]])
+    await client.nearbyHubsBySystem({ solarSystem: 'Nod', rangeLy: 100 })
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/hubs/nearby-by-system')
+    expect(url.searchParams.get('system_id')).toBe('Nod')
+    expect(url.searchParams.get('range')).toBe('100')
+  })
+
+  it('joins batch ids into one comma-separated ids parameter', async () => {
+    const fetchMock = mockFetch([
+      [{ ...placement, pool_count: 3, last_activity_at: null }],
+    ])
+    const hubs = await client.hubsEnriched([HEX, '0xabc'])
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/hubs/enriched')
+    expect(url.searchParams.get('ids')).toBe(`${HEX},0xabc`)
+    expect(hubs[0]).toMatchObject({ poolCount: 3, lastActivityAt: null })
+    // This endpoint resolves no display name — that is what solarSystemNames is for.
+    expect(hubs[0]).not.toHaveProperty('solarSystemName')
+  })
+
+  it('parses assembly, balance-manager and solar-system batch reads', async () => {
+    mockFetch([
+      [{ assembly_id: '0xass', owner: '0xowner' }],
+      [
+        {
+          assembly_id: '0xass',
+          owner: '0xowner',
+          owner_character_name: 'Pilot',
+          owner_character_id: '0xchar',
+          assembly_name: 'Depot',
+        },
+      ],
+      [
+        {
+          balance_manager_id: HEX,
+          owner: 'ou:0xorg',
+          owner_name: 'Loash Industries',
+          root_ou_id: '0xroot',
+        },
+      ],
+      [{ solar_system_id: 30000142, solar_system_name: 'Nod' }],
+    ])
+
+    expect(await client.assemblyOwners(['0xass'])).toEqual([
+      { assemblyId: '0xass', owner: '0xowner' },
+    ])
+    expect((await client.assembliesEnriched(['0xass']))[0]).toMatchObject({
+      ownerCharacterName: 'Pilot',
+      assemblyName: 'Depot',
+    })
+    expect((await client.balanceManagerOwners([HEX]))[0]).toEqual({
+      balanceManagerId: HEX,
+      owner: 'ou:0xorg',
+      ownerName: 'Loash Industries',
+      rootOuId: '0xroot',
+    })
+    expect(await client.solarSystemNames([30000142])).toEqual([
+      { solarSystemId: 30000142, solarSystemName: 'Nod' },
+    ])
+  })
+
+  it('answers an empty id list without spending a request', async () => {
+    // A 200-id batch endpoint given nothing to resolve would otherwise 400 —
+    // and still cost the caller its compute units.
+    const fetchMock = mockFetch([])
+    expect(await client.hubsEnriched([])).toEqual([])
+    expect(await client.assemblyOwners([])).toEqual([])
+    expect(await client.assembliesEnriched([])).toEqual([])
+    expect(await client.balanceManagerOwners([])).toEqual([])
+    expect(await client.solarSystemNames([])).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('reports a private origin hub as HubNotFound rather than a generic error', async () => {
+    ;(global as any).fetch = jest.fn(async () => ({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+      json: async () => ({ message: 'No location found for assembly' }),
+    }))
+    await expect(client.nearbyHubs({ hubId: HEX })).rejects.toMatchObject({
+      code: TriexError.HubNotFound,
+    })
+  })
+})

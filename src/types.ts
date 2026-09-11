@@ -4,7 +4,10 @@ import type { Transaction } from '@mysten/sui/transactions'
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 import type { z } from 'zod'
 import type {
+  AssemblyEnrichedSchema,
+  AssemblyOwnerSchema,
   AssetBalanceSchema,
+  BalanceManagerOwnerSchema,
   CollectionHubSchema,
   DiscoveryOrderSchema,
   DiscoveryResultSchema,
@@ -12,7 +15,9 @@ import type {
   FillsPageSchema,
   HubItemOrderbookSchema,
   HubItemSchema,
+  HubEnrichedSchema,
   HubItemsPageSchema,
+  HubLocationPageSchema,
   HubLocationSchema,
   ItemRecipeComponentSchema,
   ItemRecipeSchema,
@@ -22,8 +27,10 @@ import type {
   InventoryBalancesSchema,
   OpenOrderSchema,
   OpenOrdersPageSchema,
+  NearbyHubSchema,
   OrderbookOrderSchema,
   PoolMetadataSchema,
+  SolarSystemNameSchema,
   SweepableItemSchema,
   SweepablePoolSchema,
   SweepableSchema,
@@ -133,6 +140,13 @@ export type OrderbookOrder = z.output<typeof OrderbookOrderSchema>
 export type PoolMetadata = z.output<typeof PoolMetadataSchema>
 export type HubVaultInfo = z.output<typeof HubVaultSchema>
 export type HubLocation = z.output<typeof HubLocationSchema>
+export type HubLocationPage = z.output<typeof HubLocationPageSchema>
+export type NearbyHub = z.output<typeof NearbyHubSchema>
+export type HubEnriched = z.output<typeof HubEnrichedSchema>
+export type AssemblyOwner = z.output<typeof AssemblyOwnerSchema>
+export type AssemblyEnriched = z.output<typeof AssemblyEnrichedSchema>
+export type BalanceManagerOwner = z.output<typeof BalanceManagerOwnerSchema>
+export type SolarSystemName = z.output<typeof SolarSystemNameSchema>
 export type HubItem = z.output<typeof HubItemSchema>
 export type HubItemsPage = z.output<typeof HubItemsPageSchema>
 export type CollectionHub = z.output<typeof CollectionHubSchema>
@@ -235,6 +249,48 @@ export interface DiscoveryFilters {
   cursor?: string
   /** Rows per page (default and max 100). */
   limit?: number
+}
+
+/** Filters for the universe-wide hub location listing. */
+export interface HubLocationFilters {
+  /** Numeric solar system id to restrict to. */
+  solarSystemId?: number
+  /** Tenant (shard) to restrict to. */
+  tenant?: string
+  /** Only hubs that have trading initialised (a vault exists). */
+  hasVault?: boolean
+  cursor?: string
+  /** Rows per page (1–100, default 50). */
+  limit?: number
+}
+
+/** Cursor paging for the location listings (1–100 rows, default 50). */
+export interface LocationPageParams {
+  cursor?: string
+  limit?: number
+}
+
+/**
+ * Proximity search around a hub. `rangeLy` is the gateway's `range`: light
+ * years, default and maximum 3500.
+ */
+export interface NearbyHubsParams {
+  hubId: string
+  rangeLy?: number
+  /** Only hubs with open orders for this item type, e.g. `"70810"`. */
+  assetId?: string
+}
+
+/**
+ * Proximity search around a solar system rather than a hub — the form to use
+ * when the origin hub is private and publishes no location.
+ */
+export interface NearbyHubsBySystemParams {
+  /** Solar system id or name to search from. */
+  solarSystem: string
+  rangeLy?: number
+  /** Only hubs with open orders for this item type, e.g. `"70810"`. */
+  assetId?: string
 }
 
 export interface BalancesAtHubParams {
