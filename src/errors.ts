@@ -40,6 +40,8 @@ export enum TriexError {
   PoolNotFound = 'TRIEX_POOL_NOT_FOUND',
   /** The requested trade hub / storage unit could not be resolved. */
   HubNotFound = 'TRIEX_HUB_NOT_FOUND',
+  /** The requested solar system (by name or numeric id) does not exist. */
+  SolarSystemNotFound = 'TRIEX_SOLAR_SYSTEM_NOT_FOUND',
   /** The player's on-chain character could not be resolved. */
   CharacterNotFound = 'TRIEX_CHARACTER_NOT_FOUND',
   /** The transaction executed but failed (aborted) on-chain. */

@@ -208,6 +208,7 @@ explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 | `market` | `discover` · `hub` · `itemsAtHub` · `resolvePool` · `orderbook` · `poolMetadata` |
 | `market` (locations) | `hubLocations` · `itemLocations` · `nearbyHubs` · `nearbyHubsBySystem` · `hubsEnriched` · `assemblyOwners` · `assembliesEnriched` · `solarSystemNames` |
 | `orders` | `limit` · `market` · `cancel` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
+| `spatial` | `system` · `systems` · `nearbySystems` · `systemsNearCoordinates` · `autocompleteSystems` · `stats` |
 | helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `untilIndexed` · `explainMoveAbort` · `toBase` / `fromBase` |
 
 Runnable examples live in [`examples/`](./examples).

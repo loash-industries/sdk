@@ -4,7 +4,12 @@ import { IndexerClient } from './queries'
 import type {
   AssemblyEnriched,
   AssemblyOwner,
+  AutocompleteSystems,
   BalanceManagerOwner,
+  BatchSystems,
+  BatchSystemsParams,
+  CoordinateSearch,
+  CoordinateSearchParams,
   BalancesAtHubParams,
   DiscoveryFilters,
   DiscoveryResult,
@@ -22,11 +27,15 @@ import type {
   NearbyHub,
   NearbyHubsParams,
   NearbyHubsBySystemParams,
+  NearbySystems,
+  NearbySystemsParams,
   OpenOrdersPage,
   PackageIds,
   PoolMetadata,
   ReadOnlyClientConfig,
+  SolarSystem,
   SolarSystemName,
+  SpatialStats,
   Sweepable,
   TradeHubDetail,
   TradesPage,
@@ -201,6 +210,53 @@ export class ReadOnlyClient {
     balanceManagerIds: string[]
   }): Promise<BalanceManagerOwner[]> {
     return this.indexer.balanceManagerOwners(params.balanceManagerIds)
+  }
+
+  // ─── Spatial: the star map ────────────────────────────────────────────────
+
+  /**
+   * One solar system by name or numeric id.
+   * @throws `SolarSystemNotFound` when nothing matches.
+   */
+  spatialSystem(solarSystem: string): Promise<SolarSystem> {
+    return this.indexer.solarSystem(solarSystem)
+  }
+
+  /**
+   * Up to 100 systems in one call, by id or by name (not both).
+   * @throws `ValidationFailed` when neither or both selectors are given.
+   */
+  spatialSystems(params: BatchSystemsParams): Promise<BatchSystems> {
+    return this.indexer.solarSystems(params)
+  }
+
+  /**
+   * Systems within `radiusLy` of another system, nearest first (origin
+   * excluded).
+   * @throws `SolarSystemNotFound` for an unknown origin.
+   */
+  spatialNearbySystems(params: NearbySystemsParams): Promise<NearbySystems> {
+    return this.indexer.nearbySystems(params)
+  }
+
+  /** The same radius search around an arbitrary point in space. */
+  spatialSystemsNearCoordinates(
+    params: CoordinateSearchParams,
+  ): Promise<CoordinateSearch> {
+    return this.indexer.systemsNearCoordinates(params)
+  }
+
+  /** Name-prefix autocomplete over solar system names, alphabetical. */
+  spatialAutocompleteSystems(
+    query: string,
+    opts?: { limit?: number },
+  ): Promise<AutocompleteSystems> {
+    return this.indexer.autocompleteSystems(query, opts?.limit)
+  }
+
+  /** Coverage of the loaded star map. */
+  spatialStats(): Promise<SpatialStats> {
+    return this.indexer.spatialStats()
   }
 
   /** #2 — hub-scoped item balances for an explicit address / BM / hangar key. */

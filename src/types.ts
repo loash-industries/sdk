@@ -7,7 +7,11 @@ import type {
   AssemblyEnrichedSchema,
   AssemblyOwnerSchema,
   AssetBalanceSchema,
+  AutocompleteSystemsSchema,
   BalanceManagerOwnerSchema,
+  BatchSystemsSchema,
+  CoordinateSearchSchema,
+  CoordinatesSchema,
   CollectionHubSchema,
   DiscoveryOrderSchema,
   DiscoveryResultSchema,
@@ -28,9 +32,14 @@ import type {
   OpenOrderSchema,
   OpenOrdersPageSchema,
   NearbyHubSchema,
+  NearbySystemSchema,
+  NearbySystemsSchema,
   OrderbookOrderSchema,
   PoolMetadataSchema,
   SolarSystemNameSchema,
+  SolarSystemSchema,
+  SolarSystemSuggestionSchema,
+  SpatialStatsSchema,
   SweepableItemSchema,
   SweepablePoolSchema,
   SweepableSchema,
@@ -147,6 +156,15 @@ export type AssemblyOwner = z.output<typeof AssemblyOwnerSchema>
 export type AssemblyEnriched = z.output<typeof AssemblyEnrichedSchema>
 export type BalanceManagerOwner = z.output<typeof BalanceManagerOwnerSchema>
 export type SolarSystemName = z.output<typeof SolarSystemNameSchema>
+export type Coordinates = z.output<typeof CoordinatesSchema>
+export type SolarSystem = z.output<typeof SolarSystemSchema>
+export type NearbySystem = z.output<typeof NearbySystemSchema>
+export type BatchSystems = z.output<typeof BatchSystemsSchema>
+export type NearbySystems = z.output<typeof NearbySystemsSchema>
+export type CoordinateSearch = z.output<typeof CoordinateSearchSchema>
+export type SolarSystemSuggestion = z.output<typeof SolarSystemSuggestionSchema>
+export type AutocompleteSystems = z.output<typeof AutocompleteSystemsSchema>
+export type SpatialStats = z.output<typeof SpatialStatsSchema>
 export type HubItem = z.output<typeof HubItemSchema>
 export type HubItemsPage = z.output<typeof HubItemsPageSchema>
 export type CollectionHub = z.output<typeof CollectionHubSchema>
@@ -248,6 +266,41 @@ export interface DiscoveryFilters {
   publicOnly?: boolean
   cursor?: string
   /** Rows per page (default and max 100). */
+  limit?: number
+}
+
+/**
+ * A batch solar-system lookup takes ids OR names — never both, and never
+ * neither. Modelled as a union so the compiler rejects the mistake the
+ * gateway would answer with a 400.
+ */
+export type BatchSystemsParams =
+  | { solarSystemIds: number[]; solarSystemNames?: never }
+  | { solarSystemNames: string[]; solarSystemIds?: never }
+
+/** Radius search around a named or numbered solar system. */
+export interface NearbySystemsParams {
+  /** Solar system name (case-insensitive) or numeric id. */
+  solarSystem: string
+  /** Search radius in light years (positive, max 10,000). */
+  radiusLy: number
+  /** Systems to return, nearest first (default 100, max 1,000). */
+  limit?: number
+}
+
+/**
+ * Radius search around an arbitrary point — for origins that are not
+ * themselves a solar system, such as a ship or structure position read from
+ * the chain.
+ */
+export interface CoordinateSearchParams {
+  /** Origin coordinates in METRES, as decimal strings (they exceed 2^53). */
+  x: string
+  y: string
+  z: string
+  /** Search radius in light years (positive, max 10,000). */
+  radiusLy: number
+  /** Systems to return, nearest first (default 100, max 1,000). */
   limit?: number
 }
 

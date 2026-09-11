@@ -492,3 +492,200 @@ describe('IndexerClient location reads', () => {
     })
   })
 })
+
+/**
+ * The spatial (star map) surface.
+ *
+ * Two things here are easy to get wrong and expensive to get wrong late.
+ * Coordinates are metres past 2^53, so they stay decimal strings end to end —
+ * a schema that parsed them as numbers would round silently. And a system can
+ * exist in the stargate graph while being absent from the coordinate index,
+ * in which case the gateway OMITS `location` and `solar_system_name` rather
+ * than sending nulls; a schema that required them would throw on live data.
+ */
+describe('IndexerClient spatial reads', () => {
+  const client = new IndexerClient('https://api.example.test', 'k')
+
+  const coords = {
+    x: '-6523761465801880000',
+    y: '-253634337518181280',
+    z: '4013616888017946600',
+  }
+  const system = {
+    solar_system_id: 30001053,
+    solar_system_name: 'IF3-HS9',
+    location: coords,
+    constellation_id: 20000070,
+    region_id: 10000013,
+  }
+
+  it('resolves a system by name and keeps coordinates as exact strings', async () => {
+    const fetchMock = mockFetch([system])
+    const got = await client.solarSystem('EHK-KH7')
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/spatial/systems/EHK-KH7')
+    expect(got.solarSystemId).toBe(30001053)
+    expect(got.location.x).toBe(coords.x)
+    // Round-tripping through a double would land on -6523761465801880000+ε.
+    expect(BigInt(got.location.x)).toBe(-6523761465801880000n)
+    expect(got.regionId).toBe(10000013)
+  })
+
+  it('url-encodes a system name that needs it', async () => {
+    const fetchMock = mockFetch([system])
+    await client.solarSystem('A B/C')
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/spatial/systems/A%20B%2FC')
+  })
+
+  it('maps a 404 to SolarSystemNotFound rather than a generic indexer error', async () => {
+    ;(global as any).fetch = jest.fn(async () => ({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+      json: async () => ({
+        error: 'not_found',
+        message: "system 'X' not found",
+      }),
+    }))
+    await expect(client.solarSystem('X')).rejects.toMatchObject({
+      code: TriexError.SolarSystemNotFound,
+    })
+  })
+
+  it('sends batch ids and names under their own parameter names', async () => {
+    let fetchMock = mockFetch([{ count: 1, systems: [system] }])
+    const byId = await client.solarSystems({ solarSystemIds: [30001053, 42] })
+    let [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/spatial/systems')
+    expect(url.searchParams.get('solar_system_ids')).toBe('30001053,42')
+    expect(url.searchParams.has('solar_system_names')).toBe(false)
+    expect(byId.count).toBe(1)
+
+    fetchMock = mockFetch([{ count: 1, systems: [system] }])
+    await client.solarSystems({ solarSystemNames: ['IF3-HS9', 'EHK-KH7'] })
+    ;[url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.searchParams.get('solar_system_names')).toBe('IF3-HS9,EHK-KH7')
+    expect(url.searchParams.has('solar_system_ids')).toBe(false)
+  })
+
+  it('refuses a batch lookup that names neither or both selectors', async () => {
+    // The gateway answers both mistakes with a 400 — and bills for it.
+    const fetchMock = mockFetch([])
+    await expect(client.solarSystems({} as never)).rejects.toMatchObject({
+      code: TriexError.ValidationFailed,
+    })
+    await expect(
+      client.solarSystems({
+        solarSystemIds: [1],
+        solarSystemNames: ['A'],
+      } as never),
+    ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('renames the nearby-search origin fields so they cannot be confused', async () => {
+    const fetchMock = mockFetch([
+      {
+        solar_system_id: 30000142,
+        solar_system_name: 'EHK-KH7',
+        radius_ly: '100',
+        count: 1,
+        systems: [
+          {
+            solar_system_id: 30001053,
+            solar_system_name: 'IF3-HS9',
+            distance_ly: '18.991165304211588',
+            location: coords,
+          },
+        ],
+      },
+    ])
+    const res = await client.nearbySystems({
+      solarSystem: 'EHK-KH7',
+      radiusLy: 100,
+      limit: 25,
+    })
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/spatial/systems/EHK-KH7/nearby')
+    expect(url.searchParams.get('radius_ly')).toBe('100')
+    expect(url.searchParams.get('limit')).toBe('25')
+    // The origin's id lives alongside the results' ids; naming both
+    // `solarSystemId` would make a wrong read look right.
+    expect(res.originSolarSystemId).toBe(30000142)
+    expect(res.originSolarSystemName).toBe('EHK-KH7')
+    expect(res.systems[0].distanceLy).toBe('18.991165304211588')
+  })
+
+  it('accepts a nearby result missing its name and location', async () => {
+    // A system in the stargate graph but absent from the coordinate index:
+    // the gateway omits both fields rather than sending nulls.
+    mockFetch([
+      {
+        solar_system_id: 30000142,
+        solar_system_name: 'EHK-KH7',
+        radius_ly: '5',
+        count: 1,
+        systems: [{ solar_system_id: 30009999, distance_ly: '1.5' }],
+      },
+    ])
+    const res = await client.nearbySystems({
+      solarSystem: 'EHK-KH7',
+      radiusLy: 5,
+    })
+    expect(res.systems[0]).toEqual({
+      solarSystemId: 30009999,
+      distanceLy: '1.5',
+      solarSystemName: null,
+      location: null,
+    })
+  })
+
+  it('searches from a bare coordinate and echoes the origin back', async () => {
+    const fetchMock = mockFetch([
+      { location: coords, radius_ly: '50', count: 0, systems: [] },
+    ])
+    const res = await client.systemsNearCoordinates({
+      ...coords,
+      radiusLy: 50,
+      limit: 10,
+    })
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/spatial/coordinates/nearby')
+    expect(url.searchParams.get('x')).toBe(coords.x)
+    expect(url.searchParams.get('y')).toBe(coords.y)
+    expect(url.searchParams.get('z')).toBe(coords.z)
+    expect(url.searchParams.get('radius_ly')).toBe('50')
+    expect(res.origin).toEqual(coords)
+  })
+
+  it('sends the autocomplete prefix as q, like item search', async () => {
+    const fetchMock = mockFetch([
+      {
+        count: 1,
+        systems: [{ solar_system_id: 30007477, solar_system_name: 'EHK-1D2' }],
+      },
+    ])
+    const res = await client.autocompleteSystems('EHK', 5)
+
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(url.pathname).toBe('/v1/spatial/systems/search/autocomplete')
+    expect(url.searchParams.get('q')).toBe('EHK')
+    expect(url.searchParams.get('limit')).toBe('5')
+    expect(res.systems[0]).toEqual({
+      solarSystemId: 30007477,
+      solarSystemName: 'EHK-1D2',
+    })
+  })
+
+  it('reports star-map coverage', async () => {
+    mockFetch([{ total_systems: 24018, status: 'operational' }])
+    expect(await client.spatialStats()).toEqual({
+      totalSystems: 24018,
+      status: 'operational',
+    })
+  })
+})

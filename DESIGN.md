@@ -261,6 +261,14 @@ client.market.assembliesEnriched({ assemblyIds }): Promise<AssemblyEnriched[]> /
 client.market.solarSystemNames({ solarSystemIds }): Promise<SolarSystemName[]> // batch ≤200
 client.account.owners({ balanceManagerIds }): Promise<BalanceManagerOwner[]>   // batch ≤200: player:/ou: tagged
 
+// spatial — the star map (Universe | Solar Systems); no account or signer
+client.spatial.system(nameOrId): Promise<SolarSystem>                 // coords + constellation + region
+client.spatial.systems({ solarSystemIds | solarSystemNames }): Promise<BatchSystems>  // max 100, ids XOR names
+client.spatial.nearbySystems({ solarSystem, radiusLy, limit? }): Promise<NearbySystems>  // origin excluded
+client.spatial.systemsNearCoordinates({ x, y, z, radiusLy, limit? }): Promise<CoordinateSearch>
+client.spatial.autocompleteSystems(query, opts?): Promise<AutocompleteSystems>  // prefix index, ids only
+client.spatial.stats(): Promise<SpatialStats>                         // star-map coverage
+
 // order status (#14) — epoch-ms before/after paging
 client.orders.openOrders(params?): Promise<OpenOrdersPage>
 client.orders.fills(params?): Promise<FillsPage>

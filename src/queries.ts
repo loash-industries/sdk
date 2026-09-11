@@ -3,7 +3,10 @@ import { TriexClientError, TriexError } from './errors'
 import {
   AssemblyEnrichedSchema,
   AssemblyOwnerSchema,
+  AutocompleteSystemsSchema,
   BalanceManagerOwnerSchema,
+  BatchSystemsSchema,
+  CoordinateSearchSchema,
   CollectionHubSchema,
   DiscoveryResultSchema,
   FillsPageSchema,
@@ -16,11 +19,14 @@ import {
   HubVaultSchema,
   InventoryBalancesSchema,
   NearbyHubSchema,
+  NearbySystemsSchema,
   OpenOrdersPageSchema,
   OrderbookSchema,
   PoolMetadataSchema,
   PoolResolveSchema,
   SolarSystemNameSchema,
+  SolarSystemSchema,
+  SpatialStatsSchema,
   SweepableSchema,
   TradesPageSchema,
   parseWith,
@@ -28,7 +34,12 @@ import {
 import type {
   AssemblyEnriched,
   AssemblyOwner,
+  AutocompleteSystems,
   BalanceManagerOwner,
+  BatchSystems,
+  BatchSystemsParams,
+  CoordinateSearch,
+  CoordinateSearchParams,
   BalancesAtHubParams,
   CollectionHub,
   DiscoveryFilters,
@@ -49,10 +60,14 @@ import type {
   NearbyHub,
   NearbyHubsParams,
   NearbyHubsBySystemParams,
+  NearbySystems,
+  NearbySystemsParams,
   OpenOrdersPage,
   Orderbook,
   PoolMetadata,
+  SolarSystem,
   SolarSystemName,
+  SpatialStats,
   Sweepable,
   TradesPage,
   TradesParams,
@@ -412,6 +427,92 @@ export class IndexerClient {
       ids: solarSystemIds.join(','),
     })
     return parseWith(z.array(SolarSystemNameSchema), data, 'solarSystemNames')
+  }
+
+  // ─── Spatial: the star map ────────────────────────────────────────────────
+
+  /**
+   * One solar system by name or numeric id. The gateway treats the segment as
+   * an id when it parses as an integer and as a case-insensitive name
+   * otherwise, so `"EHK-KH7"` and `"30000142"` both work.
+   */
+  async solarSystem(solarSystem: string): Promise<SolarSystem> {
+    const data = await this.get(
+      `/v1/spatial/systems/${encodeURIComponent(solarSystem)}`,
+      undefined,
+      TriexError.SolarSystemNotFound,
+    )
+    return parseWith(SolarSystemSchema, data, 'solarSystem')
+  }
+
+  /**
+   * Up to 100 solar systems in one call, by id or by name. Unmatched
+   * identifiers are omitted from `systems` rather than returned as nulls.
+   */
+  async solarSystems(params: BatchSystemsParams): Promise<BatchSystems> {
+    const byId = params.solarSystemIds?.length ? 1 : 0
+    const byName = params.solarSystemNames?.length ? 1 : 0
+    if (byId + byName !== 1) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'Batch system lookup takes exactly one of solarSystemIds or solarSystemNames.',
+      )
+    }
+    const data = await this.get('/v1/spatial/systems', {
+      solar_system_ids: params.solarSystemIds?.join(','),
+      solar_system_names: params.solarSystemNames?.join(','),
+    })
+    return parseWith(BatchSystemsSchema, data, 'solarSystems')
+  }
+
+  /**
+   * Solar systems within `radiusLy` of another system, nearest first. The
+   * origin system itself is excluded.
+   */
+  async nearbySystems(params: NearbySystemsParams): Promise<NearbySystems> {
+    const data = await this.get(
+      `/v1/spatial/systems/${encodeURIComponent(params.solarSystem)}/nearby`,
+      { radius_ly: params.radiusLy, limit: params.limit },
+      TriexError.SolarSystemNotFound,
+    )
+    return parseWith(NearbySystemsSchema, data, 'nearbySystems')
+  }
+
+  /** Solar systems within `radiusLy` of a point in space, nearest first. */
+  async systemsNearCoordinates(
+    params: CoordinateSearchParams,
+  ): Promise<CoordinateSearch> {
+    const data = await this.get('/v1/spatial/coordinates/nearby', {
+      x: params.x,
+      y: params.y,
+      z: params.z,
+      radius_ly: params.radiusLy,
+      limit: params.limit,
+    })
+    return parseWith(CoordinateSearchSchema, data, 'systemsNearCoordinates')
+  }
+
+  /**
+   * Solar systems whose name starts with `query`, alphabetically. Served from
+   * an in-memory prefix index and returning only identifiers, so it is much
+   * cheaper than the full lookup — resolve the chosen suggestion with
+   * `solarSystem()`.
+   */
+  async autocompleteSystems(
+    query: string,
+    limit?: number,
+  ): Promise<AutocompleteSystems> {
+    const data = await this.get('/v1/spatial/systems/search/autocomplete', {
+      q: query,
+      limit,
+    })
+    return parseWith(AutocompleteSystemsSchema, data, 'autocompleteSystems')
+  }
+
+  /** Coverage of the loaded star map — how many systems are queryable. */
+  async spatialStats(): Promise<SpatialStats> {
+    const data = await this.get('/v1/spatial/stats')
+    return parseWith(SpatialStatsSchema, data, 'spatialStats')
   }
 
   // ─── Inventory (#2 — items only; CRED reads live on the fullnode) ─────────

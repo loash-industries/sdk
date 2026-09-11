@@ -5,6 +5,7 @@ export type {
   BalancesApi,
   MarketApi,
   OrdersApi,
+  SpatialApi,
 } from './TriexClient'
 export { ReadOnlyClient } from './ReadOnlyClient'
 
@@ -103,6 +104,18 @@ export type {
   AssemblyEnriched,
   BalanceManagerOwner,
   SolarSystemName,
+  Coordinates,
+  SolarSystem,
+  SolarSystemSuggestion,
+  NearbySystem,
+  NearbySystems,
+  NearbySystemsParams,
+  BatchSystems,
+  BatchSystemsParams,
+  CoordinateSearch,
+  CoordinateSearchParams,
+  AutocompleteSystems,
+  SpatialStats,
   HubItem,
   HubItemsPage,
   ItemRecipe,

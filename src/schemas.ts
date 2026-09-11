@@ -377,6 +377,122 @@ export const SolarSystemNameSchema = z
     solarSystemName: v.solar_system_name,
   }))
 
+// ─── Spatial: the star map ──────────────────────────────────────────────────
+//
+// Coordinates are METRES as decimal strings, never JSON numbers — the values
+// run past 2^53 and an IEEE-754 double silently rounds them. Distances and
+// radii are light years, also as decimal strings on the way back. This is the
+// same representation the hub-location reads use.
+
+export const CoordinatesSchema = z
+  .object({ x: z.string(), y: z.string(), z: z.string() })
+  .transform((v) => ({ x: v.x, y: v.y, z: v.z }))
+
+export const SolarSystemSchema = z
+  .object({
+    solar_system_id: z.number(),
+    solar_system_name: z.string(),
+    location: CoordinatesSchema,
+    constellation_id: z.number().nullish(),
+    region_id: z.number().nullish(),
+  })
+  .transform((v) => ({
+    solarSystemId: v.solar_system_id,
+    solarSystemName: v.solar_system_name,
+    /** Position in metres from the galactic origin. */
+    location: v.location,
+    constellationId: v.constellation_id ?? null,
+    /** Matches `regionId` on the hub-location reads. */
+    regionId: v.region_id ?? null,
+  }))
+
+/**
+ * A system found by a radius search. Only the id and the distance are
+ * guaranteed: a system can be in the stargate graph but absent from the
+ * coordinate index, in which case the gateway omits `location` and
+ * `solar_system_name` entirely rather than sending nulls.
+ */
+export const NearbySystemSchema = z
+  .object({
+    solar_system_id: z.number(),
+    distance_ly: z.string(),
+    solar_system_name: z.string().nullish(),
+    location: CoordinatesSchema.nullish(),
+  })
+  .transform((v) => ({
+    solarSystemId: v.solar_system_id,
+    /** Straight-line distance from the search origin, in light years. */
+    distanceLy: v.distance_ly,
+    solarSystemName: v.solar_system_name ?? null,
+    location: v.location ?? null,
+  }))
+
+export const BatchSystemsSchema = z
+  .object({ count: z.number(), systems: z.array(SolarSystemSchema) })
+  .transform((v) => ({
+    /**
+     * How many resolved. Identifiers that matched nothing are OMITTED rather
+     * than returned as nulls, so a count below the number asked for is how a
+     * miss is detected.
+     */
+    count: v.count,
+    systems: v.systems,
+  }))
+
+export const NearbySystemsSchema = z
+  .object({
+    solar_system_id: z.number(),
+    solar_system_name: z.string(),
+    radius_ly: z.string(),
+    count: z.number(),
+    systems: z.array(NearbySystemSchema),
+  })
+  .transform((v) => ({
+    /** The system searched from; it is excluded from `systems`. */
+    originSolarSystemId: v.solar_system_id,
+    originSolarSystemName: v.solar_system_name,
+    radiusLy: v.radius_ly,
+    count: v.count,
+    systems: v.systems,
+  }))
+
+export const CoordinateSearchSchema = z
+  .object({
+    location: CoordinatesSchema,
+    radius_ly: z.string(),
+    count: z.number(),
+    systems: z.array(NearbySystemSchema),
+  })
+  .transform((v) => ({
+    /** The origin point, echoed back in metres. */
+    origin: v.location,
+    radiusLy: v.radius_ly,
+    count: v.count,
+    systems: v.systems,
+  }))
+
+export const SolarSystemSuggestionSchema = z
+  .object({ solar_system_id: z.number(), solar_system_name: z.string() })
+  .transform((v) => ({
+    solarSystemId: v.solar_system_id,
+    solarSystemName: v.solar_system_name,
+  }))
+
+export const AutocompleteSystemsSchema = z
+  .object({
+    count: z.number(),
+    systems: z.array(SolarSystemSuggestionSchema),
+  })
+  .transform((v) => ({ count: v.count, systems: v.systems }))
+
+export const SpatialStatsSchema = z
+  .object({ total_systems: z.number(), status: z.string() })
+  .transform((v) => ({
+    totalSystems: v.total_systems,
+    /** `operational` when the coordinate index is loaded and queryable. */
+    status: v.status,
+  }))
+
 // ─── Item search (#8a) ───────────────────────────────────────────────────────
 
 export const ItemRecipeComponentSchema = z

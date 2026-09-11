@@ -44,7 +44,12 @@ import {
 import type {
   AssemblyEnriched,
   AssemblyOwner,
+  AutocompleteSystems,
   BalanceManagerOwner,
+  BatchSystems,
+  BatchSystemsParams,
+  CoordinateSearch,
+  CoordinateSearchParams,
   BalancesAtHubParams,
   CancelAllOrdersParams,
   CancelOrderParams,
@@ -72,10 +77,14 @@ import type {
   NearbyHub,
   NearbyHubsParams,
   NearbyHubsBySystemParams,
+  NearbySystems,
+  NearbySystemsParams,
   OpenOrdersPage,
   PackageIds,
   PoolMetadata,
+  SolarSystem,
   SolarSystemName,
+  SpatialStats,
   Sweepable,
   TradeHubDetail,
   TradesPage,
@@ -121,6 +130,7 @@ export class TriexClient {
   readonly balances: BalancesApi
   readonly market: MarketApi
   readonly orders: OrdersApi
+  readonly spatial: SpatialApi
 
   constructor(config: TriexClientConfig) {
     this.suiClient = config.suiClient
@@ -136,6 +146,7 @@ export class TriexClient {
     this.balances = new BalancesApi(this)
     this.market = new MarketApi(this)
     this.orders = new OrdersApi(this)
+    this.spatial = new SpatialApi(this)
   }
 
   /** @internal */
@@ -745,6 +756,75 @@ class MarketApi {
   }
 }
 
+// ─── spatial ─────────────────────────────────────────────────────────────────
+
+/**
+ * The star map: where solar systems are, and what is near what.
+ *
+ * Separate from `market` on purpose — these reads describe the universe
+ * itself, not anything traded in it, and they need no account, no hub, and no
+ * signer. Coordinates are metres as decimal strings and distances are light
+ * years, because the values run past 2^53 and a double would round them.
+ */
+class SpatialApi {
+  constructor(private readonly c: TriexClient) {}
+
+  /**
+   * One solar system by name or numeric id — `"EHK-KH7"` and `"30000142"`
+   * both resolve.
+   * @throws `SolarSystemNotFound` when nothing matches.
+   */
+  system(solarSystem: string): Promise<SolarSystem> {
+    return this.c.indexer.solarSystem(solarSystem)
+  }
+
+  /**
+   * Up to 100 systems in one call, by id or by name (not both). Unmatched
+   * identifiers are omitted, so compare `count` against what you asked for to
+   * detect misses.
+   * @throws `ValidationFailed` when neither or both selectors are given.
+   */
+  systems(params: BatchSystemsParams): Promise<BatchSystems> {
+    return this.c.indexer.solarSystems(params)
+  }
+
+  /**
+   * Systems within `radiusLy` light years of another system, nearest first.
+   * The origin is excluded. This is the "what is in jump range of here" read.
+   * @throws `SolarSystemNotFound` for an unknown origin.
+   */
+  nearbySystems(params: NearbySystemsParams): Promise<NearbySystems> {
+    return this.c.indexer.nearbySystems(params)
+  }
+
+  /**
+   * The same radius search around an arbitrary point, for an origin that is
+   * not itself a system — a ship or structure position read from the chain.
+   */
+  systemsNearCoordinates(
+    params: CoordinateSearchParams,
+  ): Promise<CoordinateSearch> {
+    return this.c.indexer.systemsNearCoordinates(params)
+  }
+
+  /**
+   * Name-prefix autocomplete, alphabetical. Returns identifiers only and is
+   * served from an in-memory index, so it is much cheaper than `system()` —
+   * resolve the chosen suggestion with that.
+   */
+  autocompleteSystems(
+    query: string,
+    opts?: { limit?: number },
+  ): Promise<AutocompleteSystems> {
+    return this.c.indexer.autocompleteSystems(query, opts?.limit)
+  }
+
+  /** How many systems the coordinate index holds, and whether it is loaded. */
+  stats(): Promise<SpatialStats> {
+    return this.c.indexer.spatialStats()
+  }
+}
+
 // ─── orders ──────────────────────────────────────────────────────────────────
 
 class OrdersApi {
@@ -1060,4 +1140,4 @@ class OrdersApi {
   }
 }
 
-export type { AccountApi, BalancesApi, MarketApi, OrdersApi }
+export type { AccountApi, BalancesApi, MarketApi, OrdersApi, SpatialApi }
