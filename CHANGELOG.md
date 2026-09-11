@@ -1,3 +1,7 @@
+## 3.6.0 (2026-09-11)
+
+* feat(sdk): wrap the gateway's location surface ([71f46c4](https://github.com/loash-industries/sdk/commit/71f46c4))
+
 ## 3.5.0 (2026-09-10)
 
 * Merge pull request #6 from loash-industries/build/mcp-container-image ([18380c7](https://github.com/loash-industries/sdk/commit/18380c7)), closes [#6](https://github.com/loash-industries/sdk/issues/6)
