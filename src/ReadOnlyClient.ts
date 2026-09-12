@@ -1,3 +1,4 @@
+import { OrgsApi } from './armature/OrgsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
 import { IndexerClient } from './queries'
@@ -57,6 +58,11 @@ import type {
 export class ReadOnlyClient {
   readonly ids: PackageIds
   readonly indexer: IndexerClient
+  /**
+   * Organization identity & discovery (Armature). Address-taking methods
+   * REQUIRE an explicit address here — this client has no configured player.
+   */
+  readonly orgs: OrgsApi
 
   constructor(config: ReadOnlyClientConfig) {
     this.ids = resolvePackageIds(config.network ?? 'testnet', config.packageIds)
@@ -64,6 +70,15 @@ export class ReadOnlyClient {
       config.indexerUrl ?? DEFAULT_INDEXER_URL,
       config.apiKey,
     )
+    this.orgs = new OrgsApi(this.indexer, (addr) => {
+      if (!addr) {
+        throw new TriexClientError(
+          TriexError.AddressRequired,
+          'ReadOnlyClient has no configured player — pass the address explicitly.',
+        )
+      }
+      return addr
+    })
   }
 
   /** #6 — discover open orders across the universe (most recent first). */

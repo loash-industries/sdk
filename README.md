@@ -209,9 +209,70 @@ explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 | `market` (locations) | `hubLocations` · `itemLocations` · `nearbyHubs` · `nearbyHubsBySystem` · `hubsEnriched` · `assemblyOwners` · `assembliesEnriched` · `solarSystemNames` |
 | `orders` | `limit` · `market` · `cancel` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
 | `spatial` | `system` · `systems` · `nearbySystems` · `systemsNearCoordinates` · `autocompleteSystems` · `stats` |
-| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `untilIndexed` · `explainMoveAbort` · `toBase` / `fromBase` |
+| `orgs` | `get` · `batch` · `directory` · `forPlayer` · `search` · `proposals` · `seats` · `tradingAccount` · `accessibleKeyspaces` · `vaultsAtHub` |
+| `org(id)` handle | `.governance` · `.members` · `.metadata` · `.types` · `.treasury` · `.orders` · `.vault` — see below |
+| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades/OrgDirectory` · `untilIndexed` · `explainMoveAbort` · `toBase` / `fromBase` |
 
 Runnable examples live in [`examples/`](./examples).
+
+## Organizations & governance (Armature)
+
+An organization is a **tree of DAOs** — a root plus its units — and every write
+goes through a governance pipeline whose shape depends on who is calling. Acting
+as one means binding both the organization *and* a seat within it:
+
+```ts
+const org = await client.org(orgId)   // any unit id resolves the whole tree
+org.seats                             // boards you sit on, highest authority first
+org.as(officersDaoId)                 // act through a different seat you hold
+```
+
+### The same call is not the same transaction
+
+```ts
+const outcome = await org.members.add(['0x…'])
+switch (outcome.status) {
+  case 'executed': break                       // your vote cleared quorum — done
+  case 'proposed': outcome.proposalId; break   // the board still has to vote
+  case 'blocked':  outcome.reason; break       // no path available, and why
+}
+```
+
+`blocked` is a **returned value, not a throw** — "you are not on this board" is
+an ordinary answer. Real failures still throw `TriexClientError`. Use
+`org.governance.resolve(action)` to ask without signing, and
+`org.governance.paths(action)` for the full trace of why.
+
+Whether a lone vote suffices is a question about **per-type config**, not about
+rank: it clears quorum only when `boardSize × quorum ≤ 10000` and the execution
+delay is zero. `org.governance.read()` returns those configs.
+
+### The rest of the handle
+
+| Group | Methods |
+|---|---|
+| `governance` | `read` · `resolve` · `paths` · `run` · `runBatch` · `runComposite` · `canComposite` · `vote` · `execute` · `tryExpire` · `proposals` |
+| `members` | `add` · `remove` · `setBoard` |
+| `metadata` | `update` |
+| `types` | `enable` · `updateConfig` · `enableComposite` · `enableSendCoin` · `enableTrading` |
+| `treasury` | `balances` · `balance` · `itemBalance` · `deposit` · `send` · `sendToOrg` |
+| `orders` | `ensureAccount` · `limit` · `cancel` · `buyFromTreasury` · `sellFromDaoVault` · `sweepCoin` · `sweepItems` · `sweepAll` |
+| `vault` | `atHub` · `resolve` · `info` · `balance` · `init` · `deposit` · `withdraw` · `grant` · `revoke` · `deinit` |
+
+Four things worth knowing before you call them:
+
+- **Funding a treasury is permissionless.** `treasury.deposit()` needs no seat
+  and no vote, and returns a plain `TxResult`. Paying out returns `RunOutcome`
+  because it is governance. The return types are the authorization model.
+- **Trading never degrades into a proposal.** A limit order deferred by a week
+  is priced against a book that no longer exists, and a funded buy split into
+  two proposals loses its atomic deposit-then-place guarantee — so these
+  `blocked` instead.
+- **Shared storage is keyed by (storage unit, organization).** There is no "the
+  vault at this hub": anyone can register one at any SSU. `vault.resolve()`
+  answers for *your* organization.
+- **`types.enableTrading({ bindToBaseType })` is irreversible.** It binds the
+  coin-pool order types to one base coin permanently. Leave it unset.
 
 ## Units & money
 

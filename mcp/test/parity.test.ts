@@ -83,7 +83,9 @@ describe('lock-step coverage', () => {
   it('gives every exclusion a reason', () => {
     for (const [path, reason] of Object.entries(EXCLUDED_SDK_PATHS)) {
       expect(reason.length).toBeGreaterThan(20)
-      expect(path).toMatch(/^[a-z]+\.[a-zA-Z]+$/)
+      // Two segments for a client group (`market.resolvePool`), three for a
+      // handle sub-API (`org.governance.run`).
+      expect(path).toMatch(/^[a-z]+(\.[a-zA-Z]+){1,2}$/)
     }
   })
 

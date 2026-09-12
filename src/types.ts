@@ -107,6 +107,31 @@ export interface PackageIds {
   worldOriginal: string
   /** The Sui `Clock` shared object — always `0x6`. */
   clock: string
+
+  // ─── Armature (organizations & governance) — DESIGN-ARMATURE.md §9 ────────
+  //
+  // Each upgraded package carries a `*Original` sibling. `moveCall` targets use
+  // the CURRENT id; dynamic-field key types and `StructType` filters must use
+  // the ORIGINAL, because objects keep the type tag of the package version that
+  // created them. On `stillness` these have already diverged for
+  // `armatureTrading` and `armatureVault`, so it is not a hypothetical.
+
+  /** armature_framework: dao, board_voting, proposal, composite, treasury_vault, tribe. */
+  armature: string
+  armatureOriginal: string
+  /** armature_proposals: the governance payload types and their `execute_*` dispatchers. */
+  armatureProposals: string
+  armatureProposalsOriginal: string
+  /** armature_trading: governance-wrapped CLOB operations. */
+  armatureTrading: string
+  armatureTradingOriginal: string
+  /** armature_vault: `dao_receipt_vault` (shared storage) + `acl` principals. */
+  armatureVault: string
+  armatureVaultOriginal: string
+  /** armature_world_bridge: tribe allowlist / autojoin. */
+  armatureWorldBridge: string
+  /** `DaoReceiptVaultRegistry` shared object (not a package). */
+  daoReceiptVaultRegistry: string
 }
 
 // ─── Client config ──────────────────────────────────────────────────────────
