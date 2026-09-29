@@ -388,10 +388,14 @@ export const CoordinatesSchema = z
   .object({ x: z.string(), y: z.string(), z: z.string() })
   .transform((v) => ({ x: v.x, y: v.y, z: v.z }))
 
+// Solar system names are not published for every system yet: location-api
+// sends `solar_system_name: null` for those, so every name read here is
+// nullable. Key on `solar_system_id`, and display it when the name is null.
+
 export const SolarSystemSchema = z
   .object({
     solar_system_id: z.number(),
-    solar_system_name: z.string(),
+    solar_system_name: z.string().nullable(),
     location: CoordinatesSchema,
     constellation_id: z.number().nullish(),
     region_id: z.number().nullish(),
@@ -442,7 +446,7 @@ export const BatchSystemsSchema = z
 export const NearbySystemsSchema = z
   .object({
     solar_system_id: z.number(),
-    solar_system_name: z.string(),
+    solar_system_name: z.string().nullable(),
     radius_ly: z.string(),
     count: z.number(),
     systems: z.array(NearbySystemSchema),

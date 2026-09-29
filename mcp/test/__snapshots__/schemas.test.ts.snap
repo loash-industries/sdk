@@ -331,7 +331,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "number",
       },
       "solarSystem": {
-        "description": "Solar system id or name to search from, e.g. "Nod".",
+        "description": "Solar system id (preferred) or name to search from, e.g. "30000142".",
         "minLength": 1,
         "type": "string",
       },
