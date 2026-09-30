@@ -12,6 +12,8 @@ import {
   fetchInventorySlotQuantity,
   fetchSsuOwnerInfo,
   findOwnedItemReceipts,
+  getBalanceManagerCurrencyBalance,
+  getBalanceManagerItemBalance,
   getObjectRef,
   getRegistryMulticoinCollectionId,
   getWalletCurrencyBalance,
@@ -58,6 +60,61 @@ describe('getWalletCurrencyBalance', () => {
     const total = await getWalletCurrencyBalance(sui as any, OWNER, 'CRED')
     expect(total).toBe(22n)
     expect(calls).toEqual([undefined, 'c1'])
+  })
+})
+
+describe('trading account balance reads', () => {
+  it('reads CRED under trading_account::BalanceKey<CRED> in the balances bag', async () => {
+    const BAG = '0x' + 'ba'.repeat(32)
+    const seen: any[] = []
+    const sui = asyncCore({
+      getObject: () => ({ object: { json: { balances: { id: BAG } } } }),
+      getDynamicField: (args) => {
+        seen.push(args)
+        return {
+          dynamicField: { value: { bcs: bcs.u64().serialize(77n).toBytes() } },
+        }
+      },
+    })
+    expect(await getBalanceManagerCurrencyBalance(sui as any, IDS, '0x1')).toBe(
+      77n,
+    )
+    expect(seen[0].parentId).toBe(BAG)
+    expect(seen[0].name.type).toBe(
+      `${IDS.triex}::trading_account::BalanceKey<${IDS.credCoinType}>`,
+    )
+  })
+
+  it('reads items under trading_account::MultiCoinBalanceKey on the account', async () => {
+    const seen: any[] = []
+    const sui = asyncCore({
+      getDynamicObjectField: (args) => {
+        seen.push(args)
+        return {
+          object: {
+            content: MultiCoinBalanceBcs.serialize({
+              id: '0x' + 'ee'.repeat(32),
+              collection: COLLECTION,
+              asset_id: 5n,
+              amount: 9n,
+            }).toBytes(),
+          },
+        }
+      },
+    })
+    expect(
+      await getBalanceManagerItemBalance(
+        sui as any,
+        IDS,
+        '0x1',
+        COLLECTION,
+        5n,
+      ),
+    ).toEqual({ hasKey: true, balance: 9n })
+    expect(seen[0].parentId).toBe('0x1')
+    expect(seen[0].name.type).toBe(
+      `${IDS.triex}::trading_account::MultiCoinBalanceKey`,
+    )
   })
 })
 
@@ -317,7 +374,7 @@ describe('sourceItemsIntoBalanceManager — hangar paths', () => {
       'character::borrow_owner_cap',
       'receipt::deposit_for_receipt',
       'character::return_owner_cap',
-      'balance_manager::deposit_multicoin',
+      'trading_account::deposit_multicoin',
     ])
   })
 
@@ -336,11 +393,11 @@ describe('sourceItemsIntoBalanceManager — hangar paths', () => {
       'character::borrow_owner_cap',
       'receipt::deposit_for_receipt',
       'character::return_owner_cap',
-      'balance_manager::deposit_multicoin',
+      'trading_account::deposit_multicoin',
       'character::borrow_owner_cap',
       'receipt::deposit_for_receipt',
       'character::return_owner_cap',
-      'balance_manager::deposit_multicoin',
+      'trading_account::deposit_multicoin',
     ])
   })
 

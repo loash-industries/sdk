@@ -89,12 +89,17 @@ export type TriexNetwork = 'testnet'
  */
 export interface PackageIds {
   /**
-   * Triex CLOB package: balance_manager + multicoin_pool. See the Move
+   * Triex CLOB package: trading_account + multicoin_pool. See the Move
    * contracts at https://github.com/loash-industries/trinary-exchange.
    */
   triex: string
   /** Triex CLOB registry (shared object). */
   triexRegistry: string
+  /**
+   * Triex `fee_policy::FeePolicy` (shared object). Order placement, cancel,
+   * cancel-all and modify on a `MultiCoinPool` take it by reference.
+   */
+  triexFeePolicy: string
   /** multicoin package (defines the item `Balance` struct type). */
   multicoin: string
   /** warehouse_receipts package (`receipt::redeem_receipt` / `deposit_for_receipt`). */
@@ -443,7 +448,10 @@ export interface MarketOrderParams {
 export interface CancelOrderParams {
   storageUnitId: string
   assetId: string
-  /** Pool-local order id (u64), from `orders.openOrders()` / discovery. */
+  /**
+   * Order id (Move `u128`), from `orders.openOrders()` / discovery. Keep it as
+   * a decimal string or bigint — it exceeds 2^53.
+   */
   orderId: bigint | string
 }
 

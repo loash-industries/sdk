@@ -11,6 +11,21 @@ export const u64 = z
   .string()
   .regex(/^\d+$/, 'expected a non-negative integer as a decimal string')
 
+const MAX_U128 = (1n << 128n) - 1n
+
+/**
+ * A Move `u128` as a decimal string — order ids since cycle 7. Past 2^53, so
+ * never a JSON number.
+ */
+export const u128 = z
+  .string()
+  .regex(/^\d+$/, 'expected a non-negative integer as a decimal string')
+  // The regex check does not stop later checks, so guard BigInt() here.
+  .refine(
+    (v) => !/^\d+$/.test(v) || BigInt(v) <= MAX_U128,
+    'exceeds the u128 range',
+  )
+
 /**
  * A signed integer as a decimal string — star-map coordinates in metres.
  *

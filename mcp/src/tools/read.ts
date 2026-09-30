@@ -385,7 +385,7 @@ export const readTools: ToolDef[] = [
     name: 'account_resolve',
     title: 'Resolve a trading account',
     description:
-      'Return the BalanceManager object id for an address, or null when the address has no trading account yet. Pair with prepare_create_account.',
+      'Return the TradingAccount object id for an address, or null when the address has no trading account yet. Pair with prepare_create_account.',
     kind: 'read',
     sdkPath: 'account.get',
     inputShape: { address: suiAddress },
@@ -442,7 +442,7 @@ export const readTools: ToolDef[] = [
     name: 'account_owners',
     title: 'Resolve trading account owners',
     description:
-      'Who owns these trading accounts, for up to 200 BalanceManager ids — how a counterparty id from the order book gets a name. `owner` is tagged: `player:<wallet>` for a character-owned account, `ou:<org_id>` for an organization-owned one.',
+      'Who owns these trading accounts, for up to 200 TradingAccount ids — how a counterparty id from the order book gets a name. `owner` is tagged: `player:<wallet>` for a character-owned account, `ou:<org_id>` for an organization-owned one.',
     kind: 'read',
     sdkPath: 'account.owners',
     inputShape: {
@@ -450,7 +450,7 @@ export const readTools: ToolDef[] = [
         .array(objectId)
         .min(1)
         .max(200)
-        .describe('BalanceManager object ids (max 200).'),
+        .describe('TradingAccount object ids (max 200).'),
     },
     handler: async (ctx, args) =>
       ok(await ctx.readClient().accountOwners(args)),

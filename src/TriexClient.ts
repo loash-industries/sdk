@@ -180,7 +180,7 @@ export class TriexClient {
    */
   async resolveBalanceManagerId(address: string): Promise<string | null> {
     if (this.cachedBalanceManagerId) return this.cachedBalanceManagerId
-    const structType = `${this.ids.triex}::balance_manager::BalanceManager`
+    const structType = `${this.ids.triex}::trading_account::TradingAccount`
     const core = (this.suiClient as any).core
     const page = await core.listOwnedObjects({
       owner: address,
@@ -249,9 +249,33 @@ export class TriexClient {
 /** @internal — pull the created BalanceManager id out of executor results. */
 function findCreatedBalanceManagerId(res: NormalizedExecution): string | null {
   return (
-    findCreatedObject(res, '::balance_manager::BalanceManager')?.objectId ??
+    findCreatedObject(res, '::trading_account::TradingAccount')?.objectId ??
     null
   )
+}
+
+const MAX_U128 = (1n << 128n) - 1n
+
+/**
+ * @internal — order ids are Move `u128` since cycle 7. Accept a bigint or a
+ * decimal (or 0x-hex) string, and reject anything outside the u128 range
+ * with a typed `ValidationFailed`.
+ */
+function parseOrderId(orderId: bigint | string): bigint {
+  const text = typeof orderId === 'string' ? orderId.trim() : null
+  const id =
+    text === null
+      ? (orderId as bigint)
+      : /^(\d+|0x[0-9a-fA-F]+)$/.test(text)
+        ? BigInt(text)
+        : -1n
+  if (id < 0n || id > MAX_U128) {
+    throw new TriexClientError(
+      TriexError.ValidationFailed,
+      `Invalid order id ${String(orderId)}: expected a u128 integer.`,
+    )
+  }
+  return id
 }
 
 /** @internal */
@@ -988,7 +1012,7 @@ class OrdersApi {
    * Cancel one resting order (order id from `openOrders()` / discovery).
    * @throws `AddressRequired` | `ExecutorRequired`; `BalanceManagerNotFound`;
    *   `HubNotFound` | `PoolNotFound`; `TransactionFailed` — e.g. "Order not
-   *   found (EBookOrderNotFound)" when already filled/canceled.
+   *   found (big_vector ENotFound)" when already filled/canceled.
    */
   async cancel(params: CancelOrderParams): Promise<TxResult> {
     const { tx, bm, poolId, execute } = await this.beginCancelTx(params)
@@ -997,7 +1021,7 @@ class OrdersApi {
       poolId,
       bm,
       proof,
-      orderId: BigInt(params.orderId),
+      orderId: parseOrderId(params.orderId),
     })
     return execute()
   }
@@ -1031,7 +1055,7 @@ class OrdersApi {
       poolId,
       bm,
       proof,
-      orderId: BigInt(params.orderId),
+      orderId: parseOrderId(params.orderId),
       newQuantity: params.newQuantity,
     })
     return execute()

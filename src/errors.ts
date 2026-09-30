@@ -89,29 +89,49 @@ export function notImplemented(what: string): never {
 /**
  * Known CLOB Move abort codes (contracts:
  * https://github.com/loash-industries/trinary-exchange) → developer-facing
- * explanations, keyed by `module::code` (TRIEX_SYSTEM_DESIGN §11 —
- * Transaction Abort Codes).
+ * explanations, keyed by `module::code`. Re-derived from the cycle-7 sources
+ * (`const E…` in each module): `balance_manager` is now `trading_account`,
+ * multicoin-pool slippage is `multicoin_pool::13` (coin pools keep
+ * `pool::12`), and an absent order id aborts in `big_vector` (the book has no
+ * order-not-found code of its own).
  */
 const MOVE_ABORTS: Record<string, string> = {
   'pool::12':
     'Slippage too high — the order price moved (EMinimumQuantityOutNotMet)',
+  'multicoin_pool::13':
+    'Slippage too high — the order price moved (EMinimumQuantityOutNotMet)',
+  'multicoin_pool::9':
+    'Order belongs to a different trading account (EInvalidOrderTradingAccount)',
   'book::2': 'No liquidity available (EEmptyOrderbook)',
+  'order_info::1':
+    'Order is below the minimum size for its price — raise the quantity (EOrderBelowMinimumSize)',
   'order_info::5':
     'POST-ONLY order would cross the book — use a plain limit order (EPOSTOrderCrossesOrderbook)',
   'order_info::6':
     'Not enough liquidity to fully fill a FOK order (EFOKOrderCannotBeFullyFilled)',
+  'order_info::7':
+    'Market orders cannot be POST-ONLY (EMarketOrderCannotBePostOnly)',
   'order_info::8':
     'Self-match would cancel your order (ESelfMatchingCancelTaker)',
-  'balance_manager::3':
-    'Balance manager holds insufficient currency — deposit more (EBalanceManagerBalanceTooLow)',
-  'balance_manager::7':
-    'Balance manager holds insufficient items (EMultiCoinBalanceTooLow)',
+  'trading_account::0':
+    'Only the trading account owner can do this (EInvalidOwner)',
+  'trading_account::2':
+    'Trade proof does not belong to this trading account (EInvalidProof)',
+  'trading_account::3':
+    'Trading account holds insufficient currency — deposit more (ETradingAccountBalanceTooLow)',
+  'trading_account::7':
+    'Trading account holds insufficient items (EMultiCoinBalanceTooLow)',
   'state::2':
-    'Max 100 open orders per balance manager per pool reached (EMaxOpenOrders)',
+    'Max 100 open orders per trading account per pool reached (EMaxOpenOrders)',
   'book::7':
     'Modified quantity must be less than the original (ENewQuantityMustBeLessThanOriginal)',
-  'book::8':
-    'Order not found — already filled or canceled? (EBookOrderNotFound)',
+  'order::0':
+    'New quantity must be above the filled amount and below the current quantity (EInvalidNewQuantity)',
+  'order::1': 'Order has expired (EOrderExpired)',
+  'order::4':
+    'Modified order would fall below the minimum size for its price (EOrderBelowMinimumSize)',
+  'big_vector::5':
+    'Order not found — already filled, canceled or expired? (ENotFound)',
   'order_info::4': 'Invalid order restriction value (EInvalidOrderType)',
   'order_info::0': 'Price out of valid range (EOrderInvalidPrice)',
   'order_info::3': 'Expire timestamp is in the past (EInvalidExpireTimestamp)',

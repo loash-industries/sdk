@@ -41,7 +41,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "additionalProperties": false,
     "properties": {
       "balanceManagerIds": {
-        "description": "BalanceManager object ids (max 200).",
+        "description": "TradingAccount object ids (max 200).",
         "items": {
           "pattern": "^0x[0-9a-fA-F]{1,64}$",
           "type": "string",
@@ -542,6 +542,8 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "orderId": {
+        "description": "Order id (Move u128) as a decimal string, from open orders or discovery.",
+        "pattern": "^\\d+$",
         "type": "string",
       },
       "sender": {
@@ -793,6 +795,8 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "orderId": {
+        "description": "Order id (Move u128) as a decimal string, from open orders or discovery.",
+        "pattern": "^\\d+$",
         "type": "string",
       },
       "sender": {

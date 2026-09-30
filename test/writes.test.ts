@@ -26,6 +26,8 @@ const CHAR_ID = '0x' + 'c1'.repeat(32)
 const CHAR_CAP = '0x' + 'c2'.repeat(32)
 const IDS = STILLNESS_PACKAGE_IDS
 const POOL = '0x' + '10'.repeat(32)
+/** The Clock (`0x6`) as the builder normalizes it. */
+const CLOCK = '0x' + '6'.padStart(64, '0')
 
 // ─── fakes ───────────────────────────────────────────────────────────────────
 
@@ -85,7 +87,7 @@ function captureExecutor(opts?: { createBm?: boolean }) {
             {
               type: 'created',
               objectId: BM_ID,
-              objectType: `${IDS.triex}::balance_manager::BalanceManager`,
+              objectType: `${IDS.triex}::trading_account::TradingAccount`,
             },
           ]
         : [],
@@ -116,6 +118,44 @@ function pureU64s(tx: Transaction): bigint[] {
     out.push(BigInt(bcs.u64().parse(bytes)))
   }
   return out
+}
+
+/** All pure inputs decodable as u128 (16 bytes), as bigints. */
+function pureU128s(tx: Transaction): bigint[] {
+  const out: bigint[] = []
+  for (const input of tx.getData().inputs as any[]) {
+    const b64 = input?.Pure?.bytes
+    if (!b64) continue
+    const bytes = fromBase64(b64)
+    if (bytes.length !== 16) continue
+    out.push(BigInt(bcs.u128().parse(bytes)))
+  }
+  return out
+}
+
+/**
+ * The arguments of the (first) MoveCall to `module::function`, described as
+ * the object id they reference, `pure:<n bytes>`, or `result`. Enough to pin
+ * each call's argument order against the Move signature.
+ */
+function moveCallArgs(tx: Transaction, target: string): string[] {
+  const data = tx.getData()
+  const call = data.commands.find(
+    (c: any) =>
+      c.$kind === 'MoveCall' &&
+      `${c.MoveCall.module}::${c.MoveCall.function}` === target,
+  ) as any
+  if (!call) throw new Error(`no MoveCall ${target}`)
+  return call.MoveCall.arguments.map((arg: any) => {
+    if (arg.$kind !== 'Input') return 'result'
+    const input = (data.inputs as any[])[arg.Input]
+    if (input?.Pure) return `pure:${fromBase64(input.Pure.bytes).length}`
+    const obj =
+      input?.UnresolvedObject?.objectId ??
+      input?.Object?.SharedObject?.objectId ??
+      input?.Object?.ImmOrOwnedObject?.objectId
+    return obj ?? 'unknown'
+  })
 }
 
 const bmWithNoBag = { object: { json: {} } } // BM CRED balance reads → 0n
@@ -161,7 +201,7 @@ describe('account.depositCurrency', () => {
     expect(commandNames(captured.tx!)).toEqual([
       'MergeCoins',
       'SplitCoins',
-      'balance_manager::deposit',
+      'trading_account::deposit',
     ])
     expect(pureU64s(captured.tx!)).toContainEqual(100n)
   })
@@ -176,9 +216,9 @@ describe('account.depositCurrency', () => {
     await c.account.depositCurrency({ amount: 100n })
 
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::new',
+      'trading_account::new',
       'SplitCoins',
-      'balance_manager::deposit',
+      'trading_account::deposit',
       'TransferObjects',
     ])
     // The created BM id was captured from objectChanges (read-your-writes).
@@ -204,15 +244,26 @@ describe('account.depositCurrency', () => {
 // ─── account.withdrawCurrency ────────────────────────────────────────────────
 
 describe('account.withdrawCurrency', () => {
-  it('withdraws a partial amount via balance_manager::withdraw', async () => {
+  it('withdraws a partial amount via trading_account::withdraw', async () => {
     const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
     const { executor, captured } = captureExecutor()
     await client(sui, executor).account.withdrawCurrency({ amount: 42n })
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::withdraw',
+      'trading_account::withdraw',
       'TransferObjects',
     ])
     expect(pureU64s(captured.tx!)).toContainEqual(42n)
+  })
+
+  it('looks the account up by the cycle-7 TradingAccount type', async () => {
+    const listOwnedObjects = jest.fn((_args: any) => bmPage(BM_ID))
+    const sui = fakeSuiClient({ listOwnedObjects })
+    const { executor } = captureExecutor()
+    await client(sui, executor).account.withdrawCurrency({ amount: 1n })
+    expect(listOwnedObjects.mock.calls[0][0]).toMatchObject({
+      owner: OWNER,
+      type: `${IDS.triex}::trading_account::TradingAccount`,
+    })
   })
 
   it('withdraws everything via withdraw_all when no amount is given', async () => {
@@ -220,7 +271,7 @@ describe('account.withdrawCurrency', () => {
     const { executor, captured } = captureExecutor()
     await client(sui, executor).account.withdrawCurrency()
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::withdraw_all',
+      'trading_account::withdraw_all',
       'TransferObjects',
     ])
   })
@@ -282,14 +333,31 @@ describe('orders.limit (bid)', () => {
 
     expect(commandNames(captured.tx!)).toEqual([
       'SplitCoins',
-      'balance_manager::deposit',
-      'balance_manager::generate_proof_as_owner',
+      'trading_account::deposit',
+      'trading_account::generate_proof_as_owner',
       'multicoin_pool::place_limit_order',
     ])
     const u64s = pureU64s(captured.tx!)
     expect(u64s).toContainEqual(306n) // 300 quote + 2% fee, floor-of-total
     expect(u64s).toContainEqual(GTC_EXPIRE) // default expiry
     expect(u64s).toContainEqual(100n) // price
+    // place_limit_order(pool, policy, account, proof, order_type, smo, price,
+    //   quantity, is_bid, expire_timestamp, clock)
+    expect(
+      moveCallArgs(captured.tx!, 'multicoin_pool::place_limit_order'),
+    ).toEqual([
+      POOL,
+      IDS.triexFeePolicy,
+      BM_ID,
+      'result',
+      'pure:1',
+      'pure:1',
+      'pure:8',
+      'pure:8',
+      'pure:1',
+      'pure:8',
+      CLOCK,
+    ])
   })
 
   it('skips the deposit entirely when the BM already holds enough quote', async () => {
@@ -311,7 +379,7 @@ describe('orders.limit (bid)', () => {
       quantity: 3n, // needs 306, BM holds 1000
     })
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::generate_proof_as_owner',
+      'trading_account::generate_proof_as_owner',
       'multicoin_pool::place_limit_order',
     ])
   })
@@ -361,8 +429,8 @@ describe('orders.limit (sell)', () => {
     })
     // 9-receipt alone covers the deficit of 5 → exactly one deposit_multicoin.
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::deposit_multicoin',
-      'balance_manager::generate_proof_as_owner',
+      'trading_account::deposit_multicoin',
+      'trading_account::generate_proof_as_owner',
       'multicoin_pool::place_limit_order',
     ])
   })
@@ -384,7 +452,7 @@ describe('orders.limit (sell)', () => {
       quantity: 5n,
     })
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::generate_proof_as_owner',
+      'trading_account::generate_proof_as_owner',
       'multicoin_pool::place_limit_order',
     ])
   })
@@ -457,12 +525,25 @@ describe('orders.market', () => {
     })
     expect(commandNames(captured.tx!)).toEqual([
       'SplitCoins',
-      'balance_manager::deposit',
-      'balance_manager::generate_proof_as_owner',
+      'trading_account::deposit',
+      'trading_account::generate_proof_as_owner',
       'multicoin_pool::place_market_order',
     ])
     // buffer = 100 × 2% + 2 = 4 → deposit 1004
     expect(pureU64s(captured.tx!)).toContainEqual(1_004n)
+    // place_market_order(pool, policy, account, proof, smo, quantity, is_bid, clock)
+    expect(
+      moveCallArgs(captured.tx!, 'multicoin_pool::place_market_order'),
+    ).toEqual([
+      POOL,
+      IDS.triexFeePolicy,
+      BM_ID,
+      'result',
+      'pure:1',
+      'pure:8',
+      'pure:1',
+      CLOCK,
+    ])
   })
 })
 
@@ -471,7 +552,7 @@ describe('orders.market', () => {
 describe('orders.cancel family', () => {
   const routes: Array<[string, unknown]> = [VAULT_ROUTE, RESOLVE_ROUTE]
 
-  it('cancel composes proof + cancel_order with the u64 order id', async () => {
+  it('cancel composes proof + cancel_order with the FeePolicy and a u128 order id', async () => {
     routeFetch(routes)
     const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
     const { executor, captured } = captureExecutor()
@@ -481,10 +562,50 @@ describe('orders.cancel family', () => {
       orderId: '42',
     })
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::generate_proof_as_owner',
+      'trading_account::generate_proof_as_owner',
       'multicoin_pool::cancel_order',
     ])
-    expect(pureU64s(captured.tx!)).toContainEqual(42n)
+    expect(pureU128s(captured.tx!)).toEqual([42n])
+    expect(pureU64s(captured.tx!)).toEqual([])
+    // cancel_order(pool, policy, account, proof, order_id: u128, clock)
+    expect(moveCallArgs(captured.tx!, 'multicoin_pool::cancel_order')).toEqual([
+      POOL,
+      IDS.triexFeePolicy,
+      BM_ID,
+      'result',
+      'pure:16',
+      CLOCK,
+    ])
+  })
+
+  it('cancel encodes order ids above 2^64 without truncation', async () => {
+    routeFetch(routes)
+    const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
+    const { executor, captured } = captureExecutor()
+    // A real cycle-7 id: is_bid bit | price << 64 | sequence.
+    const orderId = (1n << 127n) | (1_000n << 64n) | 7n
+    await client(sui, executor).orders.cancel({
+      storageUnitId: HEX,
+      assetId: '70810',
+      orderId: orderId.toString(),
+    })
+    expect(pureU128s(captured.tx!)).toEqual([orderId])
+  })
+
+  it('rejects order ids that are not u128 integers before building', async () => {
+    const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
+    routeFetch(routes)
+    const { executor } = captureExecutor()
+    for (const orderId of ['abc', '', '-1', (1n << 128n).toString()]) {
+      await expect(
+        client(sui, executor).orders.cancel({
+          storageUnitId: HEX,
+          assetId: '70810',
+          orderId,
+        }),
+      ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
+    }
+    expect(executor).not.toHaveBeenCalled()
   })
 
   it('cancelAll composes proof + cancel_all_orders', async () => {
@@ -496,9 +617,13 @@ describe('orders.cancel family', () => {
       assetId: '70810',
     })
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::generate_proof_as_owner',
+      'trading_account::generate_proof_as_owner',
       'multicoin_pool::cancel_all_orders',
     ])
+    // cancel_all_orders(pool, policy, account, proof, clock)
+    expect(
+      moveCallArgs(captured.tx!, 'multicoin_pool::cancel_all_orders'),
+    ).toEqual([POOL, IDS.triexFeePolicy, BM_ID, 'result', CLOCK])
   })
 
   it('modify composes proof + modify_order with id and new quantity', async () => {
@@ -512,12 +637,21 @@ describe('orders.cancel family', () => {
       newQuantity: 3n,
     })
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::generate_proof_as_owner',
+      'trading_account::generate_proof_as_owner',
       'multicoin_pool::modify_order',
     ])
-    const u64s = pureU64s(captured.tx!)
-    expect(u64s).toContainEqual(42n)
-    expect(u64s).toContainEqual(3n)
+    expect(pureU128s(captured.tx!)).toEqual([42n])
+    expect(pureU64s(captured.tx!)).toEqual([3n])
+    // modify_order(pool, policy, account, proof, order_id: u128, new_quantity, clock)
+    expect(moveCallArgs(captured.tx!, 'multicoin_pool::modify_order')).toEqual([
+      POOL,
+      IDS.triexFeePolicy,
+      BM_ID,
+      'result',
+      'pure:16',
+      'pure:8',
+      CLOCK,
+    ])
   })
 
   it('cancel without a balance manager fails typed', async () => {
@@ -575,9 +709,13 @@ describe('account.claimSettled', () => {
     const { executor, captured } = captureExecutor()
     await client(sui, executor).account.claimSettled()
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::generate_proof_as_owner',
+      'trading_account::generate_proof_as_owner',
       'multicoin_pool::withdraw_settled_amounts',
     ])
+    // withdraw_settled_amounts(pool, account, proof) — no FeePolicy
+    expect(
+      moveCallArgs(captured.tx!, 'multicoin_pool::withdraw_settled_amounts'),
+    ).toEqual([POOL, BM_ID, 'result'])
   })
 
   it('fails typed when nothing is settled', async () => {
@@ -628,9 +766,9 @@ describe('account.withdrawItems', () => {
       items: [{ assetId: '70810' }, { assetId: '92422' }],
     })
     expect(commandNames(captured.tx!)).toEqual([
-      'balance_manager::withdraw_all_multicoin',
+      'trading_account::withdraw_all_multicoin',
       'receipt::redeem_receipt',
-      'balance_manager::withdraw_all_multicoin',
+      'trading_account::withdraw_all_multicoin',
       'receipt::redeem_receipt',
     ])
   })
@@ -672,9 +810,33 @@ describe('marketBuyRoundingBuffer', () => {
 describe('explainMoveAbort', () => {
   it('translates known module::code aborts', () => {
     const raw =
-      'MoveAbort(MoveLocation { module: ModuleId { address: 0x291b, name: Identifier("balance_manager") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3) in command 2'
+      'MoveAbort(MoveLocation { module: ModuleId { address: 0xa9df, name: Identifier("trading_account") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3) in command 2'
     expect(explainMoveAbort(raw)).toContain('insufficient currency')
     expect(explainMoveAbort(new Error(raw))).toContain('deposit more')
+  })
+  it('maps the cycle-7 order-not-found and multicoin slippage aborts', () => {
+    expect(
+      explainMoveAbort(
+        "MoveAbort in 2nd command, abort code: 5, in '0xa9df::big_vector::remove' (instruction 3)",
+      ),
+    ).toContain('Order not found')
+    expect(
+      explainMoveAbort(
+        'MoveAbort(MoveLocation { module: ModuleId { address: 0xa9df, name: Identifier("multicoin_pool") }, function: 1, instruction: 1, function_name: Some("swap") }, 13)',
+      ),
+    ).toContain('Slippage')
+  })
+  it('no longer maps the retired balance_manager module or book::8', () => {
+    expect(
+      explainMoveAbort(
+        'MoveAbort(MoveLocation { module: ModuleId { address: 0x291b, name: Identifier("balance_manager") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3)',
+      ),
+    ).toBeNull()
+    expect(
+      explainMoveAbort(
+        "MoveAbort in 2nd command, abort code: 8, in '0x291b::book::cancel_order'",
+      ),
+    ).toBeNull()
   })
   it('returns null for unknown aborts and non-abort errors', () => {
     expect(explainMoveAbort('everything is fine')).toBeNull()

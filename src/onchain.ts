@@ -16,7 +16,7 @@ import type { PackageIds } from './types'
  * The unified (gRPC-era) Sui client takes dynamic-field names as BCS bytes and
  * returns values as BCS bytes, so the exact Move layouts are declared here
  * (see the CLOB Move contracts: https://github.com/loash-industries/trinary-exchange):
- *   sources/balance_manager.move
+ *   sources/trading_account.move
  *     `BalanceKey<phantom T> {}`                 (empty struct — one dummy bool)
  *     `MultiCoinBalanceKey { collection_id: ID, asset_id: u64 }`
  *   sources/registry.move
@@ -37,7 +37,7 @@ export function serializeBalanceKey(): Uint8Array {
   return BalanceKeyBcs.serialize({ dummy_field: false }).toBytes()
 }
 
-/** `balance_manager::MultiCoinBalanceKey { collection_id, asset_id }`. */
+/** `trading_account::MultiCoinBalanceKey { collection_id, asset_id }`. */
 const MultiCoinBalanceKeyBcs = bcs.struct('MultiCoinBalanceKey', {
   collection_id: bcs.Address,
   asset_id: bcs.u64(),
@@ -163,7 +163,7 @@ export async function getBalanceManagerCurrencyBalance(
   const balancesBagId = tryIdToString(balancesBag?.id)
   if (!balancesBagId) return 0n
 
-  const keyType = `${ids.triex}::balance_manager::BalanceKey<${ids.credCoinType}>`
+  const keyType = `${ids.triex}::trading_account::BalanceKey<${ids.credCoinType}>`
   const df = await core(suiClient)
     .getDynamicField({
       parentId: balancesBagId,
@@ -189,7 +189,7 @@ export async function getBalanceManagerItemBalance(
   collectionId: string,
   assetId: bigint,
 ): Promise<{ hasKey: boolean; balance: bigint }> {
-  const keyType = `${ids.triex}::balance_manager::MultiCoinBalanceKey`
+  const keyType = `${ids.triex}::trading_account::MultiCoinBalanceKey`
   const resp = await core(suiClient)
     .getDynamicObjectField({
       parentId: balanceManagerId,

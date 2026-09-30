@@ -5,7 +5,7 @@ import {
 } from '../src/execute'
 import { TriexClientError, TriexError } from '../src/errors'
 
-const BM_TYPE = '0xabc::balance_manager::BalanceManager'
+const BM_TYPE = '0xabc::trading_account::TradingAccount'
 
 describe('normalizeExecuteResult', () => {
   it('normalizes a v2 TransactionResult with effects + objectTypes', () => {
@@ -27,7 +27,7 @@ describe('normalizeExecuteResult', () => {
     expect(res.createdObjects).toEqual([
       { objectId: '0x1', objectType: BM_TYPE },
     ])
-    expect(findCreatedObject(res, '::balance_manager::BalanceManager')).toEqual(
+    expect(findCreatedObject(res, '::trading_account::TradingAccount')).toEqual(
       {
         objectId: '0x1',
         objectType: BM_TYPE,
@@ -44,7 +44,7 @@ describe('normalizeExecuteResult', () => {
         objectTypes: { '0x9': BM_TYPE },
       },
     })
-    expect(findCreatedObject(res, 'BalanceManager')?.objectId).toBe('0x9')
+    expect(findCreatedObject(res, 'TradingAccount')?.objectId).toBe('0x9')
   })
 
   it('throws typed TransactionFailed for a v2 FailedTransaction, with abort translation', () => {
@@ -57,7 +57,7 @@ describe('normalizeExecuteResult', () => {
             success: false,
             error: {
               message:
-                'MoveAbort(MoveLocation { module: ModuleId { address: 0x291b, name: Identifier("balance_manager") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3)',
+                'MoveAbort(MoveLocation { module: ModuleId { address: 0xa9df, name: Identifier("trading_account") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3)',
             },
           },
         },
@@ -108,7 +108,7 @@ describe('executeAndNormalize', () => {
     const executor = async () => {
       // Exact format the v2 client throws during transaction resolution.
       throw new Error(
-        "Transaction resolution failed: MoveAbort in 2nd command, abort code: 8, in '0x291b9da738dffedd18d7c5049e5e6792270202e03f3c9d9db4c7097670bf6eb2::book::cancel_order' (instruction 102)",
+        "Transaction resolution failed: MoveAbort in 2nd command, abort code: 5, in '0xa9dfa639b89afcec3a206398510f2a3dee80478a765d238a2d33b58d14bdc8b4::big_vector::remove' (instruction 102)",
       )
     }
     try {

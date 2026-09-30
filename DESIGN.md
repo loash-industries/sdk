@@ -61,11 +61,11 @@ The "Gateway" column is the **current** state in
 
 | # | User story | Plane | Indexer endpoint / Move entrypoint | Gateway today |
 |---|---|---|---|---|
-| 1 | Create trading account **iff** none exists (balance manager) | READ+WRITE | READ on-chain `listOwnedObjects` (authoritative; `GET /v1/inventory/balance-manager` stays disabled) → WRITE `balance_manager::new()` (+ `transferObjects` to self) | n/a (on-chain read) |
+| 1 | Create trading account **iff** none exists (balance manager) | READ+WRITE | READ on-chain `listOwnedObjects` (authoritative; `GET /v1/inventory/balance-manager` stays disabled) → WRITE `trading_account::new()` (+ `transferObjects` to self) | n/a (on-chain read) |
 | 2 | Fetch item balances | READ | `GET /v1/inventory/balances` — **hub-scoped** (`storage_unit_id` required): warehouse (wallet receipts, by `owner_address`), marketplace (BM, by `balance_manager_id`), hangar (by `inventory_key` owner-cap id) | **enabled** (50 CU) |
 | 3 | Fetch trade-currency (CRED) balance | READ | **fullnode** — wallet coins (`listCoins`) + BM `BalanceKey<CRED>` dynamic field; the indexer inventory endpoint serves *items only* | n/a (fullnode) |
-| 4 | Deposit items from hangar → trading account | READ+WRITE | READ `GET /v1/hubs/{hub_id}/vault` (vaultConfigId + collectionId) + on-chain owner-cap/char resolution → WRITE the **direct-from-hangar sequence** (borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap → balance_manager::deposit_multicoin); see §6.1 | **enabled** (vault) |
-| 5 | Deposit currency → trading account | WRITE | `balance_manager::deposit<CRED>` (wallet coin selected/merged/split) | n/a (on-chain) |
+| 4 | Deposit items from hangar → trading account | READ+WRITE | READ `GET /v1/hubs/{hub_id}/vault` (vaultConfigId + collectionId) + on-chain owner-cap/char resolution → WRITE the **direct-from-hangar sequence** (borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap → trading_account::deposit_multicoin); see §6.1 | **enabled** (vault) |
+| 5 | Deposit currency → trading account | WRITE | `trading_account::deposit<CRED>` (wallet coin selected/merged/split) | n/a (on-chain) |
 | 6 | Discover items with live buy/sell orders across the universe | READ | `GET /v1/discovery` — **open orders sorted by recency**, with filters (hubs/item/side/bm/public) | **enabled** (150 CU) |
 | 7 | Fetch trade-hub details (public/private, owner, location) | READ | `GET /v1/hubs/{hub_id}/vault` + `GET /v1/hubs/{hub_id}/location` (+ `GET /v1/collections/{collection_id}/hub` reverse lookup). `/location` **404s semantically** for unrevealed hubs (most of them) → `TradeHubDetail.location` is nullable. Tribe/fuel are NOT in these responses (post-MVP: hubs economics/enriched routes) | **enabled** |
 | 8 | Fetch items with buy/sell orders at a specific storage unit | READ | `GET /v1/hubs/{hub_id}/items` (`has_bids`/`has_asks` flags) | **enabled** |
@@ -73,8 +73,8 @@ The "Gateway" column is the **current** state in
 | 10 | Create **limit** buy/sell order | READ+WRITE | READ resolve chain + `GET /v1/pools/{pool_id}/metadata` (fee is 1e9-scaled `fee`, not bps) → WRITE `multicoin_pool::place_limit_order<Quote>` + deposit deficit | **enabled** (reads) |
 | 11 | Create **market** buy/sell order | READ+WRITE | as #10 but `multicoin_pool::place_market_order<Quote>` (no price/expiry) | **enabled** (reads) |
 | 14 | Read own open orders / fills / trades (bots) | READ | `GET /v1/balance-managers/{bm}/open-orders`, `/fills`, `/trades` (epoch-ms `before`/`after` paging) | **enabled** |
-| 12 | Withdraw items from BM → storage unit | WRITE | `balance_manager::withdraw_all_multicoin` → `receipt::redeem_receipt(...ssu, character...)` | n/a (on-chain) |
-| 13 | Withdraw currency from BM → wallet | WRITE | `balance_manager::withdraw_all<CRED>` + `transferObjects` to self | n/a (on-chain) |
+| 12 | Withdraw items from BM → storage unit | WRITE | `trading_account::withdraw_all_multicoin` → `receipt::redeem_receipt(...ssu, character...)` | n/a (on-chain) |
+| 13 | Withdraw currency from BM → wallet | WRITE | `trading_account::withdraw_all<CRED>` + `transferObjects` to self | n/a (on-chain) |
 
 **Phase 0 status (2026-08-21): done.** The market surface (pools, hubs, collections,
 balance-manager reads, discovery) was enabled in DCR `62acb22`;
@@ -294,22 +294,26 @@ are inferred from the pinned zod wire schemas (`schemas.ts`) — single source o
 
 ## 6. On-chain transaction builders (`transactions.ts`)
 
-Confirmed Move entrypoints (from `triex-app-api` — personal, non-governance path). All are
+Confirmed Move entrypoints (personal, non-governance path), verified against the cycle-7
+contract: the `balance_manager` module is now `trading_account` (`BalanceManager` →
+`TradingAccount`), order ids are `u128`, and placement / cancel / cancel-all / modify take
+the shared `FeePolicy` (`triexFeePolicy`) right after the pool. The TypeScript API keeps
+its "balance manager" names. All are
 pure functions `(args) => Transaction`; the facade fills object IDs from indexer reads.
 
 | Builder | Move target | Notes |
 |---|---|---|
-| `newBalanceManager` | `${triex}::balance_manager::new()` | returns BM; `transferObjects([bm], self)` when freshly created |
-| `depositCoin` | `${triex}::balance_manager::deposit<T>(bm, coin)` | coin prepared via list/merge/split of wallet coins |
-| `depositMulticoinObject` | `${triex}::balance_manager::deposit_multicoin(bm, object)` | deposit an owned multicoin `Balance` object (wallet receipts) into BM |
-| `withdrawAllCoin` | `${triex}::balance_manager::withdraw_all<T>(bm)` → `transferObjects` | #13 |
-| `withdrawAllMulticoin` | `${triex}::balance_manager::withdraw_all_multicoin(bm, collectionId, assetId)` | #12 step 1 |
+| `newBalanceManager` | `${triex}::trading_account::new()` | returns BM; `transferObjects([bm], self)` when freshly created |
+| `depositCoin` | `${triex}::trading_account::deposit<T>(bm, coin)` | coin prepared via list/merge/split of wallet coins |
+| `depositMulticoinObject` | `${triex}::trading_account::deposit_multicoin(bm, object)` | deposit an owned multicoin `Balance` object (wallet receipts) into BM |
+| `withdrawAllCoin` | `${triex}::trading_account::withdraw_all<T>(bm)` → `transferObjects` | #13 |
+| `withdrawAllMulticoin` | `${triex}::trading_account::withdraw_all_multicoin(bm, collectionId, assetId)` | #12 step 1 |
 | `redeemReceipt` | `${warehouseReceipts}::receipt::redeem_receipt(balance, ssu, character, vaultConfig, collection, isOwner)` | #12 step 2 (BM item → hangar) |
-| `ownerProof` | `${triex}::balance_manager::generate_proof_as_owner(bm)` | required before placing/withdrawing |
-| `placeLimitOrderItem` | `${triex}::multicoin_pool::place_limit_order<Quote>(pool, bm, proof, orderType, selfMatch, price, qty, isBid, expireTs, clock)` | items (multicoin) |
-| `placeMarketOrderItem` | `${triex}::multicoin_pool::place_market_order<Quote>(pool, bm, proof, selfMatch, qty, isBid, clock)` | items (multicoin) |
-| `cancelOrderItem` | `${triex}::multicoin_pool::cancel_order<Quote>(pool, bm, proof, orderId u64, clock)` | implemented (+ `cancel_all_orders`, `modify_order`) |
-| `withdrawCoin` | `${triex}::balance_manager::withdraw<T>(bm, amount)` | partial currency withdraw |
+| `ownerProof` | `${triex}::trading_account::generate_proof_as_owner(bm)` | required before placing/withdrawing |
+| `placeLimitOrderItem` | `${triex}::multicoin_pool::place_limit_order<Quote>(pool, feePolicy, bm, proof, orderType, selfMatch, price, qty, isBid, expireTs, clock)` | items (multicoin) |
+| `placeMarketOrderItem` | `${triex}::multicoin_pool::place_market_order<Quote>(pool, feePolicy, bm, proof, selfMatch, qty, isBid, clock)` | items (multicoin) |
+| `cancelOrderItem` | `${triex}::multicoin_pool::cancel_order<Quote>(pool, feePolicy, bm, proof, orderId u128, clock)` | implemented (+ `cancel_all_orders`, `modify_order`, which also take `feePolicy`) |
+| `withdrawCoin` | `${triex}::trading_account::withdraw<T>(bm, amount)` | partial currency withdraw |
 | `withdrawSettledAmounts` | `${triex}::multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` | claim post-fill proceeds into the BM |
 
 > `<Quote>` is the CRED coin type (`credCoinType`). Item markets are `multicoin_pool`; the
@@ -332,7 +336,7 @@ covering a deposit deficit from two sources in order:
 
 1. **Wallet multicoin receipts.** Find owned `${multicoin}::multicoin::Balance` objects for the
    `assetId` in the right collection, then for each:
-   `balance_manager::deposit_multicoin(bm, object)`.
+   `trading_account::deposit_multicoin(bm, object)`.
 2. **SSU / character hangar inventory** (only if a deficit remains). For each relevant owner cap
    (SSU owner cap and/or character owner cap):
 
@@ -342,7 +346,7 @@ covering a deposit deficit from two sources in order:
                               ssuObject, character, cap, vaultConfigId,
                               vaultCollectionId, assetId /*u64*/, amount /*u32*/)
    character::return_owner_cap<CapType>(character, cap, borrowReceipt)
-   balance_manager::deposit_multicoin(bm, receipt)
+   trading_account::deposit_multicoin(bm, receipt)
    ```
 
 **RQ-3 resolved (from the app):** the SSU owner-cap type arg is
@@ -404,12 +408,13 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
 excluded**. The current stillness trading IDs (for the SDK `testnet` preset):
 
 ```
-triexPackageId            0x291b9da738dffedd18d7c5049e5e6792270202e03f3c9d9db4c7097670bf6eb2
-triexRegistryId           0x14a58f254b8243bf3f74c057d81cc310498b3d0fe3781650ad58405d7e5f17e4   (shared obj — not in /package-ids)
-multicoinPackageId        0x99a4c039477ac7e7affcb5a5609dd23c29ab69e9436e740d94a4e168c2506cfb
-warehouseReceiptsPackageId 0x0c9d4414aa12eaa1ebf9d32437c1e6403fbf941ffcdca5b9ca16d1769313417e
-credCoinType              0xfbcbd9155669e157ce3999e073930b4c4b67255c3cf88d0d80c76342a31e6710::cred::CRED
-worldPackageId            0x8b8a46ed766fa1358ce7c5c51f6a164b13d627a63e45343f69ed0ba0446c1aa1   (= worldOriginalPackageId)
+triexPackageId            0xa9dfa639b89afcec3a206398510f2a3dee80478a765d238a2d33b58d14bdc8b4   (cycle 7)
+triexRegistryId           0xc777162427090072d3034565544f285131ae6a23909dd237d51677504d65469b   (shared obj — not in /package-ids)
+triexFeePolicyId          0x3285b29bb35ed4feae7b921413122e2f82a809e8a398216b47d9915531e24551   (shared obj — not in /package-ids)
+multicoinPackageId        0xdbb778cba30e7deccf61169fbfbcd10a867654e1e2822facd789a99bd2c4e2ba
+warehouseReceiptsPackageId 0x134dfa96ad8bc50d4a2055cd78c91e264feb2fe79facf2d030f8bb466a80bb68
+credCoinType              0xfbcbd9155669e157ce3999e073930b4c4b67255c3cf88d0d80c76342a31e6710::cred::CRED   (never republished)
+worldPackageId            0x7be18d6294e533bedd9a5d70a96ce8d9d4b87a7c74188ba65d3fe966bbed9d92   (= worldOriginalPackageId)
 clock                     0x6
 ```
 

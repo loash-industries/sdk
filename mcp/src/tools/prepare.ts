@@ -12,9 +12,14 @@ import {
   objectId,
   orderSide,
   senderShape,
+  u128,
   u64,
 } from '../schemas.js'
 import type { ToolDef } from './types.js'
+
+const orderIdSchema = u128.describe(
+  'Order id (Move u128) as a decimal string, from open orders or discovery.',
+)
 
 /**
  * Run an SDK write call with the capture executor and serialize the built
@@ -56,7 +61,7 @@ export const prepareTools: ToolDef[] = [
     name: 'prepare_create_account',
     title: 'Prepare: create trading account',
     description:
-      'Build the transaction that creates a BalanceManager (trading account) for an address. Returns prepared:false when one already exists.' +
+      'Build the transaction that creates a TradingAccount for an address. Returns prepared:false when one already exists.' +
       PREPARE_SUFFIX,
     kind: 'prepare',
     sdkPath: 'account.ensure',
@@ -340,7 +345,7 @@ export const prepareTools: ToolDef[] = [
     description: 'Build a cancellation of one resting order.' + PREPARE_SUFFIX,
     kind: 'prepare',
     sdkPath: 'orders.cancel',
-    inputShape: { ...senderShape, ...hubAssetShape, orderId: z.string() },
+    inputShape: { ...senderShape, ...hubAssetShape, orderId: orderIdSchema },
     handler: (ctx, args) =>
       prepared(
         ctx,
@@ -392,7 +397,7 @@ export const prepareTools: ToolDef[] = [
     inputShape: {
       ...senderShape,
       ...hubAssetShape,
-      orderId: z.string(),
+      orderId: orderIdSchema,
       newQuantity: u64,
     },
     handler: (ctx, args) =>

@@ -12,40 +12,43 @@ import type { PackageIds } from './types'
  * handles; none execute. The high-level client resolves object IDs (from the
  * indexer + fullnode) and composes these into atomic transactions.
  *
- * Entry points confirmed against triex-app-api
- * (`useTriexbookMulticoinOrders.ts`, `sweepAllTx.ts`). Arg orders for the
- * `multicoin_pool::place_*` calls should be re-verified against the on-chain
- * module before Phase 3 sign-off (DESIGN.md §6).
+ * Every target and argument list is verified against the cycle-7 contract
+ * (trinary-exchange `packages/triex/sources`: `trading_account.move`,
+ * `multicoin_pool.move`). Cycle 7 renamed the `balance_manager` module to
+ * `trading_account` (`BalanceManager` → `TradingAccount`), made order ids
+ * `u128`, and added a shared `&FeePolicy` argument to order placement,
+ * cancel, cancel-all and modify. The SDK keeps its "balance manager" naming
+ * for the TypeScript API; only the Move-facing strings changed.
  */
 
-// ─── Balance manager lifecycle ───────────────────────────────────────────────
+// ─── Trading account lifecycle ───────────────────────────────────────────────
 
-/** `balance_manager::new()` → the new BalanceManager (transfer to self after). */
+/** `trading_account::new()` → the new TradingAccount (transfer to self after). */
 export function newBalanceManager(
   tx: Transaction,
   ids: PackageIds,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::new`,
+    target: `${ids.triex}::trading_account::new`,
     arguments: [],
   })
 }
 
-/** `balance_manager::generate_proof_as_owner(bm)` — required before trading. */
+/** `trading_account::generate_proof_as_owner(bm)` — required before trading. */
 export function generateProofAsOwner(
   tx: Transaction,
   ids: PackageIds,
   bm: TransactionObjectArgument,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::generate_proof_as_owner`,
+    target: `${ids.triex}::trading_account::generate_proof_as_owner`,
     arguments: [bm],
   })
 }
 
 // ─── Deposits ────────────────────────────────────────────────────────────────
 
-/** `balance_manager::deposit<T>(bm, coin)` — deposit a prepared coin. */
+/** `trading_account::deposit<T>(bm, coin)` — deposit a prepared coin. */
 export function depositCoin(
   tx: Transaction,
   ids: PackageIds,
@@ -54,13 +57,13 @@ export function depositCoin(
   coinType: string = ids.credCoinType,
 ): void {
   tx.moveCall({
-    target: `${ids.triex}::balance_manager::deposit`,
+    target: `${ids.triex}::trading_account::deposit`,
     typeArguments: [coinType],
     arguments: [bm, coin],
   })
 }
 
-/** `balance_manager::deposit_multicoin(bm, object)` — deposit an item Balance. */
+/** `trading_account::deposit_multicoin(bm, object)` — deposit an item Balance. */
 export function depositMulticoinObject(
   tx: Transaction,
   ids: PackageIds,
@@ -68,14 +71,14 @@ export function depositMulticoinObject(
   itemObjectId: string,
 ): void {
   tx.moveCall({
-    target: `${ids.triex}::balance_manager::deposit_multicoin`,
+    target: `${ids.triex}::trading_account::deposit_multicoin`,
     arguments: [bm, tx.object(itemObjectId)],
   })
 }
 
 // ─── Withdrawals ─────────────────────────────────────────────────────────────
 
-/** `balance_manager::withdraw<T>(bm, amount)` → coin (partial withdraw). */
+/** `trading_account::withdraw<T>(bm, amount)` → coin (partial withdraw). */
 export function withdrawCoin(
   tx: Transaction,
   ids: PackageIds,
@@ -84,13 +87,13 @@ export function withdrawCoin(
   coinType: string = ids.credCoinType,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::withdraw`,
+    target: `${ids.triex}::trading_account::withdraw`,
     typeArguments: [coinType],
     arguments: [bm, tx.pure.u64(amount)],
   })
 }
 
-/** `balance_manager::withdraw_all<T>(bm)` → coin (transfer to self after). */
+/** `trading_account::withdraw_all<T>(bm)` → coin (transfer to self after). */
 export function withdrawAllCoin(
   tx: Transaction,
   ids: PackageIds,
@@ -98,13 +101,13 @@ export function withdrawAllCoin(
   coinType: string = ids.credCoinType,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::withdraw_all`,
+    target: `${ids.triex}::trading_account::withdraw_all`,
     typeArguments: [coinType],
     arguments: [bm],
   })
 }
 
-/** `balance_manager::withdraw_all_multicoin(bm, collectionId, assetId)` → balance. */
+/** `trading_account::withdraw_all_multicoin(bm, collectionId, assetId)` → balance. */
 export function withdrawAllMulticoin(
   tx: Transaction,
   ids: PackageIds,
@@ -113,7 +116,7 @@ export function withdrawAllMulticoin(
   assetId: bigint,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::withdraw_all_multicoin`,
+    target: `${ids.triex}::trading_account::withdraw_all_multicoin`,
     arguments: [bm, tx.pure.id(collectionId), tx.pure.u64(assetId)],
   })
 }
@@ -169,7 +172,7 @@ export interface HangarSourceArgs {
  * Pull items out of a hangar/SSU and deposit them into the balance manager, in
  * one PTB fragment:
  *   borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap
- *   → balance_manager::deposit_multicoin
+ *   → trading_account::deposit_multicoin
  *
  * TODO(RQ-3): confirm which owner cap (SSU vs character) applies for a personal
  * player at their own vs a public hub, and the exact `capTypeArg`.
@@ -211,7 +214,7 @@ export function sourceItemsFromHangar(
   })
 
   tx.moveCall({
-    target: `${ids.triex}::balance_manager::deposit_multicoin`,
+    target: `${ids.triex}::trading_account::deposit_multicoin`,
     arguments: [bm, receipt],
   })
 }
@@ -233,7 +236,10 @@ export interface PlaceLimitOrderArgs {
   expireTimestamp: bigint
 }
 
-/** `multicoin_pool::place_limit_order<Quote>(...)`. */
+/**
+ * `multicoin_pool::place_limit_order<Quote>(pool, policy, account, proof,
+ * orderType, selfMatchingOption, price, quantity, isBid, expireTimestamp, clock)`.
+ */
 export function placeLimitOrderItem(
   tx: Transaction,
   ids: PackageIds,
@@ -244,6 +250,7 @@ export function placeLimitOrderItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
       tx.pure.u8(args.orderType ?? 0),
@@ -266,7 +273,10 @@ export interface PlaceMarketOrderArgs {
   selfMatchingOption?: number
 }
 
-/** `multicoin_pool::place_market_order<Quote>(...)`. */
+/**
+ * `multicoin_pool::place_market_order<Quote>(pool, policy, account, proof,
+ * selfMatchingOption, quantity, isBid, clock)`.
+ */
 export function placeMarketOrderItem(
   tx: Transaction,
   ids: PackageIds,
@@ -277,6 +287,7 @@ export function placeMarketOrderItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
       tx.pure.u8(args.selfMatchingOption ?? 0),
@@ -288,9 +299,9 @@ export function placeMarketOrderItem(
 }
 
 /**
- * `multicoin_pool::cancel_order<Quote>(pool, bm, proof, orderId, clock)`.
- * `orderId` is the pool-local order id (u64) as surfaced by open-orders /
- * discovery reads — matches the app and TRIEX_SYSTEM_DESIGN §7.3.
+ * `multicoin_pool::cancel_order<Quote>(pool, policy, account, proof, orderId, clock)`.
+ * `orderId` is the `u128` order id as surfaced by open-orders / discovery
+ * reads (`order_id`), matching the app.
  */
 export function cancelOrderItem(
   tx: Transaction,
@@ -307,15 +318,16 @@ export function cancelOrderItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
-      tx.pure.u64(args.orderId),
+      tx.pure.u128(args.orderId),
       tx.object(ids.clock),
     ],
   })
 }
 
-/** `multicoin_pool::cancel_all_orders<Quote>(pool, bm, proof, clock)`. */
+/** `multicoin_pool::cancel_all_orders<Quote>(pool, policy, account, proof, clock)`. */
 export function cancelAllOrdersItem(
   tx: Transaction,
   ids: PackageIds,
@@ -330,6 +342,7 @@ export function cancelAllOrdersItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
       tx.object(ids.clock),
@@ -338,7 +351,7 @@ export function cancelAllOrdersItem(
 }
 
 /**
- * `multicoin_pool::modify_order<Quote>(pool, bm, proof, orderId, newQuantity, clock)`
+ * `multicoin_pool::modify_order<Quote>(pool, policy, account, proof, orderId, newQuantity, clock)`
  * — reduce a resting order's quantity (newQuantity < original, > filled).
  */
 export function modifyOrderItem(
@@ -357,9 +370,10 @@ export function modifyOrderItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
-      tx.pure.u64(args.orderId),
+      tx.pure.u128(args.orderId),
       tx.pure.u64(args.newQuantity),
       tx.object(ids.clock),
     ],
@@ -367,7 +381,7 @@ export function modifyOrderItem(
 }
 
 /**
- * `multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` — claim
+ * `multicoin_pool::withdraw_settled_amounts<Quote>(pool, account, proof)` — claim
  * settled (post-fill) proceeds from a pool into the balance manager. Fill
  * proceeds sit "settled" in the pool until claimed; bots must call this (or
  * `account.claimSettled`) before withdrawing.
