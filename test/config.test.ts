@@ -9,11 +9,11 @@ describe('testnet preset (cycle 7)', () => {
   it('points at the cycle-7 triex package and shared objects', () => {
     expect(STILLNESS_PACKAGE_IDS).toMatchObject({
       triex:
-        '0xa9dfa639b89afcec3a206398510f2a3dee80478a765d238a2d33b58d14bdc8b4',
+        '0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945',
       triexRegistry:
-        '0xc777162427090072d3034565544f285131ae6a23909dd237d51677504d65469b',
+        '0x2f37ad133427cabf94653be9a67560f87ea7458eaef2b410f6497808cef722c2',
       triexFeePolicy:
-        '0x3285b29bb35ed4feae7b921413122e2f82a809e8a398216b47d9915531e24551',
+        '0xcd63402799fe6b3a3ff2d963f90449e843f178659c349a08a1503db516163748',
       multicoin:
         '0xdbb778cba30e7deccf61169fbfbcd10a867654e1e2822facd789a99bd2c4e2ba',
       warehouseReceipts:

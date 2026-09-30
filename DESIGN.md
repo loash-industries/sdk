@@ -408,9 +408,9 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
 excluded**. The current stillness trading IDs (for the SDK `testnet` preset):
 
 ```
-triexPackageId            0xa9dfa639b89afcec3a206398510f2a3dee80478a765d238a2d33b58d14bdc8b4   (cycle 7)
-triexRegistryId           0xc777162427090072d3034565544f285131ae6a23909dd237d51677504d65469b   (shared obj — not in /package-ids)
-triexFeePolicyId          0x3285b29bb35ed4feae7b921413122e2f82a809e8a398216b47d9915531e24551   (shared obj — not in /package-ids)
+triexPackageId            0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945   (cycle 7)
+triexRegistryId           0x2f37ad133427cabf94653be9a67560f87ea7458eaef2b410f6497808cef722c2   (shared obj — not in /package-ids)
+triexFeePolicyId          0xcd63402799fe6b3a3ff2d963f90449e843f178659c349a08a1503db516163748   (shared obj — not in /package-ids)
 multicoinPackageId        0xdbb778cba30e7deccf61169fbfbcd10a867654e1e2822facd789a99bd2c4e2ba
 warehouseReceiptsPackageId 0x134dfa96ad8bc50d4a2055cd78c91e264feb2fe79facf2d030f8bb466a80bb68
 credCoinType              0xfbcbd9155669e157ce3999e073930b4c4b67255c3cf88d0d80c76342a31e6710::cred::CRED   (never republished)
