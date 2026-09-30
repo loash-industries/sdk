@@ -163,14 +163,16 @@ export const readTools: ToolDef[] = [
     name: 'market_nearby_hubs_by_system',
     title: 'Find hubs near a solar system',
     description:
-      'The same proximity search as market_nearby_hubs, centred on a solar system id or name instead of a hub. Use it when the origin hub is private and publishes no location.',
+      'The same proximity search as market_nearby_hubs, centred on a solar system id or name instead of a hub. Use it when the origin hub is private and publishes no location. Prefer the numeric id: names are not yet available for every system, and an unresolvable name fails with SolarSystemNotFound.',
     kind: 'read',
     sdkPath: 'market.nearbyHubsBySystem',
     inputShape: {
       solarSystem: z
         .string()
         .min(1)
-        .describe('Solar system id or name to search from, e.g. "Nod".'),
+        .describe(
+          'Solar system id (preferred) or name to search from, e.g. "30000142".',
+        ),
       rangeLy: z
         .number()
         .positive()

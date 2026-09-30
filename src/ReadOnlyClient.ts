@@ -172,7 +172,11 @@ export class ReadOnlyClient {
     return this.indexer.nearbyHubs(params)
   }
 
-  /** The same proximity search centred on a solar system id or name. */
+  /**
+   * The same proximity search centred on a solar system id or name. Prefer a
+   * numeric id — names are not yet available for every system.
+   * @throws `SolarSystemNotFound` when a name can't be resolved.
+   */
   nearbyHubsBySystem(params: NearbyHubsBySystemParams): Promise<NearbyHub[]> {
     return this.indexer.nearbyHubsBySystem(params)
   }

@@ -413,6 +413,18 @@ describe('IndexerClient location reads', () => {
     expect(url.searchParams.get('range')).toBe('100')
   })
 
+  it('maps a null by-system result to SolarSystemNotFound, keeping [] as "none in range"', async () => {
+    mockFetch([null])
+    await expect(
+      client.nearbyHubsBySystem({ solarSystem: 'EHK-KH7' }),
+    ).rejects.toMatchObject({ code: TriexError.SolarSystemNotFound })
+
+    mockFetch([[]])
+    await expect(
+      client.nearbyHubsBySystem({ solarSystem: '30000142' }),
+    ).resolves.toEqual([])
+  })
+
   it('joins batch ids into one comma-separated ids parameter', async () => {
     const fetchMock = mockFetch([
       [{ ...placement, pool_count: 3, last_activity_at: null }],
@@ -532,6 +544,13 @@ describe('IndexerClient spatial reads', () => {
     expect(got.regionId).toBe(10000013)
   })
 
+  it('accepts a system whose name is not yet published', async () => {
+    mockFetch([{ ...system, solar_system_name: null }])
+    const got = await client.solarSystem('30001053')
+    expect(got.solarSystemId).toBe(30001053)
+    expect(got.solarSystemName).toBeNull()
+  })
+
   it('url-encodes a system name that needs it', async () => {
     const fetchMock = mockFetch([system])
     await client.solarSystem('A B/C')
@@ -617,6 +636,31 @@ describe('IndexerClient spatial reads', () => {
     expect(res.originSolarSystemId).toBe(30000142)
     expect(res.originSolarSystemName).toBe('EHK-KH7')
     expect(res.systems[0].distanceLy).toBe('18.991165304211588')
+  })
+
+  it('accepts a nearby-search origin whose name is not yet published', async () => {
+    mockFetch([
+      {
+        solar_system_id: 30000142,
+        solar_system_name: null,
+        radius_ly: '100',
+        count: 1,
+        systems: [
+          {
+            solar_system_id: 30001053,
+            solar_system_name: null,
+            distance_ly: '18.991165304211588',
+            location: coords,
+          },
+        ],
+      },
+    ])
+    const res = await client.nearbySystems({
+      solarSystem: '30000142',
+      radiusLy: 100,
+    })
+    expect(res.originSolarSystemName).toBeNull()
+    expect(res.systems[0].solarSystemName).toBeNull()
   })
 
   it('accepts a nearby result missing its name and location', async () => {

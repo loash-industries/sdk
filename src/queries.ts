@@ -322,7 +322,14 @@ export class IndexerClient {
     return parseWith(z.array(NearbyHubSchema), data, 'nearbyHubs')
   }
 
-  /** Same search as `nearbyHubs()`, centred on a solar system id or name. */
+  /**
+   * Same search as `nearbyHubs()`, centred on a solar system id or name.
+   *
+   * etl-api answers `null` (rather than `[]`) when a name can't be resolved —
+   * unknown, or not yet published — and that is surfaced as
+   * `SolarSystemNotFound`, so `[]` always means "no hubs in range". Prefer a
+   * numeric id: names are not available for every system.
+   */
   async nearbyHubsBySystem(
     params: NearbyHubsBySystemParams,
   ): Promise<NearbyHub[]> {
@@ -331,7 +338,18 @@ export class IndexerClient {
       range: params.rangeLy,
       type_id: params.assetId,
     })
-    return parseWith(z.array(NearbyHubSchema), data, 'nearbyHubsBySystem')
+    const hubs = parseWith(
+      z.array(NearbyHubSchema).nullable(),
+      data,
+      'nearbyHubsBySystem',
+    )
+    if (hubs === null) {
+      throw new TriexClientError(
+        TriexError.SolarSystemNotFound,
+        `Could not resolve solar system "${params.solarSystem}" — pass a numeric solar system id.`,
+      )
+    }
+    return hubs
   }
 
   /**
