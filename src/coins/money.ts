@@ -1,6 +1,6 @@
 import {
-  FEE_RATE_SCALING,
   TRIEX_PRICE_SCALING,
+  computeQuoteFee,
   fromBase,
   toBase,
 } from '../money'
@@ -51,14 +51,10 @@ export function coinQuoteForBase(price: bigint, quantity: bigint): bigint {
 /**
  * Quote fee on `quote` at a 1e9-scaled rate, floored, rate clamped at 100% —
  * exactly `quote_fee::fee_from_scaled_rate`. Coin and item pools share that
- * Move function, so this is the same formula as the item-side quote-fee
- * helper; kept as a thin, swappable function for that reason.
+ * Move function, so this delegates to the item-side {@link computeQuoteFee}.
  */
 export function coinQuoteFee(quote: bigint, feeRateScaled: bigint): bigint {
-  if (quote <= 0n || feeRateScaled <= 0n) return 0n
-  const rate =
-    feeRateScaled > FEE_RATE_SCALING ? FEE_RATE_SCALING : feeRateScaled
-  return (quote * rate) / FEE_RATE_SCALING
+  return computeQuoteFee(quote, feeRateScaled)
 }
 
 /**
