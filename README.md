@@ -208,7 +208,8 @@ whether the abort was `resolved`, came from a dependency package
 | `RateLimited` | compute-unit budget exhausted (HTTP 429) | wait `e.retryAfterMs`, retry |
 | `IndexerError` | 5xx / unexpected HTTP failure (`e.status` set) | retry with backoff |
 | `UnexpectedResponse` | response didn't match the pinned schema | report — API drift |
-| `HubNotFound` / `PoolNotFound` / `TradingAccountNotFound` | unknown id for the target resource | check inputs |
+| `HubNotFound` / `PoolNotFound` / `TradingAccountNotFound` / `OrderNotFound` / `FillNotFound` / `CharacterNotFound` / `TribeNotFound` / `ItemNotFound` / `SolarSystemNotFound` | unknown id for the target resource | check inputs (a system *name* may simply be unreported yet — try its id) |
+| `RouteNotFound` | a route endpoint name is unknown/unreported, or the pair is unreachable with these ship parameters | check names via `spatial.autocompleteSystems`, or raise `maxJumpRangeLy` |
 | `TransactionFailed` | the transaction aborted on-chain | `e.message` carries the decoded abort |
 | `InsufficientBalance` | wallet/hangar/BM can't fund the operation | deposit / top up |
 | `CollectionMismatch` | item receipts from a different deployment | wrong network/receipts |
@@ -222,16 +223,61 @@ whether the abort was `resolved`, came from a dependency package
 |---|---|
 | `account` | `get` · `ensure` · `register` · `depositCurrency` · `depositItems` · `withdrawCurrency` · `withdrawItems` · `sweepable` · `claimSettled` · `owners` · `mintCap` · `revokeCap` · `caps` |
 | `balances` | `atHub` (items: warehouse/marketplace/hangar) · `currency` (CRED wallet + BM, fullnode) |
-| `market` | `discover` · `hub` · `itemsAtHub` · `resolvePool` · `orderbook` · `poolMetadata` · `createPool` · `claimOperatorShare` |
+| `market` | `discover` · `hub` · `itemsAtHub` · `searchItems` · `resolvePool` · `orderbook` · `poolMetadata` · `createPool` · `claimOperatorShare` |
+| `market` (feeds & prices) | `recentTrades` · `displayPrices` · `displayPrice` · `hubEconomics` · `topPoolsByFees` · `stats` |
 | `market` (locations) | `hubLocations` · `itemLocations` · `nearbyHubs` · `nearbyHubsBySystem` · `hubsEnriched` · `assemblyOwners` · `assembliesEnriched` · `solarSystemNames` |
-| `orders` | `fees` · `limit` · `market` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
+| `orders` | `fees` · `limit` · `market` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` · `get` (any order, any state) · `fill` (by event digest) |
 | `spatial` | `system` · `systems` · `nearbySystems` · `systemsNearCoordinates` · `autocompleteSystems` · `stats` |
+| `routing` | `route` · `compare` · `stats` |
+| `characters` | `get` · `byAddress` · `byName` · `batch` · `tribe` |
+| `world` | `items` · `item` · `recipes` · `recipesFor` |
 | `coins` | `list` · `resolvePool` · `orderbook` · `tradeParams` · `quote` · `estimateMarket` · `openOrders` · `account` · `balances` · `deposit` · `withdraw` · `limit` · `market` · `swap` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `claimSettled` · `createPool` — see below |
 | `orgs` | `get` · `batch` · `directory` · `forPlayer` · `search` · `proposals` · `seats` · `tradingAccount` · `accessibleKeyspaces` · `vaultsAtHub` |
 | `org(id)` handle | `.governance` · `.members` · `.metadata` · `.types` · `.treasury` · `.orders` · `.vault` — see below |
-| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `estimateMarketSellProceeds` · `computeBidQuoteDeposit` · `computeAskProceeds` · `computeQuoteFee` · `iterateDiscovery/Fills/Trades/OrgDirectory` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
+| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `estimateMarketSellProceeds` · `computeBidQuoteDeposit` · `computeAskProceeds` · `computeQuoteFee` · `iterateDiscovery/Fills/Trades/OpenOrders/RecentTrades/HubLocations/ItemLocations/OrgDirectory` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
+
+`ReadOnlyClient` exposes the same reads flat (`ro.recentTrades()`,
+`ro.order()`, `ro.character()`, `ro.route()`, `ro.worldItems()`, …) with
+identity always explicit. Every read's JSDoc gives its compute-unit cost —
+from 20 CU (a single lookup) to 150 CU (`discover`) and 300 CU
+(`routing.compare`, three route searches).
 
 Runnable examples live in [`examples/`](./examples).
+
+### Reading the market, the map and the players
+
+```ts
+// The public tape — human-readable prices, newest first.
+const { trades } = await client.market.recentTrades({ assetId: '77800' })
+
+// What became of an order you placed (open / filled / cancelled + fills).
+const order = await client.orders.get({ poolId, orderId })
+
+// Who is behind an address, and their tribe.
+const [who] = await client.characters.batch({ addresses: [wallet] })
+
+// Static reference data — fetch once, cache.
+const items = await client.world.items()            // assetId strings
+const bom = await client.world.recipesFor('77753')  // [] if not craftable
+
+// Routes take system NAMES — see the note below.
+const route = await client.routing.route({
+  origin: 'U4T-SL7', destination: 'U.L6B.HNX', maxJumpRangeLy: 500,
+})
+```
+
+> **Solar system names are player-reported (cycle 7).** The star map ships
+> with ids, coordinates and stargates, but a system's *name* is known only once
+> a player reports it. Until then `solarSystemName` is `null` on every read,
+> a lookup **by name** fails (`SolarSystemNotFound` / `RouteNotFound`) while the
+> same system resolves **by id**, and routing — which is name-only — cannot
+> reach it. Key on `solarSystemId`; use `spatial.autocompleteSystems()` to find
+> names that resolve, and `spatial.stats().knownSolarSystemNames` for coverage.
+
+> **Display prices carry no fee.** `market.displayPrice(s)` is the plain
+> market price; pool metadata's `feeRateScaled` is the fee class's *entry*
+> tier — use `orders.fees()` for maker rates and your own tier — and the rate a fill actually charged is on the fill
+> (`fee`, `makerFee`/`takerFee`, `feeRateBps`).
 
 ## Coin markets (currency pairs)
 

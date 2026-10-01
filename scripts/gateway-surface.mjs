@@ -84,7 +84,7 @@ const HTTP_METHODS = new Set([
  * either place.
  *
  * @returns {{path: string, normalized: string, method: string,
- *            operationId: string|undefined,
+ *            operationId: string|undefined, deprecated: boolean,
  *            query: {name: string, required: boolean}[],
  *            pathParams: string[]}[]}
  */
@@ -102,6 +102,10 @@ export function readGatewaySurface(spec = loadSpec()) {
         normalized: normalizePath(path),
         method: method.toUpperCase(),
         operationId: operation.operationId,
+        // OpenAPI's flag, or the gateway's own deprecation-date extension.
+        deprecated: Boolean(
+          operation.deprecated || operation['x-deprecation-date'],
+        ),
         query: parameters
           .filter((p) => p.in === 'query')
           .map((p) => ({ name: p.name, required: Boolean(p.required) }))

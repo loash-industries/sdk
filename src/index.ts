@@ -3,9 +3,12 @@ export { TriexClient } from './TriexClient'
 export type {
   AccountApi,
   BalancesApi,
+  CharactersApi,
   MarketApi,
   OrdersApi,
+  RoutingApi,
   SpatialApi,
+  WorldApi,
 } from './TriexClient'
 export { ReadOnlyClient } from './ReadOnlyClient'
 export { OrgsApi } from './armature/OrgsApi'
@@ -98,11 +101,25 @@ export type { BookLevel } from './book'
 export {
   iterateDiscovery,
   iterateFills,
+  iterateHubLocations,
+  iterateItemLocations,
+  iterateOpenOrders,
   iterateOrgDirectory,
+  iterateRecentTrades,
   iterateTrades,
 } from './paging'
 export type { IterateOptions } from './paging'
 export { untilIndexed } from './wait'
+
+// Known values of the open enumerations in gateway responses (a value outside
+// these still parses — see `openEnum` in schemas.ts).
+export {
+  DISPLAY_PRICE_TIERS,
+  JUMP_TYPES,
+  ORDER_STATUSES,
+  ORDER_TYPES,
+  ROUTE_OPTIMIZATIONS,
+} from './schemas'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type {
@@ -193,6 +210,45 @@ export type {
   CreatePoolParams,
   CreatePoolResult,
   ClaimOperatorShareParams,
+  // Point lookups: one order, one fill
+  OrderDetail,
+  OrderDetailFill,
+  OrderParty,
+  OrderCharacter,
+  OrderHub,
+  OrderCurrency,
+  OrderLookupParams,
+  FillDetail,
+  // Market-wide feeds, prices & rankings
+  RecentTrade,
+  RecentTradesPage,
+  RecentTradesParams,
+  DisplayPrice,
+  DisplayPriceParams,
+  DisplayPricesParams,
+  HubEconomics,
+  PoolFees,
+  PlatformStats,
+  StatsQuoteVolume,
+  StatsTopItem,
+  StatsTopOrg,
+  // Characters & tribes
+  Character,
+  CharacterLookup,
+  Tribe,
+  // World reference data
+  WorldItem,
+  ItemInfo,
+  Recipe,
+  RecipeMaterial,
+  // Routing
+  Route,
+  RouteComparison,
+  RouteOptimization,
+  RouteParams,
+  RouteShipParams,
+  RoutingStats,
+  Waypoint,
 } from './types'
 export type {
   OwnedItemReceipt,

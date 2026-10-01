@@ -72,7 +72,7 @@ The "Gateway" column is the **current** state in
 | 9 | Fetch order book for one item at that storage unit | READ | `GET /v1/hubs/{hub_id}/vault` → `GET /v1/pools/resolve` (**`collection_id`+`asset_id`**, not hub+item) → `GET /v1/pools/{pool_id}/orderbook` (returns resting **orders**, not levels) | **enabled** |
 | 10 | Create **limit** buy/sell order | READ+WRITE | READ resolve chain + `GET /v1/pools/{pool_id}/metadata` (fee is 1e9-scaled `fee`, not bps) → WRITE `multicoin_pool::place_limit_order<Quote>` + deposit deficit | **enabled** (reads) |
 | 11 | Create **market** buy/sell order | READ+WRITE | as #10 but `multicoin_pool::place_market_order<Quote>` (no price/expiry) | **enabled** (reads) |
-| 14 | Read own open orders / fills / trades (bots) | READ | `GET /v1/balance-managers/{bm}/open-orders`, `/fills`, `/trades` (epoch-ms `before`/`after` paging) | **enabled** |
+| 14 | Read own open orders / fills / trades (bots) | READ | `GET /v1/trading-accounts/{trading_account_id}/open-orders`, `/fills`, `/trades` (epoch-ms `before`/`after` paging; `next_cursor` is the last row's timestamp, null on a short page) | **enabled** |
 | 12 | Withdraw items from BM → storage unit | WRITE | `trading_account::withdraw_all_multicoin` → `receipt::redeem_receipt(...ssu, character...)` | n/a (on-chain) |
 | 13 | Withdraw currency from BM → wallet | WRITE | `trading_account::withdraw_all<CRED>` + `transferObjects` to self | n/a (on-chain) |
 
@@ -93,6 +93,49 @@ on the free/standard tier).
 > (no lag) and are not "reads" in the indexer sense. The BM-existence check (#1) is likewise
 > best done on-chain (`listOwnedObjects`) to avoid the double-create race (§13).
 
+### 2.1 Beyond the stories — full gateway read coverage (2026-10-01)
+
+Every operation the gateway publishes now has an SDK method (bar `/v1/coins`,
+owned by the coin-pool module, and the deprecated `/v1/tribes/{id}` alias).
+`test/gateway.test.ts` enforces it: a newly published, non-deprecated route
+fails the suite until it is wrapped or explicitly excluded, and
+`test/schema-conformance.test.ts` parses payloads synthesised from every
+wrapped operation's response schema (minimal: required fields only, nullables
+null; full: every field) so a requiredness/nullability drift fails CI before it
+throws on live data.
+
+| Need | Endpoint | SDK | CU |
+|---|---|---|---|
+| What became of an order (open / filled / cancelled + fills) | `GET /v1/pools/{pool_id}/orders/{order_id}` | `orders.get` · `ro.order` | 30 |
+| One fill, both sides + both fees | `GET /v1/fills/{event_digest}` | `orders.fill` · `ro.fill` | 30 |
+| Public tape, all item markets | `GET /v1/trades/recent` | `market.recentTrades` · `iterateRecentTrades` | 50 |
+| Plain market price (no fee), item-wide or per hub | `GET /v1/display-prices`, `/{item_id}` | `market.displayPrices` / `displayPrice` | 50 / 20 |
+| Hub fee reserve + depth | `GET /v1/hubs/economics` | `market.hubEconomics` | 50 |
+| Pools by unclaimed fees | `GET /v1/pools/top-by-fees` | `market.topPoolsByFees` | 50 |
+| Platform aggregates | `GET /v1/stats` | `market.stats` | 50 |
+| Characters | `GET /v1/characters/{id}`, `/address/{a}`, `/name/{n}`, `/batch` | `characters.get` / `byAddress` / `byName` / `batch` | 20 / 20 / 20 / 50 |
+| Tribes | `GET /v1/world/tribes/{tribe_id}` | `characters.tribe` | 20 |
+| World items & recipes (CDN, static) | `GET /v1/world/items`, `/{asset_id}`, `/v1/world/recipes`, `/{recipe_id}` | `world.items` / `item` / `recipes` / `recipesFor` | 20 each |
+| Routing (location-api) | `GET /v1/routing/route`, `/compare`, `/stats` | `routing.route` / `compare` / `stats` | 100 / 300 / 20 |
+
+Notes that change how results are read:
+
+- **Units on the public tape differ.** `/v1/trades/recent` returns
+  HUMAN-READABLE `price` / `quantity` / `fee_amount` (already shifted by the
+  quote decimals) — the SDK keeps them as strings. Every other trade/fill read
+  is raw integers → `bigint`.
+- **Fees (cycle 7).** Pool metadata's `fee` is the fee class's ENTRY tier (the
+  higher of old/new while a class change is pending) — an upper bound, right
+  for deposit buffers. The fee a fill charged is on the fill; `fee_rate_bps`
+  on the tape is derived per fill (`taker_fee × 10000 / quote_quantity`), and
+  the indexer now records maker fees too. Display prices carry no fee.
+- **Solar system names are player-reported (cycle 7).** location-api fills
+  names from EF-Map community reports; until a system is named, its
+  `solar_system_name` is null and name lookups 404 (`SolarSystemNotFound` /
+  `RouteNotFound`) while id lookups work. Routing is name-only.
+  `/v1/spatial/stats` gains `known_solar_system_names`. The SDK accepts both
+  the published (string) and post-deploy (nullable) shapes.
+
 ---
 
 ## 3. Architecture
@@ -104,8 +147,11 @@ on the free/standard tier).
                     │   TriexClient (high-level facade)            │
                     │   ├── account   (balance manager lifecycle)  │
                     │   ├── balances  (item + currency reads)      │
-                    │   ├── market    (discovery, hubs, orderbook) │
-                    │   └── orders    (limit/market, deposit/wdrw) │
+                    │   ├── market    (discovery, hubs, orderbook, │
+                    │   │              tape, prices, stats)        │
+                    │   ├── orders    (limit/market, status reads) │
+                    │   ├── spatial · routing  (star map, routes)  │
+                    │   └── characters · world (players, items)    │
                     │                                              │
                     │   queries.ts  ──READ──►  api.trinary.exchange│───► etl-api (indexer)
                     │     (fetch + x-api-key + zod validate)       │      (Postgres read models)
@@ -273,6 +319,34 @@ client.spatial.stats(): Promise<SpatialStats>                         // star-ma
 client.orders.openOrders(params?): Promise<OpenOrdersPage>
 client.orders.fills(params?): Promise<FillsPage>
 client.orders.trades(params?): Promise<TradesPage>
+client.orders.get({ poolId, orderId }): Promise<OrderDetail>          // any order, any state, + fills
+client.orders.fill(eventDigest): Promise<FillDetail>                  // both sides + both fees
+
+// market-wide feeds, prices & rankings (§2.1)
+client.market.recentTrades({ before?, after?, limit?, publicOnly?, assetId? }): Promise<RecentTradesPage>
+client.market.displayPrices({ itemIds, storageUnitIds?, fallback? }): Promise<DisplayPrice[]>
+client.market.displayPrice(itemId, { storageUnitId?, fallback? }?): Promise<DisplayPrice>
+client.market.hubEconomics({ hubIds }): Promise<HubEconomics[]>
+client.market.topPoolsByFees({ limit? }?): Promise<PoolFees[]>
+client.market.stats(): Promise<PlatformStats>
+
+// routing — names only; names are player-reported in cycle 7
+client.routing.route({ origin, destination, optimization?, mass?, gateWeight?, maxJumpRangeLy? }): Promise<Route>
+client.routing.compare({ origin, destination, mass?, gateWeight?, maxJumpRangeLy? }): Promise<RouteComparison>
+client.routing.stats(): Promise<RoutingStats>
+
+// characters & tribes
+client.characters.get(characterId, { enrich? }?): Promise<Character>
+client.characters.byAddress(address?, { enrich? }?): Promise<Character[]>   // defaults to the player
+client.characters.byName(name): Promise<Character[]>
+client.characters.batch({ addresses }): Promise<CharacterLookup[]>   // ≤500
+client.characters.tribe(tribeId): Promise<Tribe>
+
+// world reference data (static — cache it)
+client.world.items(): Promise<WorldItem[]>
+client.world.item(assetId): Promise<ItemInfo>
+client.world.recipes(): Promise<Recipe[]>
+client.world.recipesFor(productAssetId): Promise<Recipe[]>          // [] when not craftable
 
 // orders (#10, #11) — each auto-ensures BM + deposits any deficit in one PTB
 client.orders.limit({ storageUnitId, assetId, side, price, quantity, expireAt? }): Promise<TxResult>   // #10
@@ -618,34 +692,81 @@ object IDs. For latency-sensitive bots, note the post-MVP live-stream option.
 
 ---
 
-## 13. Appendix — current `etl-api` gateway route inventory
+## 13. Appendix — published gateway surface → SDK
 
-From `dynamic-config-registry/gateway-routes/etl-api.json` (65 routes), **as of 2026-08-21**
-(DCR `62acb22` + `feat/publish-inventory-balances`). Phase 0 is done: everything the MVP
-reads is live.
-
-**Enabled — MVP reads** (CU costs as published):
+The gateway's published OpenAPI document (`https://api.trinary.exchange/swagger.json`,
+vendored at `test/fixtures/gateway-openapi.json`) — **60 operations, all `GET`**, as of
+2026-10-01. Upstreams per `dynamic-config-registry/gateway-routes/`: etl-api (market
+data), location-api (`/v1/spatial/*`, `/v1/routing/*`) and the public CDN
+(`/v1/world/items`, `/v1/world/recipes*`). `npm run check:gateway [-- --live]` lists any
+operation the SDK does not wrap.
 
 ```
-GET /v1/discovery                                          (150 CU)  # story 6 — repriced 30 → 150 (2 rps sustained on free/standard)
-GET /v1/inventory/balances                                 (50 CU)   # story 2 (items only; hub-scoped)
-GET /v1/hubs/{hub_id}/vault                                (20 CU)   # stories 4,7,9 (vaultConfig/collection)
-GET /v1/hubs/{hub_id}/location                             (20 CU)   # story 7 (location/owner/visibility)
-GET /v1/hubs/{hub_id}/items                                (20 CU)   # story 8
-GET /v1/collections/{collection_id}/hub                    (20 CU)   # story 7 reverse lookup
-GET /v1/pools/resolve                                      (30 CU)   # stories 9,10,11 (collection+asset → poolId)
-GET /v1/pools/{pool_id}/orderbook                          (30 CU)   # story 9
-GET /v1/pools/{pool_id}/metadata                           (20 CU)   # stories 10,11 (1e9-scaled fee)
-GET /v1/balance-managers/{balance_manager_id}/open-orders  (30 CU)   # story 14
-GET /v1/balance-managers/{balance_manager_id}/fills        (30 CU)   # story 14
-GET /v1/balance-managers/{balance_manager_id}/trades       (30 CU)   # story 14
+# Market data (etl-api)
+GET /v1/discovery                                    150 CU  market.discover · iterateDiscovery
+GET /v1/pools/resolve                                 30 CU  market.resolvePool (internal: indexer.resolvePool)
+GET /v1/pools/{pool_id}/orderbook                     30 CU  indexer.orderbook
+GET /v1/pools/{pool_id}/metadata                      20 CU  market.poolMetadata
+GET /v1/pools/{pool_id}/orders/{order_id}             30 CU  orders.get · ro.order
+GET /v1/pools/top-by-fees                             50 CU  market.topPoolsByFees
+GET /v1/hubs/{hub_id}/items/{asset_id}/orderbook      50 CU  market.orderbook
+GET /v1/fills/{event_digest}                          30 CU  orders.fill · ro.fill
+GET /v1/trades/recent                                 50 CU  market.recentTrades · iterateRecentTrades
+GET /v1/display-prices                                50 CU  market.displayPrices
+GET /v1/display-prices/{item_id}                      20 CU  market.displayPrice
+GET /v1/stats                                         50 CU  market.stats
+# Hubs & locations (etl-api)
+GET /v1/hubs/{hub_id}/vault                           20 CU  market.hub (+ write flows)
+GET /v1/hubs/{hub_id}/location                        20 CU  market.hub
+GET /v1/hubs/{hub_id}/items                           20 CU  market.itemsAtHub
+GET /v1/hubs/locations                                50 CU  market.hubLocations · iterateHubLocations
+GET /v1/hubs/enriched                                 50 CU  market.hubsEnriched
+GET /v1/hubs/economics                                50 CU  market.hubEconomics
+GET /v1/hubs/{hub_id}/nearby                          50 CU  market.nearbyHubs
+GET /v1/hubs/nearby-by-system                         50 CU  market.nearbyHubsBySystem
+GET /v1/items/{item_id}/locations                     50 CU  market.itemLocations · iterateItemLocations
+GET /v1/collections/{collection_id}/hub               20 CU  indexer.collectionHub
+GET /v1/assemblies/owners                             50 CU  market.assemblyOwners
+GET /v1/assemblies/enriched                           50 CU  market.assembliesEnriched
+GET /v1/solar-systems/names                           50 CU  market.solarSystemNames
+# Trading accounts (etl-api)
+GET /v1/inventory/balances                            50 CU  balances.atHub
+GET /v1/trading-accounts/{id}/open-orders             30 CU  orders.openOrders · iterateOpenOrders
+GET /v1/trading-accounts/{id}/fills                   30 CU  orders.fills · iterateFills
+GET /v1/trading-accounts/{id}/trades                  30 CU  orders.trades · iterateTrades
+GET /v1/trading-accounts/{id}/sweepable               30 CU  account.sweepable / claimSettled
+GET /v1/trading-accounts/owners                       50 CU  account.owners
+# Characters, tribes & world (etl-api + public CDN)
+GET /v1/characters/{object_id}                        20 CU  characters.get
+GET /v1/characters/address/{address}                  20 CU  characters.byAddress
+GET /v1/characters/name/{name}                        20 CU  characters.byName
+GET /v1/characters/batch                              50 CU  characters.batch
+GET /v1/world/tribes/{tribe_id}                       20 CU  characters.tribe
+GET /v1/tribes/{tribe_id}                             20 CU  — deprecated 2026-08-20 alias of the above; not wrapped
+GET /v1/world/items                                   20 CU  world.items           (CDN)
+GET /v1/world/items/{asset_id}                        20 CU  world.item
+GET /v1/world/items/search                            50 CU  market.searchItems
+GET /v1/world/recipes                                 20 CU  world.recipes         (CDN)
+GET /v1/world/recipes/{recipe_id}                     20 CU  world.recipesFor      (CDN)
+# Star map & routing (location-api)
+GET /v1/spatial/systems/{solar_system}                20 CU  spatial.system
+GET /v1/spatial/systems                               50 CU  spatial.systems
+GET /v1/spatial/systems/{solar_system}/nearby         50 CU  spatial.nearbySystems
+GET /v1/spatial/coordinates/nearby                    50 CU  spatial.systemsNearCoordinates
+GET /v1/spatial/systems/search/autocomplete           20 CU  spatial.autocompleteSystems
+GET /v1/spatial/stats                                 20 CU  spatial.stats
+GET /v1/routing/route                                100 CU  routing.route
+GET /v1/routing/compare                              300 CU  routing.compare
+GET /v1/routing/stats                                 20 CU  routing.stats
+# Organizations (etl-api) — Armature module, DESIGN-ARMATURE.md §13.1
+GET /v1/orgs · /v1/orgs/{org_id} · /v1/orgs/directory · /v1/orgs/{org_id}/proposals
+GET /v1/players/{address}/orgs · /v1/players/{address}/accessible-keyspaces
+GET /v1/hubs/{hub_id}/dao-vaults · /v1/search
+# Coin (currency-pair) markets — coin-pool module
+GET /v1/coins
 ```
 
-(Also enabled beyond MVP need: `/v1/balance-managers/{bm}/sweepable`, `/owners`, the wider
-pools/hubs/assets/activity families, `GET /v1/characters/*`, `GET /v1/orgs*`,
-`GET /v1/search` (100 CU), `GET /v1/stats`, `GET /v1/trades/recent`.)
-
-**Deliberately disabled (D11 — sluice attaches no caller identity):** the remaining
+**Deliberately unpublished (D11 — sluice attaches no caller identity):** the remaining
 `inventory` family, including the seven POST container mutations and two GETs the SDK
 replaces with fullnode reads — `GET /v1/inventory/balance-manager` (story 1: on-chain
 `listOwnedObjects` is authoritative) and `GET /v1/inventory/receipt-objects` (story 4:
@@ -653,6 +774,6 @@ wallet-receipt discovery is PTB input resolution). `coin-pools/*` stays disabled
 the `coins` group reads coin pools from the fullnode instead and uses only `GET /v1/coins`.
 
 > Remember a merge to `main` does **not** update the running gateway — run
-> `scripts/push-gateway.sh --env <env>` (per CLAUDE.md). The balances route is already
-> published; its branch still needs merging to `main` so a future publish from a clean
-> checkout doesn't revert it.
+> `scripts/push-gateway.sh --env <env>` in dynamic-config-registry. location-api's
+> cycle-7 names change (nullable `solar_system_name`, `known_solar_system_names`) is
+> deployed but not yet reflected in the published spec; the SDK accepts both shapes.
