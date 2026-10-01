@@ -45,6 +45,33 @@ import type {
   SweepableSchema,
   TradeSchema,
   TradesPageSchema,
+  CharacterLookupSchema,
+  CharacterSchema,
+  DisplayPriceSchema,
+  FillDetailSchema,
+  HubEconomicsSchema,
+  ItemInfoSchema,
+  OrderCharacterSchema,
+  OrderCurrencySchema,
+  OrderDetailFillSchema,
+  OrderDetailSchema,
+  OrderHubSchema,
+  OrderPartySchema,
+  PlatformStatsSchema,
+  PoolFeesSchema,
+  RecentTradeSchema,
+  RecentTradesPageSchema,
+  RecipeMaterialSchema,
+  RecipeSchema,
+  RouteComparisonSchema,
+  RouteSchema,
+  RoutingStatsSchema,
+  StatsQuoteVolumeSchema,
+  StatsTopItemSchema,
+  StatsTopOrgSchema,
+  TribeSchema,
+  WaypointSchema,
+  WorldItemSchema,
 } from './schemas'
 
 // ─── Wallet / executor plumbing (mirrors keyspace) ──────────────────────────
@@ -211,6 +238,43 @@ export type TradesPage = z.output<typeof TradesPageSchema>
 export type SweepablePool = z.output<typeof SweepablePoolSchema>
 export type SweepableItem = z.output<typeof SweepableItemSchema>
 export type Sweepable = z.output<typeof SweepableSchema>
+
+// Point lookups: one order, one fill.
+export type OrderDetail = z.output<typeof OrderDetailSchema>
+export type OrderDetailFill = z.output<typeof OrderDetailFillSchema>
+export type OrderParty = z.output<typeof OrderPartySchema>
+export type OrderCharacter = z.output<typeof OrderCharacterSchema>
+export type OrderHub = z.output<typeof OrderHubSchema>
+export type OrderCurrency = z.output<typeof OrderCurrencySchema>
+export type FillDetail = z.output<typeof FillDetailSchema>
+
+// Market-wide feeds, prices & rankings.
+export type RecentTrade = z.output<typeof RecentTradeSchema>
+export type RecentTradesPage = z.output<typeof RecentTradesPageSchema>
+export type DisplayPrice = z.output<typeof DisplayPriceSchema>
+export type HubEconomics = z.output<typeof HubEconomicsSchema>
+export type PoolFees = z.output<typeof PoolFeesSchema>
+export type PlatformStats = z.output<typeof PlatformStatsSchema>
+export type StatsQuoteVolume = z.output<typeof StatsQuoteVolumeSchema>
+export type StatsTopItem = z.output<typeof StatsTopItemSchema>
+export type StatsTopOrg = z.output<typeof StatsTopOrgSchema>
+
+// Characters & tribes.
+export type Character = z.output<typeof CharacterSchema>
+export type CharacterLookup = z.output<typeof CharacterLookupSchema>
+export type Tribe = z.output<typeof TribeSchema>
+
+// World reference data.
+export type WorldItem = z.output<typeof WorldItemSchema>
+export type ItemInfo = z.output<typeof ItemInfoSchema>
+export type Recipe = z.output<typeof RecipeSchema>
+export type RecipeMaterial = z.output<typeof RecipeMaterialSchema>
+
+// Routing.
+export type Route = z.output<typeof RouteSchema>
+export type Waypoint = z.output<typeof WaypointSchema>
+export type RouteComparison = z.output<typeof RouteComparisonSchema>
+export type RoutingStats = z.output<typeof RoutingStatsSchema>
 
 /** Order book for one pool: resting orders (not aggregated price levels). */
 export interface Orderbook {
@@ -386,6 +450,77 @@ export interface BalancesAtHubParams {
   inventoryKey?: string
   /** Organization (DAO) receipt vault ids to include. */
   vaultIds?: string[]
+}
+
+/** Look up one order on one pool (order ids are only unique per pool). */
+export interface OrderLookupParams {
+  poolId: string
+  /**
+   * Order id (Move `u128`) — a decimal string or bigint, never a number
+   * (it exceeds 2^53). A `0x`-hex string is accepted and sent as decimal.
+   */
+  orderId: bigint | string
+}
+
+/** Filters for the universe-wide recent-trades feed. */
+export interface RecentTradesParams extends HistoryPageParams {
+  /** Only trades at location-revealed (public) hubs. */
+  publicOnly?: boolean
+  /** Only trades of this item type (numeric asset id). */
+  assetId?: string
+}
+
+/**
+ * Batch display prices. `itemIds` alone → one vault-independent item-tier
+ * price per item; with `storageUnitIds` → the per-hub waterfall per
+ * (item, hub) pair. `storageUnitIds` must be one id (applied to every item)
+ * or exactly as many as `itemIds` (paired by position).
+ */
+export interface DisplayPricesParams {
+  /** Numeric item ids (max 100). */
+  itemIds: string[]
+  /** Trade hub or vault collection ids. */
+  storageUnitIds?: string[]
+  /**
+   * Pair mode only: `false` disables falling back to the item-tier price for
+   * a pair with no pool at that hub (default: fallback enabled).
+   */
+  fallback?: boolean
+}
+
+/** Price one item, optionally at one hub. */
+export interface DisplayPriceParams {
+  /** Trade hub or vault collection id to price against. */
+  storageUnitId?: string
+  /** As {@link DisplayPricesParams.fallback}. */
+  fallback?: boolean
+}
+
+/** Request-side route modes (the response names them differently). */
+export type RouteOptimization = 'fuel' | 'time' | 'balanced'
+
+/** Ship parameters shared by the routing reads. */
+export interface RouteShipParams {
+  /**
+   * Departure system NAME (case-insensitive). Routing takes names only —
+   * and since cycle 7 names are player-reported, an unreported name 404s
+   * (`RouteNotFound`) even though the system exists. Resolve candidates with
+   * `spatial.autocompleteSystems()` first.
+   */
+  origin: string
+  /** Arrival system NAME (case-insensitive); same caveat as `origin`. */
+  destination: string
+  /** Ship mass in game units (default 1.0); heavier pushes fuel routes to gates. */
+  mass?: number
+  /** 0–1 preference for stargates over drives, `balanced` only (default 0.5). */
+  gateWeight?: number
+  /** Ship's jump-drive range in light years (default 50). */
+  maxJumpRangeLy?: number
+}
+
+export interface RouteParams extends RouteShipParams {
+  /** `time` (default), `fuel`, or `balanced`. */
+  optimization?: RouteOptimization
 }
 
 /** Cursorless history paging: epoch-ms bounds + limit (1–100). */

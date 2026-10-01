@@ -45,6 +45,7 @@ export enum TriexError {
   /** No trading account found for the player (and one was expected). */
   TradingAccountNotFound = 'TRIEX_TRADING_ACCOUNT_NOT_FOUND',
   /** @deprecated Renamed to {@link TriexError.TradingAccountNotFound}; same value. */
+  // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values -- deliberate alias
   BalanceManagerNotFound = 'TRIEX_TRADING_ACCOUNT_NOT_FOUND',
   /** No pool exists for the requested item + storage unit. */
   PoolNotFound = 'TRIEX_POOL_NOT_FOUND',
@@ -56,6 +57,21 @@ export enum TriexError {
   OrgNotFound = 'TRIEX_ORG_NOT_FOUND',
   /** The player's on-chain character could not be resolved. */
   CharacterNotFound = 'TRIEX_CHARACTER_NOT_FOUND',
+  /** No order with that id exists on that pool (as far as the indexer knows). */
+  OrderNotFound = 'TRIEX_ORDER_NOT_FOUND',
+  /** No fill with that event digest has been indexed. */
+  FillNotFound = 'TRIEX_FILL_NOT_FOUND',
+  /** No tribe with that numeric id exists. */
+  TribeNotFound = 'TRIEX_TRIBE_NOT_FOUND',
+  /** No item type with that numeric id exists in the world item data. */
+  ItemNotFound = 'TRIEX_ITEM_NOT_FOUND',
+  /**
+   * No route: either a system NAME is not known (cycle-7 names are
+   * player-reported, so an unreported name is unknown to the router), or
+   * both systems are known but unreachable under the ship parameters — a
+   * larger `maxJumpRangeLy` may succeed. The message says which.
+   */
+  RouteNotFound = 'TRIEX_ROUTE_NOT_FOUND',
   /** The transaction executed but failed (aborted) on-chain. */
   TransactionFailed = 'TRIEX_TRANSACTION_FAILED',
   /** A wait helper (`untilIndexed`) gave up before the condition held. */

@@ -97,6 +97,28 @@ import type {
   TxResult,
   WithdrawCurrencyParams,
   WithdrawItemsParams,
+  Character,
+  CharacterLookup,
+  DisplayPrice,
+  DisplayPriceParams,
+  DisplayPricesParams,
+  FillDetail,
+  HubEconomics,
+  ItemInfo,
+  OrderDetail,
+  OrderLookupParams,
+  PlatformStats,
+  PoolFees,
+  RecentTradesPage,
+  RecentTradesParams,
+  Recipe,
+  Route,
+  RouteComparison,
+  RouteParams,
+  RouteShipParams,
+  RoutingStats,
+  Tribe,
+  WorldItem,
 } from './types'
 
 /**
@@ -105,7 +127,8 @@ import type {
  * Reads go through the indexer (`api.trinary.exchange`, `x-api-key`) except
  * currency balances, which are head-current fullnode reads; writes are built
  * as Sui PTBs and handed to the caller-supplied `executor` to sign. The API
- * surface is grouped: `account`, `balances`, `market`, `orders`.
+ * surface is grouped: `account`, `balances`, `market`, `orders`, `spatial`,
+ * `routing`, `characters`, `world` (and `orgs`).
  *
  * Write flows mirror triex-app-api's production composition: the balance
  * manager is created on demand INSIDE the same PTB as the first operation,
@@ -133,6 +156,9 @@ export class TriexClient {
   readonly market: MarketApi
   readonly orders: OrdersApi
   readonly spatial: SpatialApi
+  readonly routing: RoutingApi
+  readonly characters: CharactersApi
+  readonly world: WorldApi
   /**
    * Organization identity & discovery (Armature). Address-taking methods
    * default to the configured player. Acting AS an organization lives on the
@@ -155,6 +181,9 @@ export class TriexClient {
     this.market = new MarketApi(this)
     this.orders = new OrdersApi(this)
     this.spatial = new SpatialApi(this)
+    this.routing = new RoutingApi(this)
+    this.characters = new CharactersApi(this)
+    this.world = new WorldApi(this)
     this.orgs = new OrgsApi(this.indexer, (addr) => this.requireAddress(addr))
   }
 
@@ -529,7 +558,7 @@ class AccountApi {
    * `owner` comes back TAGGED (`player:<wallet>` or `ou:<org_id>`) rather than
    * as a bare address, because an account can belong to an organization as
    * easily as to a character. This is how a counterparty id from the order
-   * book or a fill turns into a name.
+   * book or a fill turns into a name. 50 CU.
    */
   owners(params: {
     tradingAccountIds: string[]
@@ -660,13 +689,14 @@ class BalancesApi {
 class MarketApi {
   constructor(private readonly c: TriexClient) {}
 
-  /** #6 — discover open orders across the universe (most recent first). */
+  /** #6 — discover open orders across the universe (most recent first). 150 CU. */
   discover(filters?: DiscoveryFilters): Promise<DiscoveryResult> {
     return this.c.indexer.discovery(filters)
   }
 
   /**
    * #7 — trade-hub detail: vault descriptor + location (null if unrevealed).
+   * Two reads, 40 CU.
    * @throws `HubNotFound` for an unknown hub id.
    */
   async hub(hubId: string): Promise<TradeHubDetail> {
@@ -683,7 +713,7 @@ class MarketApi {
   }
 
   /**
-   * #8 — items with open orders at a trade hub.
+   * #8 — items with open orders at a trade hub. 20 CU.
    * @throws `HubNotFound` for an unknown hub id.
    */
   itemsAtHub(hubId: string): Promise<HubItemsPage> {
@@ -693,7 +723,7 @@ class MarketApi {
   /**
    * #8a — resolve an item name to its `assetId`: search item types by
    * partial, case-insensitive name (or exact numeric ID). Each match carries
-   * display metadata, mass, and crafting recipes; best matches first.
+   * display metadata, mass, and crafting recipes; best matches first. 50 CU.
    */
   searchItems(
     query: string,
@@ -704,7 +734,7 @@ class MarketApi {
 
   /**
    * #9a — resolve the pool for an item at a trade hub (hub → vault collection
-   * → pool).
+   * → pool). Two reads, 50 CU.
    * @throws `HubNotFound` for an unknown hub; `PoolNotFound` when no market
    *   exists for the pair.
    */
@@ -729,7 +759,7 @@ class MarketApi {
   /**
    * #9 — order book for one item at a trade hub. A single indexer call: the
    * gateway resolves the hub's pool and returns the book with pool metadata
-   * embedded.
+   * embedded. 50 CU.
    * @throws `HubNotFound` for an unknown hub; `PoolNotFound` when no market
    *   exists for the pair.
    */
@@ -751,7 +781,9 @@ class MarketApi {
   }
 
   /**
-   * #10/#11 — pool metadata (decimals, fee rate, hub linkage).
+   * #10/#11 — pool metadata (decimals, fee rate, hub linkage). The fee is
+   * the pool's fee-class ENTRY tier — an upper bound on any taker's rate.
+   * 20 CU.
    * @throws `PoolNotFound` for an unknown pool id.
    */
   poolMetadata(poolId: string): Promise<PoolMetadata> {
@@ -763,7 +795,8 @@ class MarketApi {
   /**
    * Every indexed hub location, cursor-paged — the universe-wide counterpart
    * to `hub()`. Narrow with `solarSystemId`, `tenant`, or `hasVault` (only
-   * hubs where trading is actually initialised).
+   * hubs where trading is actually initialised). 50 CU per page;
+   * `iterateHubLocations` walks every page.
    */
   hubLocations(filters?: HubLocationFilters): Promise<HubLocationPage> {
     return this.c.indexer.hubLocations(filters)
@@ -772,6 +805,7 @@ class MarketApi {
   /**
    * Where an item is currently for sale, cursor-paged: the hub locations with
    * open sell orders for `assetId`. Pair with `orderbook()` to price one.
+   * 50 CU per page; `iterateItemLocations` walks every page.
    */
   itemLocations(
     assetId: string,
@@ -782,7 +816,7 @@ class MarketApi {
 
   /**
    * Hubs within `rangeLy` light years of a hub (default and max 3500),
-   * optionally only those with open orders for one item.
+   * optionally only those with open orders for one item. 50 CU.
    * @throws `HubNotFound` when the origin hub publishes no location — use
    *   `nearbyHubsBySystem()` for a private origin.
    */
@@ -792,7 +826,8 @@ class MarketApi {
 
   /**
    * The same proximity search centred on a solar system id or name. Prefer a
-   * numeric id — names are not yet available for every system.
+   * numeric id — a name resolves only once a player has reported it
+   * (cycle 7). 50 CU.
    * @throws `SolarSystemNotFound` when a name can't be resolved.
    */
   nearbyHubsBySystem(params: NearbyHubsBySystemParams): Promise<NearbyHub[]> {
@@ -803,29 +838,88 @@ class MarketApi {
    * Batch hub detail for a watchlist — location, market count, and last
    * storage activity for up to 200 hubs in one call. Cheaper than a `hub()`
    * per id, at the cost of the vault descriptor and the resolved system name
-   * (feed the ids to `solarSystemNames()` for the latter).
+   * (feed the ids to `solarSystemNames()` for the latter). 50 CU.
    */
   hubsEnriched(params: { hubIds: string[] }): Promise<HubEnriched[]> {
     return this.c.indexer.hubsEnriched(params.hubIds)
   }
 
-  /** Owner wallet for up to 200 assembly (structure) object ids. */
+  /** Owner wallet for up to 200 assembly (structure) object ids. 50 CU. */
   assemblyOwners(params: { assemblyIds: string[] }): Promise<AssemblyOwner[]> {
     return this.c.indexer.assemblyOwners(params.assemblyIds)
   }
 
-  /** `assemblyOwners()` plus owner character and assembly name. */
+  /** `assemblyOwners()` plus owner character and assembly name. 50 CU. */
   assembliesEnriched(params: {
     assemblyIds: string[]
   }): Promise<AssemblyEnriched[]> {
     return this.c.indexer.assembliesEnriched(params.assemblyIds)
   }
 
-  /** Display names for up to 200 numeric solar system ids. */
+  /**
+   * Display names for up to 200 numeric solar system ids. A name is null
+   * until a player has reported it (cycle 7) — display the id then. 50 CU.
+   */
   solarSystemNames(params: {
     solarSystemIds: number[]
   }): Promise<SolarSystemName[]> {
     return this.c.indexer.solarSystemNames(params.solarSystemIds)
+  }
+
+  // ─── Market-wide feeds, prices & rankings ──────────────────────────────────
+
+  /**
+   * The latest trades across every item market, newest first — the public
+   * tape. At most 50 per page; page with `nextCursor` as `before` (or
+   * `iterateRecentTrades`), poll with `after`. Unlike `orders.trades()`,
+   * `price` / `quantity` / `feeAmount` are HUMAN-READABLE decimal strings
+   * already scaled by the quote decimals, and `feeRateBps` is the fill's own
+   * effective taker rate. 50 CU.
+   */
+  recentTrades(params?: RecentTradesParams): Promise<RecentTradesPage> {
+    return this.c.indexer.recentTrades(params)
+  }
+
+  /**
+   * Display prices for up to 100 items — item-wide, or per hub when
+   * `storageUnitIds` is given (one id for all, or one per item). This is the
+   * PLAIN market price with no trading fee; `tier` says where it came from
+   * (`traded` → `item` → `book` → `estimated` → `unknown`). 50 CU.
+   * @throws `ValidationFailed` over 100 items or for a mismatched
+   *   `storageUnitIds` length.
+   */
+  displayPrices(params: DisplayPricesParams): Promise<DisplayPrice[]> {
+    return this.c.indexer.displayPrices(params)
+  }
+
+  /** Display price (no fee) for one item, optionally at one hub. 20 CU. */
+  displayPrice(
+    itemId: string,
+    opts?: DisplayPriceParams,
+  ): Promise<DisplayPrice> {
+    return this.c.indexer.displayPrice(itemId, opts)
+  }
+
+  /**
+   * Fee reserve and open-order liquidity depth for up to 200 hubs (raw
+   * integers; vanished hubs omitted). 50 CU.
+   */
+  hubEconomics(params: { hubIds: string[] }): Promise<HubEconomics[]> {
+    return this.c.indexer.hubEconomics(params.hubIds)
+  }
+
+  /** Pools ranked by unclaimed fee balance (default 20, max 100). 50 CU. */
+  topPoolsByFees(opts?: { limit?: number }): Promise<PoolFees[]> {
+    return this.c.indexer.topPoolsByFees(opts?.limit)
+  }
+
+  /**
+   * Platform-wide statistics: trades and active traders by window, volume
+   * per quote currency, top items, organization / shared-storage / pilot
+   * totals and 30-day daily series. Cached upstream up to 60 s. 50 CU.
+   */
+  stats(): Promise<PlatformStats> {
+    return this.c.indexer.stats()
   }
 }
 
@@ -844,7 +938,9 @@ class SpatialApi {
 
   /**
    * One solar system by name or numeric id — `"EHK-KH7"` and `"30000142"`
-   * both resolve.
+   * both resolve. Names are PLAYER-REPORTED in cycle 7: a name works only
+   * once someone has reported it, and `solarSystemName` is null until then;
+   * an id always works. 20 CU.
    * @throws `SolarSystemNotFound` when nothing matches.
    */
   system(solarSystem: string): Promise<SolarSystem> {
@@ -853,8 +949,8 @@ class SpatialApi {
 
   /**
    * Up to 100 systems in one call, by id or by name (not both). Unmatched
-   * identifiers are omitted, so compare `count` against what you asked for to
-   * detect misses.
+   * identifiers (including unreported names) are omitted, so compare `count`
+   * against what you asked for to detect misses. 50 CU.
    * @throws `ValidationFailed` when neither or both selectors are given.
    */
   systems(params: BatchSystemsParams): Promise<BatchSystems> {
@@ -864,6 +960,7 @@ class SpatialApi {
   /**
    * Systems within `radiusLy` light years of another system, nearest first.
    * The origin is excluded. This is the "what is in jump range of here" read.
+   * 50 CU.
    * @throws `SolarSystemNotFound` for an unknown origin.
    */
   nearbySystems(params: NearbySystemsParams): Promise<NearbySystems> {
@@ -873,6 +970,7 @@ class SpatialApi {
   /**
    * The same radius search around an arbitrary point, for an origin that is
    * not itself a system — a ship or structure position read from the chain.
+   * 50 CU.
    */
   systemsNearCoordinates(
     params: CoordinateSearchParams,
@@ -883,7 +981,8 @@ class SpatialApi {
   /**
    * Name-prefix autocomplete, alphabetical. Returns identifiers only and is
    * served from an in-memory index, so it is much cheaper than `system()` —
-   * resolve the chosen suggestion with that.
+   * resolve the chosen suggestion with that. Only player-reported names are
+   * indexed, so this is also how to find names `routing` will accept. 20 CU.
    */
   autocompleteSystems(
     query: string,
@@ -892,9 +991,145 @@ class SpatialApi {
     return this.c.indexer.autocompleteSystems(query, opts?.limit)
   }
 
-  /** How many systems the coordinate index holds, and whether it is loaded. */
+  /**
+   * How many systems the coordinate index holds, whether it is loaded, and
+   * (`knownSolarSystemNames`) how many can currently be looked up by name.
+   * 20 CU.
+   */
   stats(): Promise<SpatialStats> {
     return this.c.indexer.spatialStats()
+  }
+}
+
+// ─── routing ─────────────────────────────────────────────────────────────────
+
+/**
+ * Travel routes over the stargate network plus jump-drive hops. Origins and
+ * destinations are solar system NAMES — and in cycle 7 names are
+ * player-reported, so only systems someone has named can be routed between
+ * (`spatial.autocompleteSystems()` lists the ones that can). Waypoints
+ * through unnamed systems carry a null `solarSystemName`.
+ */
+class RoutingApi {
+  constructor(private readonly c: TriexClient) {}
+
+  /**
+   * The optimal route for one mode — `time` (default), `fuel`, or `balanced`
+   * (weighted by `gateWeight`). Ship `mass` and `maxJumpRangeLy` shape which
+   * hops exist and what they cost. 100 CU.
+   * @throws `RouteNotFound` when a name is unknown/unreported or the pair is
+   *   unreachable under these parameters (a larger `maxJumpRangeLy` may help).
+   */
+  route(params: RouteParams): Promise<Route> {
+    return this.c.indexer.route(params)
+  }
+
+  /**
+   * All three modes in one consistent call, to show the jumps-vs-fuel
+   * trade-off. Priced as three searches: 300 CU.
+   * @throws `RouteNotFound` when no mode connects the pair.
+   */
+  compare(params: RouteShipParams): Promise<RouteComparison> {
+    return this.c.indexer.compareRoutes(params)
+  }
+
+  /** Graph coverage and the default jump range the drive edges use. 20 CU. */
+  stats(): Promise<RoutingStats> {
+    return this.c.indexer.routingStats()
+  }
+}
+
+// ─── characters ──────────────────────────────────────────────────────────────
+
+/**
+ * Player characters and their tribes — who is behind an address, an order or
+ * an organization seat. Character names are not unique and a wallet can hold
+ * several characters, so the by-name and by-address reads return lists.
+ */
+class CharactersApi {
+  constructor(private readonly c: TriexClient) {}
+
+  /**
+   * One character by object id; `enrich` adds the on-chain `ownerCapId` and
+   * `assemblyId`. 20 CU.
+   * @throws `CharacterNotFound`.
+   */
+  get(characterId: string, opts?: { enrich?: boolean }): Promise<Character> {
+    return this.c.indexer.character(characterId, opts)
+  }
+
+  /**
+   * Every character a wallet holds, newest first — defaults to the
+   * configured player's address. 20 CU.
+   * @throws `AddressRequired` when no address is configured or passed.
+   */
+  async byAddress(
+    address?: string,
+    opts?: { enrich?: boolean },
+  ): Promise<Character[]> {
+    return this.c.indexer.charactersByAddress(
+      this.c.requireAddress(address),
+      opts,
+    )
+  }
+
+  /** Characters whose name matches EXACTLY, newest first. 20 CU. */
+  byName(name: string): Promise<Character[]> {
+    return this.c.indexer.charactersByName(name)
+  }
+
+  /**
+   * Resolve up to 500 wallet addresses to characters with tribe names in one
+   * call; every address is echoed back, unresolved ones with null fields.
+   * 50 CU.
+   * @throws `ValidationFailed` over 500 addresses.
+   */
+  batch(params: { addresses: string[] }): Promise<CharacterLookup[]> {
+    return this.c.indexer.charactersBatch(params.addresses)
+  }
+
+  /**
+   * A tribe (game-world faction — not an on-chain organization) by id.
+   * 20 CU.
+   * @throws `TribeNotFound`.
+   */
+  tribe(tribeId: number): Promise<Tribe> {
+    return this.c.indexer.tribe(tribeId)
+  }
+}
+
+// ─── world ───────────────────────────────────────────────────────────────────
+
+/**
+ * Static game reference data: the item catalogue and crafting recipes. It
+ * changes only when the game client data does, so fetch once and cache —
+ * every call still costs CUs. Ids come back as `assetId` strings, joining
+ * onto every market read. (Name search lives on `market.searchItems()`.)
+ */
+class WorldApi {
+  constructor(private readonly c: TriexClient) {}
+
+  /** The full curated item list. 20 CU. */
+  items(): Promise<WorldItem[]> {
+    return this.c.indexer.worldItems()
+  }
+
+  /**
+   * Name and group for one item type id. 20 CU.
+   * @throws `ItemNotFound`.
+   */
+  item(assetId: string): Promise<ItemInfo> {
+    return this.c.indexer.worldItem(assetId)
+  }
+
+  /** Every crafting recipe. 20 CU. */
+  recipes(): Promise<Recipe[]> {
+    return this.c.indexer.recipes()
+  }
+
+  /** The recipes producing one item — `[]` when it is not craftable. 20 CU. */
+  recipesFor(productAssetId: string): Promise<Recipe[]> {
+    return this.c.indexer.recipesFor(productAssetId)
   }
 }
 
@@ -1107,7 +1342,7 @@ class OrdersApi {
   }
 
   /**
-   * #14 — the player's open orders (empty page when no BM exists yet).
+   * #14 — the player's open orders (empty page when no BM exists yet). 30 CU.
    * @throws `AddressRequired`.
    */
   async openOrders(params?: HistoryPageParams): Promise<OpenOrdersPage> {
@@ -1117,7 +1352,7 @@ class OrdersApi {
   }
 
   /**
-   * #14 — the player's fills.
+   * #14 — the player's fills. 30 CU.
    * @throws `AddressRequired`.
    */
   async fills(params?: FillsParams): Promise<FillsPage> {
@@ -1127,13 +1362,33 @@ class OrdersApi {
   }
 
   /**
-   * #14 — the player's trades.
+   * #14 — the player's trades. 30 CU.
    * @throws `AddressRequired`.
    */
   async trades(params?: TradesParams): Promise<TradesPage> {
     const bm = await this.ownBm()
     if (!bm) return { trades: [], nextCursor: null }
     return this.c.indexer.trades(bm, params)
+  }
+
+  /**
+   * Any order on any pool, by id — including orders that have left the
+   * book: `status` says `open`, `filled` or `cancelled`, and `fills` is the
+   * order's fill history. How a bot learns what became of an order it placed.
+   * Not limited to the player's own orders. 30 CU.
+   * @throws `OrderNotFound`; `ValidationFailed` for a non-u128 order id.
+   */
+  get(params: OrderLookupParams): Promise<OrderDetail> {
+    return this.c.indexer.poolOrder(params)
+  }
+
+  /**
+   * One fill by event digest (the `eventDigest` on fills and trades), with
+   * BOTH sides' accounts and fees. 30 CU.
+   * @throws `FillNotFound`.
+   */
+  fill(eventDigest: string): Promise<FillDetail> {
+    return this.c.indexer.fill(eventDigest)
   }
 
   // ─── internals ─────────────────────────────────────────────────────────────
@@ -1213,4 +1468,13 @@ class OrdersApi {
   }
 }
 
-export type { AccountApi, BalancesApi, MarketApi, OrdersApi, SpatialApi }
+export type {
+  AccountApi,
+  BalancesApi,
+  CharactersApi,
+  MarketApi,
+  OrdersApi,
+  RoutingApi,
+  SpatialApi,
+  WorldApi,
+}

@@ -729,6 +729,8 @@ describe('IndexerClient spatial reads', () => {
     mockFetch([{ total_systems: 24018, status: 'operational' }])
     expect(await client.spatialStats()).toEqual({
       totalSystems: 24018,
+      // Absent before location-api's cycle-7 names change.
+      knownSolarSystemNames: null,
       status: 'operational',
     })
   })
