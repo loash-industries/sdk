@@ -38,7 +38,18 @@ const NAMESPACE_CLASSES = {
  * missed the moment they landed). Reading the handle's own property
  * declarations instead means adding a group to the handle is all it takes.
  */
-const HANDLE_ROOTS = { OrgHandle: 'org' }
+const HANDLE_ROOTS = { TriexClient: '', OrgHandle: 'org' }
+
+/**
+ * Root properties that are class-typed but are not API groups, with why.
+ * Everything else a root exposes is scanned.
+ */
+const ROOT_PROPERTY_SKIP = {
+  TriexClient: {
+    indexer:
+      'The raw HTTP transport (one method per endpoint); the namespaced groups are its public face.',
+  },
+}
 
 /**
  * Namespaced API classes declared OUTSIDE `TriexClient.d.ts`, as
@@ -107,6 +118,32 @@ function isWriteReturn(text) {
 }
 
 /**
+ * Structural form of {@link isWriteReturn}: a result type that EXTENDS a write
+ * type is a write too. `MintCapResult extends TxResult` adds the minted cap's
+ * id, `CoinSwapResult extends TxResult` the enforced minimum — each still signs
+ * and submits, and a name list would miss the next one to land.
+ */
+function isWriteType(type, checker, seen = new Set()) {
+  if (!type || seen.has(type)) return false
+  seen.add(type)
+  const name = type.getSymbol?.()?.getName() ?? type.aliasSymbol?.getName()
+  if (name && WRITE_RETURN_TYPES.has(name)) return true
+  if (type.isUnionOrIntersection?.()) {
+    return type.types.some((t) => isWriteType(t, checker, seen))
+  }
+  const bases = type.isClassOrInterface?.() ? checker.getBaseTypes(type) : []
+  return bases.some((t) => isWriteType(t, checker, seen))
+}
+
+/** The awaited return type of a method declaration, via the checker. */
+function awaitedReturnType(method, checker) {
+  const signature = checker.getSignatureFromDeclaration(method)
+  if (!signature) return null
+  const returned = checker.getReturnTypeOfSignature(signature)
+  return checker.getAwaitedType?.(returned) ?? returned
+}
+
+/**
  * Absolute path to a declaration file inside an installed package.
  *
  * These packages publish an `exports` map with no CJS entry, so
@@ -163,8 +200,11 @@ function returnTypeText(method, source) {
 function isPrivate(method) {
   const modifiers = ts.getModifiers?.(method) ?? method.modifiers ?? []
   return (
-    modifiers.some((m) => m.kind === ts.SyntaxKind.PrivateKeyword) ||
-    ts.isPrivateIdentifier(method.name)
+    modifiers.some(
+      (m) =>
+        m.kind === ts.SyntaxKind.PrivateKeyword ||
+        m.kind === ts.SyntaxKind.ProtectedKeyword,
+    ) || ts.isPrivateIdentifier(method.name)
   )
 }
 
@@ -384,52 +424,78 @@ export function readSdkSurface(declarationPath = sdkDeclarationPath()) {
     ...externalFiles.map((path) => program.getSourceFile(path)),
   ].filter(Boolean)
 
-  // Merge the fixed map with whatever the handle roots declare.
-  const namespaces = { ...NAMESPACE_CLASSES }
+  // Namespace → class declarations. Seeded from the fixed map, then
+  // DISCOVERED from each root's public properties through the type checker,
+  // so a group declared in any module — `coins` lives in coins/CoinsApi.d.ts —
+  // is found without a list to keep, along with the base classes it inherits
+  // methods from (`CoinsApi extends CoinsReadApi`).
+  const groups = new Map() // ClassDeclaration → namespace
+  for (const source of declarationFiles) {
+    for (const statement of source.statements) {
+      if (!ts.isClassDeclaration(statement) || !statement.name) continue
+      const namespace = NAMESPACE_CLASSES[statement.name.text]
+      if (namespace) groups.set(statement, namespace)
+    }
+  }
+  const addClassType = (type, namespace, seen = new Set()) => {
+    if (!type || seen.has(type)) return
+    seen.add(type)
+    const decl = type
+      .getSymbol?.()
+      ?.declarations?.find((d) => ts.isClassDeclaration(d))
+    if (!decl) return
+    if (!groups.has(decl)) groups.set(decl, namespace)
+    for (const base of checker.getBaseTypes(type) ?? []) {
+      addClassType(base, namespace, seen)
+    }
+  }
   for (const source of declarationFiles) {
     for (const statement of source.statements) {
       if (!ts.isClassDeclaration(statement) || !statement.name) continue
       const prefix = HANDLE_ROOTS[statement.name.text]
-      if (!prefix) continue
+      if (prefix === undefined) continue
+      const skip = ROOT_PROPERTY_SKIP[statement.name.text] ?? {}
       for (const member of statement.members) {
         if (!ts.isPropertyDeclaration(member) || isPrivate(member)) continue
-        const typeName = member.type?.getText(source)
-        const declaredHere = declarationFiles.some((f) =>
-          f.statements.some(
-            (st) => ts.isClassDeclaration(st) && st.name?.text === typeName,
-          ),
+        const name = member.name.getText(source)
+        if (name in skip) continue
+        addClassType(
+          checker.getTypeAtLocation(member),
+          prefix ? `${prefix}.${name}` : name,
         )
-        if (!declaredHere) continue
-        namespaces[typeName] = `${prefix}.${member.name.getText(source)}`
       }
     }
   }
 
-  for (const source of declarationFiles) {
-    for (const statement of source.statements) {
-      if (!ts.isClassDeclaration(statement) || !statement.name) continue
-      const namespace = namespaces[statement.name.text]
-      if (!namespace) continue
-
-      for (const member of statement.members) {
-        if (!ts.isMethodDeclaration(member) || isPrivate(member)) continue
-        const method = member.name.getText(source)
-        const returns = returnTypeText(member, source)
-        const alias = readOnlyAliases(namespace, method).find((n) =>
-          readOnly.has(n),
-        )
-        surface.push({
-          path: `${namespace}.${method}`,
-          namespace,
-          method,
-          kind: isWriteReturn(returns) ? 'write' : 'read',
-          returns,
-          params: mergeParams(
-            parametersOf(member, checker),
-            alias ? readOnly.get(alias) : [],
-          ),
-        })
-      }
+  const seenPaths = new Set()
+  for (const [decl, namespace] of groups) {
+    const source = decl.getSourceFile()
+    for (const member of decl.members) {
+      if (!ts.isMethodDeclaration(member) || isPrivate(member)) continue
+      const method = member.name.getText(source)
+      const path = `${namespace}.${method}`
+      // A subclass override and its base declaration are one method.
+      if (seenPaths.has(path)) continue
+      seenPaths.add(path)
+      const returns = returnTypeText(member, source)
+      const alias = readOnlyAliases(namespace, method).find((n) =>
+        readOnly.has(n),
+      )
+      surface.push({
+        path,
+        namespace,
+        method,
+        kind:
+          isWriteReturn(returns) ||
+          isWriteType(awaitedReturnType(member, checker), checker)
+            ? 'write'
+            : 'read',
+        returns,
+        params: mergeParams(
+          parametersOf(member, checker),
+          alias ? readOnly.get(alias) : [],
+        ),
+      })
     }
   }
 
