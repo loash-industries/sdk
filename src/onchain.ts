@@ -620,7 +620,7 @@ export async function getPoolTradingFees(
 
   const res = await core(suiClient).simulateTransaction({
     transaction: tx,
-    include: { commandResults: true },
+    include: { commandResults: true, effects: true },
     checksEnabled: false,
   })
   if (res?.$kind === 'FailedTransaction' || res?.FailedTransaction) {
