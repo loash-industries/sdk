@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { OrgQueries } from './armature/queries'
+import { CoinListSchema } from './coins/schemas'
+import type { CoinInfo } from './coins/types'
 import { TriexClientError, TriexError } from './errors'
 import { indexerGet } from './http'
 import type { QueryParams } from './http'
@@ -478,6 +480,22 @@ export class IndexerClient {
   async spatialStats(): Promise<SpatialStats> {
     const data = await this.get('/v1/spatial/stats')
     return parseWith(SpatialStatsSchema, data, 'spatialStats')
+  }
+
+  // ─── Coins (currency-pair markets) ────────────────────────────────────────
+
+  /**
+   * The consolidated coin list: every coin in the token registry (pooled or
+   * not) with supply/contract facts and, when it has a pool, its market —
+   * pooled coins first, most active first. `coinTypes` restricts the list
+   * (max 200). Coin-pool books/orders are not on the gateway; those are
+   * fullnode reads (`coins/onchain.ts`).
+   */
+  async listCoins(coinTypes?: string[]): Promise<CoinInfo[]> {
+    const data = await this.get('/v1/coins', {
+      coin_types: coinTypes?.length ? coinTypes.join(',') : undefined,
+    })
+    return parseWith(CoinListSchema, data, 'listCoins')
   }
 
   // ─── Inventory (#2 — items only; CRED reads live on the fullnode) ─────────

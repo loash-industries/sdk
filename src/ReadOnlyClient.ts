@@ -1,4 +1,5 @@
 import { OrgsApi } from './armature/OrgsApi'
+import { CoinsReadApi } from './coins/CoinsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
 import { IndexerClient } from './queries'
@@ -44,7 +45,8 @@ import type {
 } from './types'
 
 /**
- * Indexer-only client — no `executor`, no signing, no fullnode. For
+ * Indexer-only client — no `executor`, no signing, and no fullnode except the
+ * optional `suiClient` behind `coins.*` reads. For
  * dashboards, market scanners, and bots that only observe. Identity params
  * (address, trading account id) are always explicit here since there is no
  * configured player. Currency (CRED) balances are fullnode reads and live on
@@ -63,6 +65,12 @@ export class ReadOnlyClient {
    * REQUIRE an explicit address here — this client has no configured player.
    */
   readonly orgs: OrgsApi
+  /**
+   * Coin (currency-pair) market reads. `list()` is indexer-only; books,
+   * orders, fees and quotes are fullnode reads and need `suiClient` in the
+   * config. Account-scoped reads take an explicit `tradingAccountId`.
+   */
+  readonly coins: CoinsReadApi
 
   constructor(config: ReadOnlyClientConfig) {
     this.ids = resolvePackageIds(config.network ?? 'testnet', config.packageIds)
@@ -78,6 +86,20 @@ export class ReadOnlyClient {
         )
       }
       return addr
+    })
+    this.coins = new CoinsReadApi({
+      indexer: this.indexer,
+      ids: this.ids,
+      suiClient: config.suiClient,
+      requireAddress: (addr) => {
+        if (!addr) {
+          throw new TriexClientError(
+            TriexError.AddressRequired,
+            'ReadOnlyClient has no configured player — pass `tradingAccountId` / `address` explicitly.',
+          )
+        }
+        return addr
+      },
     })
   }
 

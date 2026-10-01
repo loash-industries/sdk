@@ -334,3 +334,93 @@ export {
 } from './armature/vault'
 export type { DaoVaultInfo } from './armature/vault'
 export type { OrgSweepSkip } from './armature/OrgClient'
+
+// ─── Coins: currency-pair markets (triex::pool) ──────────────────────────────
+export {
+  CoinsApi,
+  CoinsReadApi,
+  DEFAULT_SWAP_SLIPPAGE_BPS,
+} from './coins/CoinsApi'
+export type { CoinsReadDeps } from './coins/CoinsApi'
+export {
+  COIN_MAX_FILLS,
+  COIN_MAX_PRICE,
+  COIN_MIN_PRICE,
+  COIN_POOL_CREATION_FEE,
+  COIN_PRICE_SCALING,
+  coinMinOrderQuantity,
+  coinPriceDecimals,
+  coinPriceToRaw,
+  coinQuoteFee,
+  coinQuoteForBase,
+  coinSellNet,
+  computeCoinBidDeposit,
+  conservativeBidFeeRate,
+  estimateCoinMarketOrder,
+  formatCoinPrice,
+} from './coins/money'
+export type {
+  CoinFeeRates,
+  CoinMakerOrder,
+  CoinMarketEstimate,
+} from './coins/money'
+export * as coinTransactions from './coins/transactions'
+export type { CoinPoolTypes } from './coins/transactions'
+export {
+  COIN_ORDER_STATUS,
+  CoinBalancesBcs,
+  CoinFeeScheduleBcs,
+  CoinOrderBcs,
+  CoinOrderPageBcs,
+  CoinPoolAccountBcs,
+  dryRunCoinQuantityOut,
+  fetchCoinAccountOrders,
+  fetchCoinBookSide,
+  fetchCoinPoolAccount,
+  fetchCoinPoolTypes,
+  fetchCoinTradeParams,
+  getTradingAccountCoinBalance,
+  resolveCoinPoolId,
+  simulateReturnValues,
+} from './coins/onchain'
+export type {
+  CoinBookOrder,
+  CoinBookSide,
+  CoinPoolAccount,
+  CoinPoolBalances,
+  CoinTradeParams,
+} from './coins/onchain'
+export {
+  depositCoinDeficit,
+  isSuiCoinType,
+  prepareCoinInput,
+} from './coins/funding'
+export type {
+  CoinAccountParams,
+  CoinBalances,
+  CoinBalancesParams,
+  CoinCancelOrderParams,
+  CoinCancelOrdersParams,
+  CoinClaimSettledParams,
+  CoinDepositParams,
+  CoinInfo,
+  CoinLimitOrderParams,
+  CoinMarket,
+  CoinMarketEstimateParams,
+  CoinMarketOrderParams,
+  CoinMintPolicy,
+  CoinModifyOrderParams,
+  CoinOrderbook,
+  CoinOrderbookParams,
+  CoinPool,
+  CoinPoolSelector,
+  CoinSwapParams,
+  CoinSwapQuote,
+  CoinSwapQuoteParams,
+  CoinSwapResult,
+  CoinTradeParamsParams,
+  CoinTreasuryHolding,
+  CoinWithdrawParams,
+  CreateCoinPoolParams,
+  CreateCoinPoolResult,
+} from './coins/types'

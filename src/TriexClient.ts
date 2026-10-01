@@ -7,6 +7,7 @@ import type { ClientWithCoreApi } from '@mysten/sui/client'
 
 import { OrgHandle } from './armature/OrgClient'
 import { OrgsApi } from './armature/OrgsApi'
+import { CoinsApi } from './coins/CoinsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
 import { executeAndNormalize, findCreatedObject } from './execute'
@@ -105,7 +106,7 @@ import type {
  * Reads go through the indexer (`api.trinary.exchange`, `x-api-key`) except
  * currency balances, which are head-current fullnode reads; writes are built
  * as Sui PTBs and handed to the caller-supplied `executor` to sign. The API
- * surface is grouped: `account`, `balances`, `market`, `orders`.
+ * surface is grouped: `account`, `balances`, `market`, `orders`, `coins`.
  *
  * Write flows mirror triex-app-api's production composition: the balance
  * manager is created on demand INSIDE the same PTB as the first operation,
@@ -139,6 +140,11 @@ export class TriexClient {
    * handle from `client.org(id)` — see DESIGN-ARMATURE.md §5.1.
    */
   readonly orgs: OrgsApi
+  /**
+   * Coin (currency-pair) markets on `triex::pool` — reads (fullnode +
+   * `/v1/coins`) and trading. See DESIGN-COINS.md.
+   */
+  readonly coins: CoinsApi
 
   constructor(config: TriexClientConfig) {
     this.suiClient = config.suiClient
@@ -156,6 +162,7 @@ export class TriexClient {
     this.orders = new OrdersApi(this)
     this.spatial = new SpatialApi(this)
     this.orgs = new OrgsApi(this.indexer, (addr) => this.requireAddress(addr))
+    this.coins = new CoinsApi(this)
   }
 
   /**
