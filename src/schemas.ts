@@ -155,7 +155,12 @@ export const PoolMetadataSchema = z
     storageUnitId: v.storage_unit_id,
     assetId: v.asset_id,
     collectionId: v.collection_id,
-    /** Raw taker fee rate scaled by 1e9 (20_000_000 = 2%); 0n when unknown. */
+    /**
+     * Entry-tier TAKER rate of the pool's fee class, scaled by 1e9
+     * (22_000_000 = 2.2%) — what an account with no turnover pays; 0n when
+     * unknown. Maker rates and an account's own tier are on-chain only:
+     * `orders.fees()`.
+     */
     feeRateScaled: v.fee === null ? 0n : BigInt(v.fee),
     /** Decimal form of the fee (fee / 1e9), for display. */
     feeRate: v.fee_rate,

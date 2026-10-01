@@ -43,8 +43,11 @@ export {
   toBase,
   fromBase,
   computeItemQuote,
+  computeQuoteFee,
   computeBidQuoteDeposit,
+  computeAskProceeds,
   estimateMarketBuyCost,
+  estimateMarketSellProceeds,
   marketBuyRoundingBuffer,
   TRIEX_PRICE_SCALING,
   MULTICOIN_PRICE_SCALING,
@@ -59,7 +62,10 @@ export {
   getWalletCurrencyBalance,
   getTradingAccountCurrencyBalance,
   getTradingAccountItemBalance,
-  getRegistryMulticoinCollectionId,
+  getPoolTradingFees,
+  getTradingAccountAllowList,
+  findOwnedTradingAccountCaps,
+  tradingAccountCapType,
   findOwnedItemReceipts,
   fetchCharacterInfo,
   fetchSsuOwnerInfo,
@@ -177,13 +183,32 @@ export type {
   CancelAllOrdersParams,
   ModifyOrderParams,
   ClaimSettledParams,
+  CancelOrdersParams,
+  PoolSelector,
+  TradingFeesParams,
+  MintCapParams,
+  MintCapResult,
+  RevokeCapParams,
+  TradingAccountCaps,
+  CreatePoolParams,
+  CreatePoolResult,
+  ClaimOperatorShareParams,
 } from './types'
 export type {
   OwnedItemReceipt,
   CharacterInfo,
   SsuOwnerInfo,
   ObjectRef,
+  OwnedTradingAccountCap,
+  FeeTier,
+  AccountFeeRates,
+  TradingFees,
 } from './onchain'
+export type {
+  TradingAccountCapKind,
+  SwapWithTradingAccountArgs,
+} from './transactions'
+export { POOL_CREATION_FEE } from './transactions'
 
 // ─── Armature: organizations & governance ────────────────────────────────────
 export {

@@ -134,8 +134,11 @@ import { estimateMarketBuyCost } from '@trinaryex/sdk'
 //    the trading account if missing, and rolls everything back on failure.
 await client.orders.limit({ storageUnitId, assetId, side: 'sell', price, quantity })
 
-// Market buys need a worst-case budget from the current book:
-const est = estimateMarketBuyCost(book.asks, quantity, meta.feeRateScaled)
+// Market buys need a budget from the current book, at YOUR taker rate
+// (fee tiers lower it as your trailing fee turnover grows):
+const fees = await client.orders.fees({ storageUnitId, assetId })
+const taker = fees.account?.takerFeeRate ?? fees.entryTakerFeeRate
+const est = estimateMarketBuyCost(book.asks, quantity, taker)
 await client.orders.market({ storageUnitId, assetId, side: 'buy', quantity, quoteBudget: est.total })
 
 // 2. Watch state. The indexer trails the chain by seconds — untilIndexed()
@@ -157,6 +160,7 @@ await client.account.withdrawItems({ storageUnitId, items: [{ assetId }] })
 
 // Housekeeping.
 await client.orders.cancel({ storageUnitId, assetId, orderId })
+await client.orders.cancelMany({ storageUnitId, assetId, orderIds })
 await client.orders.cancelAll({ storageUnitId, assetId })
 ```
 
@@ -216,15 +220,15 @@ whether the abort was `resolved`, came from a dependency package
 
 | Group | Methods |
 |---|---|
-| `account` | `get` · `ensure` · `depositCurrency` · `depositItems` · `withdrawCurrency` · `withdrawItems` · `sweepable` · `claimSettled` · `owners` |
+| `account` | `get` · `ensure` · `register` · `depositCurrency` · `depositItems` · `withdrawCurrency` · `withdrawItems` · `sweepable` · `claimSettled` · `owners` · `mintCap` · `revokeCap` · `caps` |
 | `balances` | `atHub` (items: warehouse/marketplace/hangar) · `currency` (CRED wallet + BM, fullnode) |
-| `market` | `discover` · `hub` · `itemsAtHub` · `resolvePool` · `orderbook` · `poolMetadata` |
+| `market` | `discover` · `hub` · `itemsAtHub` · `resolvePool` · `orderbook` · `poolMetadata` · `createPool` · `claimOperatorShare` |
 | `market` (locations) | `hubLocations` · `itemLocations` · `nearbyHubs` · `nearbyHubsBySystem` · `hubsEnriched` · `assemblyOwners` · `assembliesEnriched` · `solarSystemNames` |
-| `orders` | `limit` · `market` · `cancel` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
+| `orders` | `fees` · `limit` · `market` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
 | `spatial` | `system` · `systems` · `nearbySystems` · `systemsNearCoordinates` · `autocompleteSystems` · `stats` |
 | `orgs` | `get` · `batch` · `directory` · `forPlayer` · `search` · `proposals` · `seats` · `tradingAccount` · `accessibleKeyspaces` · `vaultsAtHub` |
 | `org(id)` handle | `.governance` · `.members` · `.metadata` · `.types` · `.treasury` · `.orders` · `.vault` — see below |
-| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades/OrgDirectory` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
+| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `estimateMarketSellProceeds` · `computeBidQuoteDeposit` · `computeAskProceeds` · `computeQuoteFee` · `iterateDiscovery/Fills/Trades/OrgDirectory` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
 
 Runnable examples live in [`examples/`](./examples).
 
@@ -293,10 +297,18 @@ Four things worth knowing before you call them:
   timestamps are epoch **milliseconds**. Items are identified by `assetId`
   (numeric item-type id as a string).
 - Item pools price in CRED base units per item (no price scaling). Pool
-  metadata carries `feeRateScaled` (× 1e9; `20_000_000` = 2%) and the
-  base/quote `decimals` for display conversion via `toBase`/`fromBase`.
-- Only buyers pay fees. A limit bid deposits
-  `quote × (1e9 + feeRateScaled) / 1e9` — computed for you.
+  metadata carries the base/quote `decimals` for display conversion via
+  `toBase`/`fromBase`, and `feeRateScaled` — the pool's entry-tier taker rate.
+- Fees are quote-denominated, `floor(quote × rate / 1e9)`, and **both sides
+  pay**: bids on top of what they owe (taker fee when they match, maker fee
+  escrowed while they rest), asks out of their proceeds. Rates come from the
+  pool's fee class (multicoin launch ladder: 2.2% taker / 1.8% maker, falling
+  with your trailing 30-epoch fee turnover). `orders.fees()` reads the ladder,
+  your tier, and the cancel retention (the share of a bid's escrowed maker fee
+  kept when you cancel, modify down, or it expires) from the chain.
+- A limit bid is funded for `notional + floor(notional × bidEscrowFeeRate /
+  1e9)` — the pool's highest rate, so it can never be under-funded; anything
+  unused stays in the trading account. Sells need no CRED.
 - Order expiry defaults to good-til-cancelled (`GTC_EXPIRE`).
 
 ## Consistency model

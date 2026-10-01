@@ -7,7 +7,10 @@ import { bcs } from '@mysten/sui/bcs'
 import { Transaction } from '@mysten/sui/transactions'
 
 import {
+  FeeScheduleBcs,
   MultiCoinBalanceBcs,
+  getPoolTradingFees,
+  getTradingAccountAllowList,
   fetchCharacterInfo,
   fetchInventorySlotQuantity,
   fetchSsuOwnerInfo,
@@ -15,7 +18,6 @@ import {
   getTradingAccountCurrencyBalance,
   getTradingAccountItemBalance,
   getObjectRef,
-  getRegistryMulticoinCollectionId,
   getWalletCurrencyBalance,
 } from '../src/onchain'
 import { sourceItemsIntoTradingAccount } from '../src/funding'
@@ -130,24 +132,6 @@ describe('getObjectRef', () => {
       version: '9',
       digest: 'dg',
     })
-  })
-})
-
-describe('getRegistryMulticoinCollectionId', () => {
-  it('parses the Address value of the registry singleton field', async () => {
-    const sui = asyncCore({
-      getDynamicField: (args) => {
-        expect(args.parentId).toBe(IDS.triexRegistry)
-        return {
-          dynamicField: {
-            value: { bcs: bcs.Address.serialize(COLLECTION).toBytes() },
-          },
-        }
-      },
-    })
-    expect(await getRegistryMulticoinCollectionId(sui as any, IDS)).toBe(
-      COLLECTION,
-    )
   })
 })
 
@@ -414,5 +398,82 @@ describe('sourceItemsIntoTradingAccount — hangar paths', () => {
         amount: 5n,
       }),
     ).rejects.toMatchObject({ code: TriexError.InsufficientBalance })
+  })
+
+  it('requires the market collection (no registry-wide fallback since cycle 7)', async () => {
+    const tx = new Transaction()
+    await expect(
+      sourceItemsIntoTradingAccount(
+        asyncCore({}) as any,
+        tx,
+        IDS,
+        tx.object('0x' + 'b1'.repeat(32)),
+        { ...base, amount: 1n, vaultCollectionId: '' },
+      ),
+    ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
+  })
+})
+
+describe('getTradingAccountAllowList', () => {
+  const CAP_A = '0x' + 'a1'.repeat(32)
+  const CAP_B = '0x' + 'a2'.repeat(32)
+
+  it.each([
+    ['VecSet JSON', { contents: [CAP_A, CAP_B] }],
+    ['wrapped fields', { fields: { contents: [CAP_A, CAP_B] } }],
+    ['bare array', [CAP_A, CAP_B]],
+  ])('reads the allow-list from %s', async (_label, allowListed) => {
+    const sui = asyncCore({
+      getObject: () => ({ object: { json: { allow_listed: allowListed } } }),
+    })
+    expect(await getTradingAccountAllowList(sui as any, '0x1')).toEqual([
+      CAP_A,
+      CAP_B,
+    ])
+  })
+
+  it('is empty when the account cannot be read', async () => {
+    const sui = asyncCore({
+      getObject: () => {
+        throw new Error('not found')
+      },
+    })
+    expect(await getTradingAccountAllowList(sui as any, '0x1')).toEqual([])
+  })
+})
+
+describe('getPoolTradingFees', () => {
+  const ladder = (taker: bigint, maker: bigint) =>
+    FeeScheduleBcs.serialize({
+      tiers: [{ min_turnover: 0n, taker_fee: taker, maker_fee: maker }],
+    }).toBytes()
+  const u64 = (n: bigint) => bcs.u64().serialize(n).toBytes()
+
+  it('clamps the bid escrow rate at 100%', async () => {
+    const sui = asyncCore({
+      simulateTransaction: () => ({
+        $kind: 'Transaction',
+        Transaction: { epoch: '5' },
+        commandResults: [
+          { returnValues: [{ bcs: bcs.u16().serialize(1).toBytes() }] },
+          { returnValues: [{ bcs: ladder(1_000_000_000n, 0n) }] },
+          {
+            returnValues: [
+              { bcs: ladder(1_000_000_000n, 2_000_000_000n) },
+              { bcs: u64(6n) },
+            ],
+          },
+          { returnValues: [{ bcs: u64(0n) }] },
+        ],
+      }),
+    })
+    const fees = await getPoolTradingFees(sui as any, IDS, {
+      poolId: '0x' + '10'.repeat(32),
+      sender: OWNER,
+    })
+    expect(fees.bidEscrowFeeRate).toBe(1_000_000_000n)
+    expect(fees.nextSchedule[0].makerFeeRate).toBe(2_000_000_000n)
+    expect(fees.nextScheduleEpoch).toBe(6n)
+    expect(fees.account).toBeNull()
   })
 })

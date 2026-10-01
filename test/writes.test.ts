@@ -10,7 +10,11 @@ import { fromBase64 } from '@mysten/sui/utils'
 import type { Transaction } from '@mysten/sui/transactions'
 
 import { TriexClient } from '../src/TriexClient'
-import { MultiCoinBalanceBcs, toSsuObjectId } from '../src/onchain'
+import {
+  FeeScheduleBcs,
+  MultiCoinBalanceBcs,
+  toSsuObjectId,
+} from '../src/onchain'
 import { TriexError, explainMoveAbort } from '../src/errors'
 import {
   GTC_EXPIRE,
@@ -54,6 +58,7 @@ type CoreImpl = Partial<{
   getObject: (args: any) => any
   getDynamicField: (args: any) => any
   getDynamicObjectField: (args: any) => any
+  simulateTransaction: (args: any) => any
 }>
 
 function fakeSuiClient(impl: CoreImpl): any {
@@ -71,7 +76,75 @@ function fakeSuiClient(impl: CoreImpl): any {
         'getDynamicObjectField',
         impl.getDynamicObjectField,
       ),
+      simulateTransaction: wrap(
+        'simulateTransaction',
+        impl.simulateTransaction,
+      ),
     },
+  }
+}
+
+/** Genesis multicoin ladder (fee_policy.move): 2.20% taker / 1.80% maker at tier 0. */
+const GENESIS_LADDER: Array<[bigint, bigint, bigint]> = [
+  [0n, 22_000_000n, 18_000_000n],
+  [20_000_000_000n, 20_900_000n, 17_100_000n],
+]
+
+const scheduleBytes = (tiers: Array<[bigint, bigint, bigint]>) =>
+  FeeScheduleBcs.serialize({
+    tiers: tiers.map(([min_turnover, taker_fee, maker_fee]) => ({
+      min_turnover,
+      taker_fee,
+      maker_fee,
+    })),
+  }).toBytes()
+
+const u64 = (n: bigint) => bcs.u64().serialize(n).toBytes()
+
+/**
+ * A `simulateTransaction` result for `getPoolTradingFees`' view calls:
+ * pool_fee_class, pool_fee_schedule, pool_fee_schedule_next,
+ * cancel_retention_bps [, trade_params_for_account, account_fee_tier,
+ * account_fee_turnover].
+ */
+function feeSimulation(opts?: {
+  schedule?: Array<[bigint, bigint, bigint]>
+  next?: Array<[bigint, bigint, bigint]>
+  nextEpoch?: bigint
+  account?: { taker: bigint; maker: bigint; tier: bigint; turnover: bigint }
+}) {
+  const schedule = opts?.schedule ?? GENESIS_LADDER
+  const results = [
+    { returnValues: [{ bcs: bcs.u16().serialize(7).toBytes() }] },
+    { returnValues: [{ bcs: scheduleBytes(schedule) }] },
+    {
+      returnValues: [
+        { bcs: scheduleBytes(opts?.next ?? schedule) },
+        { bcs: u64(opts?.nextEpoch ?? 900n) },
+      ],
+    },
+    { returnValues: [{ bcs: u64(2_000n) }] },
+  ]
+  if (opts?.account) {
+    results.push(
+      {
+        returnValues: [
+          { bcs: u64(opts.account.taker) },
+          { bcs: u64(opts.account.maker) },
+        ],
+      },
+      { returnValues: [{ bcs: u64(opts.account.tier) }] },
+      {
+        returnValues: [
+          { bcs: bcs.u128().serialize(opts.account.turnover).toBytes() },
+        ],
+      },
+    )
+  }
+  return {
+    $kind: 'Transaction',
+    Transaction: { digest: 'sim', epoch: '901' },
+    commandResults: results,
   }
 }
 
@@ -316,11 +389,12 @@ const META_ROUTE: [string, unknown] = [
 
 describe('orders.limit (bid)', () => {
   it('composes deposit-deficit → proof → place with fee-inclusive amount and GTC default', async () => {
-    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE, META_ROUTE])
+    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE])
     const sui = fakeSuiClient({
       listOwnedObjects: () => bmPage(BM_ID),
       getObject: () => bmWithNoBag, // BM CRED balance → 0
       listCoins: () => coinPage([1_000_000n]),
+      simulateTransaction: () => feeSimulation(),
     })
     const { executor, captured } = captureExecutor()
     await client(sui, executor).orders.limit({
@@ -338,7 +412,9 @@ describe('orders.limit (bid)', () => {
       'multicoin_pool::place_limit_order',
     ])
     const u64s = pureU64s(captured.tx!)
-    expect(u64s).toContainEqual(306n) // 300 quote + 2% fee, floor-of-total
+    // 300 notional + floor(300 × 2.2%) — the entry taker rate, which exceeds
+    // the 1.8% maker escrow, so any match/rest split is covered.
+    expect(u64s).toContainEqual(306n)
     expect(u64s).toContainEqual(GTC_EXPIRE) // default expiry
     expect(u64s).toContainEqual(100n) // price
     // place_limit_order(pool, policy, account, proof, order_type, smo, price,
@@ -360,8 +436,54 @@ describe('orders.limit (bid)', () => {
     ])
   })
 
+  it('funds at the highest rate any account can be charged, across the staged ladder', async () => {
+    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE])
+    let simulated: any
+    const sui = fakeSuiClient({
+      listOwnedObjects: () => bmPage(BM_ID),
+      getObject: () => bmWithNoBag,
+      listCoins: () => coinPage([1_000_000n]),
+      simulateTransaction: (args: any) => {
+        simulated = args
+        // A ladder staged for next epoch whose maker rate (5%) tops every
+        // current rate: the bid must still be funded if it lands then.
+        return feeSimulation({ next: [[0n, 30_000_000n, 50_000_000n]] })
+      },
+    })
+    const { executor, captured } = captureExecutor()
+    await client(sui, executor).orders.limit({
+      storageUnitId: HEX,
+      assetId: '70810',
+      side: 'buy',
+      price: 1_000n,
+      quantity: 10n,
+    })
+    expect(pureU64s(captured.tx!)).toContainEqual(10_500n) // 10_000 + 5%
+    expect(simulated.include).toEqual({ commandResults: true })
+    expect(simulated.transaction.getData().sender).toBe(OWNER)
+  })
+
+  it('honours an explicit quoteDeposit without reading fees', async () => {
+    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE])
+    const sui = fakeSuiClient({
+      listOwnedObjects: () => bmPage(BM_ID),
+      getObject: () => bmWithNoBag,
+      listCoins: () => coinPage([1_000_000n]),
+    })
+    const { executor, captured } = captureExecutor()
+    await client(sui, executor).orders.limit({
+      storageUnitId: HEX,
+      assetId: '70810',
+      side: 'buy',
+      price: 100n,
+      quantity: 3n,
+      quoteDeposit: 400n,
+    })
+    expect(pureU64s(captured.tx!)).toContainEqual(400n)
+  })
+
   it('skips the deposit entirely when the BM already holds enough quote', async () => {
-    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE, META_ROUTE])
+    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE])
     const credBag = '0x' + 'ba'.repeat(32)
     const sui = fakeSuiClient({
       listOwnedObjects: () => bmPage(BM_ID),
@@ -369,6 +491,7 @@ describe('orders.limit (bid)', () => {
       getDynamicField: () => ({
         dynamicField: { value: { bcs: bcs.u64().serialize(1_000n).toBytes() } },
       }),
+      simulateTransaction: () => feeSimulation(),
     })
     const { executor, captured } = captureExecutor()
     await client(sui, executor).orders.limit({
@@ -508,8 +631,8 @@ describe('orders.market', () => {
     ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
   })
 
-  it('deposits budget + rounding buffer and places the market order', async () => {
-    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE, META_ROUTE])
+  it('deposits exactly the budget (the fee floors once, on the aggregate) and places the market order', async () => {
+    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE])
     const sui = fakeSuiClient({
       listOwnedObjects: () => bmPage(BM_ID),
       getObject: () => bmWithNoBag,
@@ -529,8 +652,8 @@ describe('orders.market', () => {
       'trading_account::generate_proof_as_owner',
       'multicoin_pool::place_market_order',
     ])
-    // buffer = 100 × 2% + 2 = 4 → deposit 1004
-    expect(pureU64s(captured.tx!)).toContainEqual(1_004n)
+    // The split covers the budget with no buffer; then the quantity.
+    expect(pureU64s(captured.tx!)).toEqual([1_000n, 100n])
     // place_market_order(pool, policy, account, proof, smo, quantity, is_bid, clock)
     expect(
       moveCallArgs(captured.tx!, 'multicoin_pool::place_market_order'),
@@ -774,6 +897,374 @@ describe('account.withdrawItems', () => {
   })
 })
 
+describe('account.withdrawItems (partial)', () => {
+  const sui = () =>
+    fakeSuiClient({
+      listOwnedObjects: (args: any) =>
+        String(args?.type ?? '').includes('PlayerProfile')
+          ? { objects: [{ json: { character_id: CHAR_ID } }] }
+          : bmPage(BM_ID),
+      getObject: (args: any) =>
+        args.objectId === CHAR_ID
+          ? {
+              object: {
+                json: { owner_cap_id: CHAR_CAP, character_address: OWNER },
+              },
+            }
+          : { object: { json: {} } },
+    })
+
+  it('withdraws `amount` via withdraw_multicoin, the rest in full', async () => {
+    routeFetch([VAULT_ROUTE])
+    const { executor, captured } = captureExecutor()
+    await client(sui(), executor).account.withdrawItems({
+      storageUnitId: HEX,
+      items: [{ assetId: '70810', amount: 4n }, { assetId: '92422' }],
+    })
+    expect(commandNames(captured.tx!)).toEqual([
+      'trading_account::withdraw_multicoin',
+      'receipt::redeem_receipt',
+      'trading_account::withdraw_all_multicoin',
+      'receipt::redeem_receipt',
+    ])
+    // withdraw_multicoin(bm, collection_id: ID, asset_id, amount)
+    expect(
+      moveCallArgs(captured.tx!, 'trading_account::withdraw_multicoin'),
+    ).toEqual([BM_ID, 'pure:32', 'pure:8', 'pure:8'])
+    expect(pureU64s(captured.tx!)).toEqual([70810n, 4n, 92422n])
+  })
+
+  it('rejects a non-positive amount before building', async () => {
+    const { executor } = captureExecutor()
+    await expect(
+      client(sui(), executor).account.withdrawItems({
+        storageUnitId: HEX,
+        items: [{ assetId: '70810', amount: 0n }],
+      }),
+    ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
+    expect(executor).not.toHaveBeenCalled()
+  })
+})
+
+// ─── account capabilities & registry ─────────────────────────────────────────
+
+describe('account caps', () => {
+  const CAP = '0x' + 'ca'.repeat(32)
+  const BOT = '0x' + 'b0'.repeat(32)
+
+  it('mintCap mints the requested kind, transfers it, and reports its id', async () => {
+    const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
+    const captured: { tx?: Transaction } = {}
+    const executor = jest.fn(async (tx: Transaction) => {
+      captured.tx = tx
+      return {
+        digest: '0xd',
+        objectChanges: [
+          {
+            type: 'created',
+            objectId: CAP,
+            objectType: `${IDS.triex}::trading_account::DepositCap`,
+          },
+        ],
+      }
+    })
+    const res = await client(sui, executor).account.mintCap({
+      kind: 'deposit',
+      recipient: BOT,
+    })
+    expect(commandNames(captured.tx!)).toEqual([
+      'trading_account::mint_deposit_cap',
+      'TransferObjects',
+    ])
+    expect(
+      moveCallArgs(captured.tx!, 'trading_account::mint_deposit_cap'),
+    ).toEqual([BM_ID])
+    expect(res.capId).toBe(CAP)
+  })
+
+  it('mintCap rejects an unknown kind', async () => {
+    const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
+    const { executor } = captureExecutor()
+    await expect(
+      client(sui, executor).account.mintCap({ kind: 'admin' as any }),
+    ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
+  })
+
+  it('revokeCap passes the cap id as a pure ID', async () => {
+    const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
+    const { executor, captured } = captureExecutor()
+    await client(sui, executor).account.revokeCap({ capId: CAP })
+    expect(commandNames(captured.tx!)).toEqual([
+      'trading_account::revoke_trade_cap',
+    ])
+    expect(
+      moveCallArgs(captured.tx!, 'trading_account::revoke_trade_cap'),
+    ).toEqual([BM_ID, 'pure:32'])
+  })
+
+  it('caps reads the allow-list and the caps the address holds', async () => {
+    const capContent = (ta: string) =>
+      bcs
+        .struct('Cap', { id: bcs.Address, trading_account_id: bcs.Address })
+        .serialize({ id: CAP, trading_account_id: ta })
+        .toBytes()
+    const sui = fakeSuiClient({
+      listOwnedObjects: (args: any) => {
+        const type = String(args?.type ?? '')
+        if (type.endsWith('::trading_account::TradeCap')) {
+          return {
+            objects: [{ objectId: CAP, content: capContent(BM_ID) }],
+            hasNextPage: false,
+          }
+        }
+        if (type.endsWith('Cap')) return { objects: [], hasNextPage: false }
+        return bmPage(BM_ID)
+      },
+      getObject: () => ({
+        object: { json: { allow_listed: { contents: [CAP] } } },
+      }),
+    })
+    expect(await client(sui, jest.fn()).account.caps()).toEqual({
+      tradingAccountId: BM_ID,
+      allowListed: [CAP],
+      held: [{ objectId: CAP, kind: 'trade', tradingAccountId: BM_ID }],
+    })
+  })
+
+  it('register files the account in the registry', async () => {
+    const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
+    const { executor, captured } = captureExecutor()
+    await client(sui, executor).account.register()
+    expect(
+      moveCallArgs(captured.tx!, 'trading_account::register_trading_account'),
+    ).toEqual([BM_ID, IDS.triexRegistry])
+  })
+})
+
+// ─── orders.fees / orders.cancelMany ─────────────────────────────────────────
+
+describe('orders.fees', () => {
+  it("resolves the pool, then reads the ladder and the account's own tier", async () => {
+    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE])
+    let simulated: any
+    const sui = fakeSuiClient({
+      listOwnedObjects: () => bmPage(BM_ID),
+      simulateTransaction: (args: any) => {
+        simulated = args
+        return feeSimulation({
+          account: {
+            taker: 20_900_000n,
+            maker: 17_100_000n,
+            tier: 1n,
+            turnover: 25_000_000_000n,
+          },
+        })
+      },
+    })
+    const fees = await client(sui, jest.fn()).orders.fees({
+      storageUnitId: HEX,
+      assetId: '70810',
+    })
+    expect(commandNames(simulated.transaction)).toEqual([
+      'multicoin_pool::pool_fee_class',
+      'multicoin_pool::pool_fee_schedule',
+      'multicoin_pool::pool_fee_schedule_next',
+      'fee_policy::cancel_retention_bps',
+      'multicoin_pool::trade_params_for_account',
+      'multicoin_pool::account_fee_tier',
+      'multicoin_pool::account_fee_turnover',
+    ])
+    expect(
+      moveCallArgs(
+        simulated.transaction,
+        'multicoin_pool::trade_params_for_account',
+      ),
+    ).toEqual([POOL, IDS.triexFeePolicy, BM_ID])
+    expect(fees).toMatchObject({
+      poolId: POOL,
+      feeClass: 7,
+      epoch: 901n,
+      entryTakerFeeRate: 22_000_000n,
+      entryMakerFeeRate: 18_000_000n,
+      nextScheduleEpoch: 900n,
+      cancelRetentionBps: 2_000n,
+      bidEscrowFeeRate: 22_000_000n,
+      account: {
+        tradingAccountId: BM_ID,
+        tier: 1,
+        turnover: 25_000_000_000n,
+        takerFeeRate: 20_900_000n,
+        makerFeeRate: 17_100_000n,
+      },
+    })
+    expect(fees.schedule).toHaveLength(2)
+  })
+
+  it('reads only the pool ladder when no address is configured', async () => {
+    let simulated: any
+    const sui = fakeSuiClient({
+      simulateTransaction: (args: any) => {
+        simulated = args
+        return feeSimulation()
+      },
+    })
+    const ro = new TriexClient({
+      suiClient: sui,
+      apiKey: 'k',
+      indexerUrl: 'https://api.example.test',
+    })
+    const fees = await ro.orders.fees({ poolId: POOL })
+    expect(fees.account).toBeNull()
+    expect(commandNames(simulated.transaction)).toHaveLength(4)
+  })
+
+  it('surfaces a failed simulation as TransactionFailed', async () => {
+    const sui = fakeSuiClient({
+      listOwnedObjects: () => bmPage(null),
+      simulateTransaction: () => ({
+        $kind: 'FailedTransaction',
+        FailedTransaction: { status: { error: 'MoveAbort' } },
+      }),
+    })
+    await expect(
+      client(sui, jest.fn()).orders.fees({ poolId: POOL }),
+    ).rejects.toMatchObject({ code: TriexError.TransactionFailed })
+  })
+
+  it('reports UnexpectedResponse when the client returns no command results', async () => {
+    const sui = fakeSuiClient({
+      listOwnedObjects: () => bmPage(null),
+      simulateTransaction: () => ({
+        $kind: 'Transaction',
+        Transaction: { epoch: null },
+      }),
+    })
+    await expect(
+      client(sui, jest.fn()).orders.fees({ poolId: POOL }),
+    ).rejects.toMatchObject({ code: TriexError.UnexpectedResponse })
+  })
+})
+
+describe('orders.cancelMany', () => {
+  it('composes proof + cancel_orders with a vector<u128> of ids', async () => {
+    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE])
+    const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
+    const { executor, captured } = captureExecutor()
+    const big = (1n << 127n) | 9n
+    await client(sui, executor).orders.cancelMany({
+      storageUnitId: HEX,
+      assetId: '70810',
+      orderIds: ['42', big],
+    })
+    expect(commandNames(captured.tx!)).toEqual([
+      'trading_account::generate_proof_as_owner',
+      'multicoin_pool::cancel_orders',
+    ])
+    // cancel_orders(pool, policy, account, proof, order_ids, clock)
+    expect(moveCallArgs(captured.tx!, 'multicoin_pool::cancel_orders')).toEqual(
+      [POOL, IDS.triexFeePolicy, BM_ID, 'result', 'pure:33', CLOCK],
+    )
+    const vec = (captured.tx!.getData().inputs as any[]).find(
+      (i) => i?.Pure && fromBase64(i.Pure.bytes).length === 33,
+    )
+    expect(
+      bcs.vector(bcs.u128()).parse(fromBase64(vec.Pure.bytes)).map(BigInt),
+    ).toEqual([42n, big])
+  })
+
+  it('rejects an empty or invalid id list before building', async () => {
+    const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
+    routeFetch([VAULT_ROUTE, RESOLVE_ROUTE])
+    const { executor } = captureExecutor()
+    for (const orderIds of [[], ['nope']]) {
+      await expect(
+        client(sui, executor).orders.cancelMany({
+          storageUnitId: HEX,
+          assetId: '70810',
+          orderIds,
+        }),
+      ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
+    }
+    expect(executor).not.toHaveBeenCalled()
+  })
+})
+
+// ─── market.createPool / market.claimOperatorShare ───────────────────────────
+
+describe('market.createPool', () => {
+  it('pays the 500 CRED fee from the wallet and reports the new pool id', async () => {
+    routeFetch([VAULT_ROUTE])
+    const sui = fakeSuiClient({ listCoins: () => coinPage([600_000_000n]) })
+    const captured: { tx?: Transaction } = {}
+    const executor = jest.fn(async (tx: Transaction) => {
+      captured.tx = tx
+      return {
+        digest: '0xd',
+        objectChanges: [
+          {
+            type: 'created',
+            objectId: POOL,
+            objectType: `${IDS.triex}::multicoin_pool::MultiCoinPool<${IDS.credCoinType}>`,
+          },
+        ],
+      }
+    })
+    const res = await client(sui, executor).market.createPool({
+      storageUnitId: HEX,
+      assetId: '70810',
+    })
+    expect(commandNames(captured.tx!)).toEqual([
+      'SplitCoins',
+      'multicoin_pool::create_permissionless_pool',
+    ])
+    // create_permissionless_pool(registry, policy, collection, asset_id, fee)
+    expect(
+      moveCallArgs(captured.tx!, 'multicoin_pool::create_permissionless_pool'),
+    ).toEqual([IDS.triexRegistry, IDS.triexFeePolicy, HEX, 'pure:8', 'result'])
+    expect(pureU64s(captured.tx!)).toEqual([500_000_000n, 70810n])
+    expect(res.poolId).toBe(POOL)
+  })
+
+  it('fails typed when the wallet cannot cover the fee', async () => {
+    routeFetch([VAULT_ROUTE])
+    const sui = fakeSuiClient({ listCoins: () => coinPage([1n]) })
+    const { executor } = captureExecutor()
+    await expect(
+      client(sui, executor).market.createPool({
+        storageUnitId: HEX,
+        assetId: '70810',
+      }),
+    ).rejects.toMatchObject({ code: TriexError.InsufficientBalance })
+  })
+})
+
+describe('market.claimOperatorShare', () => {
+  it('batches one claim per pool', async () => {
+    const other = '0x' + '20'.repeat(32)
+    const { executor, captured } = captureExecutor()
+    await client(fakeSuiClient({}), executor).market.claimOperatorShare({
+      poolIds: [POOL, other],
+    })
+    expect(commandNames(captured.tx!)).toEqual([
+      'multicoin_pool::claim_operator_share',
+      'multicoin_pool::claim_operator_share',
+    ])
+    // claim_operator_share(pool, policy, registry, clock)
+    expect(
+      moveCallArgs(captured.tx!, 'multicoin_pool::claim_operator_share'),
+    ).toEqual([POOL, IDS.triexFeePolicy, IDS.triexRegistry, CLOCK])
+  })
+
+  it('rejects an empty pool list', async () => {
+    const { executor } = captureExecutor()
+    await expect(
+      client(fakeSuiClient({}), executor).market.claimOperatorShare({
+        poolIds: [],
+      }),
+    ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
+  })
+})
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 describe('toSsuObjectId', () => {
@@ -955,6 +1446,18 @@ describe('balances.currency', () => {
 
     expect(balances.wallet).toBe(3n)
     expect(seen).toEqual([other, other])
+  })
+
+  it("never answers another address with the configured player's cached account", async () => {
+    const other = '0x' + 'ee'.repeat(32)
+    const sui = fakeSuiClient({
+      listCoins: () => ({ objects: [] }),
+      listOwnedObjects: (args: any) =>
+        bmPage(args.owner === OWNER ? BM_ID : null),
+    })
+    const c = client(sui, jest.fn())
+    expect((await c.account.get())?.tradingAccountId).toBe(BM_ID)
+    expect((await c.balances.currency(other)).tradingAccountId).toBeNull()
   })
 
   it('requires an address when neither config nor call supplies one', async () => {
