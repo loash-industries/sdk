@@ -106,6 +106,44 @@ const CURATED: Partial<Record<MoveAbortName, string>> = {
   'multicoin_pool::EQuoteNotApproved': 'That quote currency is not approved',
   'pool::EQuoteNotApproved': 'That quote currency is not approved',
   'multicoin_vault::ENoBalanceToSettle': 'Nothing to settle or claim',
+
+  // ─── Armature (organizations) ─────────────────────────────────────────────
+  'governance::ENotBoardMember':
+    'The caller is not on this unit’s board — act from a unit you sit on (org.governance seats)',
+  'board_voting::ETypeNotEnabled':
+    'This proposal type is not enabled on the unit — enable it first (org.types)',
+  'proposal::ETypeNotEnabled':
+    'This proposal type is not enabled on the unit — enable it first (org.types)',
+  'proposal::EPermissionDenied':
+    'The proposal type lacks the permission bit this action needs — re-enable it with the required permissions',
+  'proposal::ECooldownActive':
+    'This proposal type is still in its cooldown since the last execution',
+  'proposal::EDelayNotElapsed':
+    'The proposal passed but its execution delay has not elapsed yet',
+  'proposal::ENotPassed': 'The proposal has not passed',
+  'proposal::ENotActive':
+    'The proposal is no longer open for voting (passed, executed or expired)',
+  'proposal::EAlreadyVoted': 'This address has already voted on the proposal',
+  'proposal::EExecutionPaused': 'Execution is paused on this unit',
+  'board_voting::EInsufficientVotingWeight':
+    'One vote does not reach quorum here — submit a proposal instead of executing immediately',
+  'board_voting::EProposeThresholdNotMet':
+    'The caller’s voting weight is below this type’s propose threshold',
+  'board_voting::EOUNotActive':
+    'The unit is not active (migrating or destroyed)',
+  'emergency::EFrozen':
+    'This proposal type is frozen by the unit’s emergency freeze',
+  'treasury_vault::EInsufficientBalance':
+    'The organization treasury holds too little of that coin — fund it (org.treasury.deposit)',
+  'ou_receipt_vault::ENotAuthorized':
+    'The caller has no role on this shared-storage vault for that operation',
+  'ou_receipt_vault::EInsufficientVaultBalance':
+    'The shared-storage vault holds too few of that item',
+  'ou_receipt_vault::ELastEditor': 'Cannot remove the vault’s last editor',
+  'trading_ops::EWrongCustody':
+    'The trading custody does not belong to this trading account',
+  'trading_ops::EWrongOu':
+    'Only the unit that set up the trading account can trade with it',
   'coin_vault::ENoBalanceToSettle': 'Nothing to settle or claim',
 }
 
@@ -222,7 +260,13 @@ export function explainMoveAbortDetailed(
   const bits = unpackAbortCode(parsed.rawCode)
   const moduleTable = MOVE_ABORT_CATALOG[parsed.module] as
     Record<number, MoveAbortEntry> | undefined
-  const entry = bits.code === null ? undefined : moduleTable?.[bits.code]
+  // A clever abort whose explicit-code bits are 0 is either a bare `#[error]`
+  // or `#[error(code = 0)]`. The generator only admits code 0 for modules with
+  // no bare clever errors, so a clever entry at 0 is the unambiguous match.
+  const fallback =
+    bits.clever && bits.code === null && moduleTable?.[0]?.clever ? 0 : null
+  const code = bits.code ?? fallback
+  const entry = code === null ? undefined : moduleTable?.[code]
 
   let resolution: MoveAbortExplanation['resolution']
   if (entry) resolution = 'resolved'
@@ -237,7 +281,7 @@ export function explainMoveAbortDetailed(
     module: parsed.module,
     address: parsed.address,
     function: parsed.function,
-    code: bits.code,
+    code,
     rawCode: parsed.rawCode,
     clever: bits.clever,
     sourceLine: bits.sourceLine,

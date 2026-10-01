@@ -140,8 +140,20 @@ export function parseFile(path, repoRoot) {
 }
 
 /** Collect every error constant under `roots`, with collision and gap diagnostics. */
+/**
+ * @param roots source directories — plain paths (relative to `repoRoot`), or
+ *   `{ dir, repoRoot, label }` when the sources span several repositories, in
+ *   which case each entry's `file` is prefixed with its repository's label.
+ */
 export function buildCatalog(roots, repoRoot) {
-  const entries = roots.flatMap(root => findMoveSources(root).flatMap(f => parseFile(f, repoRoot)))
+  const entries = roots.flatMap(root => {
+    const dir = typeof root === 'string' ? root : root.dir
+    const base = typeof root === 'string' ? repoRoot : root.repoRoot
+    const label = typeof root === 'string' ? null : root.label
+    return findMoveSources(dir).flatMap(f =>
+      parseFile(f, base).map(e => (label ? { ...e, file: `${label}/${e.file}` } : e)),
+    )
+  })
 
   const collisions = []
   const unkeyed = []

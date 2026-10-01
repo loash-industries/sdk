@@ -160,6 +160,14 @@ describe('catalog', () => {
       'coin_vault',
       'fee_policy',
       'state',
+      // Armature: framework, proposals, vault, trading
+      'governance',
+      'board_voting',
+      'proposal',
+      'treasury_vault',
+      'emergency',
+      'ou_receipt_vault',
+      'trading_ops',
     ]) {
       expect(Object.keys(MOVE_ABORT_CATALOG[m]).length).toBeGreaterThan(0)
     }
@@ -170,5 +178,41 @@ describe('catalog', () => {
     expect(MOVE_ABORT_CATALOG['trading_account']['3'].name).toBe(
       'ETradingAccountBalanceTooLow',
     )
+  })
+})
+
+describe('Armature aborts', () => {
+  const ARMATURE =
+    '0x0a9eee47251a9f8a264a18804b1d5e553514720c4f4f765a481d1f12b492624c'
+
+  // Verbatim from simulating org writes against testnet (cycle 7).
+  it('explains a board-membership abort from the framework', () => {
+    const d = explainMoveAbortDetailed(
+      `MoveAbort in 3rd command, abort code: 2, in '${ARMATURE}::governance::assert_board_member' (instruction 6)`,
+    )!
+    expect(d.resolution).toBe('resolved')
+    expect(d.constant).toBe('ENotBoardMember')
+    expect(d.explanation).toContain('not on this unit’s board')
+  })
+
+  it('explains an empty-treasury abort', () => {
+    expect(
+      explainMoveAbort(
+        `MoveAbort in 3rd command, abort code: 0, in '${ARMATURE}::treasury_vault::withdraw' (instruction 46)`,
+      ),
+    ).toContain('treasury holds too little')
+  })
+
+  it('resolves an explicit #[error(code = 0)] where the module has no bare errors', () => {
+    // ou_receipt_vault declares every error with an explicit code, so a clever
+    // abort with zero code bits can only be ENotAuthorized (code 0).
+    const clever = (1n << 63n) | (67n << 32n)
+    const d = explainMoveAbortDetailed(
+      `Move Runtime Abort. Location: 0xf447::ou_receipt_vault::withdraw_receipt (function index 3) at offset 4, Abort Code: ${clever}`,
+    )!
+    expect(d.clever).toBe(true)
+    expect(d.code).toBe(0)
+    expect(d.constant).toBe('ENotAuthorized')
+    expect(d.resolution).toBe('resolved')
   })
 })

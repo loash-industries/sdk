@@ -458,18 +458,26 @@ the live document — see `.github/workflows/gateway_drift.yml`.
 
 ### Regenerating the abort catalog
 
-`src/moveAbortCatalog.generated.ts` is generated from the Move sources in the
-[contracts repo](https://github.com/loash-industries/trinary-exchange). It is
-committed, so building and testing the SDK never needs that checkout — only
+`src/moveAbortCatalog.generated.ts` is generated from the Move sources of all four
+contract repositories: [trinary-exchange](https://github.com/loash-industries/trinary-exchange)
+(triex + CRED) and the three Armature repos (`armature`, `armature-vault`,
+`armature-trading`), so organization aborts are explained as well as trading ones.
+It is committed, so building and testing the SDK never needs those checkouts — only
 regenerating does, after an error constant is added, removed or renumbered:
 
 ```bash
-npm run generate:error-codes                              # assumes ../trinary-exchange
-npm run generate:error-codes -- --contracts <path>        # or $TRIEX_CONTRACTS
-npm run check:error-codes                                 # fail if the catalog is stale
+npm run generate:error-codes -- \
+  --contracts <trinary-exchange> \          # or $TRIEX_CONTRACTS            (default ../trinary-exchange)
+  --armature <armature> \                    # or $ARMATURE_CONTRACTS         (default ../armature)
+  --armature-vault <armature-vault> \        # or $ARMATURE_VAULT_CONTRACTS   (default ../armature-vault)
+  --armature-trading <armature-trading>      # or $ARMATURE_TRADING_CONTRACTS (default ../armature-trading)
+npm run check:error-codes -- <same flags>    # fail if the catalog is stale
 ```
 
-`check:error-codes` needs the contracts checkout, so it is a local/release step
+Every repository is required; a missing checkout fails rather than shrinking the
+catalog.
+
+`check:error-codes` needs the contract checkouts, so it is a local/release step
 rather than a CI one. Drift is caught in CI a different way: the curated messages in
 `src/moveAbort.ts` are keyed by `MoveAbortName`, a union generated from the
 contracts, so a renamed or deleted constant fails `npm run tscheck`.
