@@ -46,6 +46,7 @@ import {
   cancelCoinOrder,
   cancelCoinOrders,
   createPermissionlessCoinPool,
+  currencyObjectId,
   modifyCoinOrder,
   placeCoinLimitOrder,
   placeCoinMarketOrder,
@@ -790,6 +791,10 @@ export class CoinsApi extends CoinsReadApi {
     const quoteCoinType = normalizeType(
       params.quoteCoinType ?? this.c.ids.credCoinType,
     )
+    await assertCurrenciesRegistered(this.c.suiClient, [
+      baseCoinType,
+      quoteCoinType,
+    ])
     const tx = new Transaction()
     const fee = await prepareCoinInput(
       this.c.suiClient,
@@ -909,4 +914,33 @@ function parseOrderId(orderId: bigint | string): bigint {
     )
   }
   return id
+}
+
+/**
+ * @internal — pool creation reads decimals from each coin's
+ * `coin_registry::Currency<T>`. A coin still on legacy `CoinMetadata` has none
+ * until someone runs `0x2::coin_registry::migrate_legacy_metadata<T>`, and the
+ * fullnode then fails the build with an opaque object-not-found — so say which
+ * coin and what has to happen instead.
+ */
+async function assertCurrenciesRegistered(
+  suiClient: ClientWithCoreApi,
+  coinTypes: string[],
+): Promise<void> {
+  for (const coinType of coinTypes) {
+    const objectId = currencyObjectId(coinType)
+    const found = await suiClient.core
+      .getObject({ objectId })
+      .then((r: { object?: unknown }) => !!r?.object)
+      .catch(() => false)
+    if (!found) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        `${coinType} has no coin_registry::Currency object (${objectId}) — ` +
+          'it is still on legacy CoinMetadata. A coin pool cannot be created ' +
+          'for it until 0x2::coin_registry::migrate_legacy_metadata runs for ' +
+          'that coin type.',
+      )
+    }
+  }
 }

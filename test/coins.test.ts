@@ -1126,7 +1126,10 @@ describe('coins.deposit / withdraw / createPool', () => {
   })
 
   it('createPool pays exactly 500 CRED and passes both Currency objects', async () => {
-    const sui = fakeSuiClient({ listCoins: () => coinPage([10n ** 12n]) })
+    const sui = fakeSuiClient({
+      listCoins: () => coinPage([10n ** 12n]),
+      getObject: () => ({ object: { objectId: 'currency' } }),
+    })
     const { executor, captured } = captureExecutor({ createPool: true })
     const res = await client(sui, executor).coins.createPool({
       baseCoinType: BASE,
@@ -1145,6 +1148,25 @@ describe('coins.deposit / withdraw / createPool', () => {
       currencyObjectId(CRED),
       'result',
     ])
+  })
+
+  it('createPool refuses, naming the coin, when a Currency is not registered', async () => {
+    // CRED on testnet today: still on legacy CoinMetadata, no Currency<CRED>.
+    const sui = fakeSuiClient({
+      listCoins: () => coinPage([10n ** 12n]),
+      getObject: ({ objectId }: any) => {
+        if (objectId === currencyObjectId(CRED)) throw new Error('not found')
+        return { object: { objectId } }
+      },
+    })
+    const { executor } = captureExecutor({ createPool: true })
+    await expect(
+      client(sui, executor).coins.createPool({ baseCoinType: BASE }),
+    ).rejects.toMatchObject({
+      code: TriexError.ValidationFailed,
+      message: expect.stringContaining('migrate_legacy_metadata'),
+    })
+    expect(executor).not.toHaveBeenCalled()
   })
 })
 
