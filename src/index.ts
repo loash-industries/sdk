@@ -474,6 +474,7 @@ export type {
 export { OrgsWriteApi } from './armature/OrgsApi'
 export type {
   CreatedOrg,
+  CreatedOu,
   CreateOrgParams,
   OrgsWriteDeps,
 } from './armature/OrgsApi'

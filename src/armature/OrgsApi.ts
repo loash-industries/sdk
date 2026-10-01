@@ -209,12 +209,17 @@ export interface CreateOrgParams {
 }
 
 /** The result of `orgs.create`: the three unit ids, resolved from chain. */
-export interface CreatedOrg {
+export interface CreatedOrg extends TxResult {
   /** Root ("org") unit — the id every `client.org()` call takes. */
   orgId: string
   officersId: string
   membersId: string
-  tx: TxResult
+}
+
+/** The result of `orgs.createStandalone`. */
+export interface CreatedOu extends TxResult {
+  /** The new OU, when the executor surfaced created objects. */
+  ouId: string | undefined
 }
 
 /** What creating needs beyond the read surface. */
@@ -286,7 +291,7 @@ export class OrgsWriteApi extends OrgsApi {
       .filter((o) => /::ou::OU$/.test(o.objectType))
       .map((o) => o.objectId)
     const tiers = await this.identifyTiers(ouIds)
-    return { ...tiers, tx: result }
+    return { ...result, ...tiers }
   }
 
   /**
@@ -297,7 +302,7 @@ export class OrgsWriteApi extends OrgsApi {
     name: string
     metadataUri: string
     board?: string[]
-  }): Promise<{ ouId: string | undefined; tx: TxResult }> {
+  }): Promise<CreatedOu> {
     const tx = createOuTx({
       armature: this.w.ids.armature,
       board: params.board ?? [this.addressOf()],
@@ -306,13 +311,11 @@ export class OrgsWriteApi extends OrgsApi {
     })
     const res = await executeAndNormalize(this.w.requireExecutor(), tx)
     return {
+      digest: res.digest,
+      createdObjects: res.createdObjects,
+      raw: res.raw,
       ouId: res.createdObjects.find((o) => /::ou::OU$/.test(o.objectType))
         ?.objectId,
-      tx: {
-        digest: res.digest,
-        createdObjects: res.createdObjects,
-        raw: res.raw,
-      },
     }
   }
 
