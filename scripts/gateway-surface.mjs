@@ -84,7 +84,7 @@ const HTTP_METHODS = new Set([
  * either place.
  *
  * @returns {{path: string, normalized: string, method: string,
- *            operationId: string|undefined,
+ *            operationId: string|undefined, deprecated: boolean,
  *            query: {name: string, required: boolean}[],
  *            pathParams: string[]}[]}
  */
@@ -102,6 +102,10 @@ export function readGatewaySurface(spec = loadSpec()) {
         normalized: normalizePath(path),
         method: method.toUpperCase(),
         operationId: operation.operationId,
+        // OpenAPI's flag, or the gateway's own deprecation-date extension.
+        deprecated: Boolean(
+          operation.deprecated || operation['x-deprecation-date'],
+        ),
         query: parameters
           .filter((p) => p.in === 'query')
           .map((p) => ({ name: p.name, required: Boolean(p.required) }))
@@ -182,8 +186,16 @@ function queryKeys(node) {
  *            file: string, line: number}[]}
  */
 export function readSdkCalls(
-  files = [join(here, '..', 'src', 'queries.ts')],
-  methodNames = { get: 'GET' },
+  files = [
+    join(here, '..', 'src', 'queries.ts'),
+    // Armature reads live in their own module but hit the same gateway, so the
+    // drift gate has to see them too — a renamed org query param is exactly as
+    // quiet as a renamed market one.
+    join(here, '..', 'src', 'armature', 'queries.ts'),
+  ],
+  // `fetchJson` is the Armature module's HTTP helper; `get` there is a public
+  // method (fetch one org), not the request primitive.
+  methodNames = { get: 'GET', fetchJson: 'GET' },
 ) {
   const calls = []
 

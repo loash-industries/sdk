@@ -140,5 +140,11 @@ if (problems.length) {
 
 console.log(
   `\nSDK matches the gateway contract.` +
-    `\n${diff.unusedEndpoints.length} published operation(s) the SDK does not wrap — informational, not a failure.`,
+    `\n${diff.unusedEndpoints.length} published operation(s) the SDK does not wrap — informational, not a failure` +
+    (diff.unusedEndpoints.length ? ':' : '.'),
 )
+for (const op of diff.unusedEndpoints) {
+  console.log(
+    `  · ${op.method.padEnd(4)} ${op.path}${op.deprecated ? '  (deprecated)' : ''}`,
+  )
+}

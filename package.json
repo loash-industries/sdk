@@ -18,6 +18,8 @@
   ],
   "scripts": {
     "build": "vite build",
+    "generate:error-codes": "node scripts/generate-error-codes.mjs",
+    "check:error-codes": "node scripts/generate-error-codes.mjs --check",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:cov": "node --experimental-vm-modules node_modules/.bin/jest --ci --coverage",
     "check:gateway": "node scripts/check-gateway.mjs",

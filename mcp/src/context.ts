@@ -13,13 +13,21 @@ export interface RequestContext {
   /** The caller's TriEx API key, taken from the request headers. */
   readonly apiKey: string
   readonly config: ServerConfig
-  /** A read client bound to this caller's key. */
+  /**
+   * A read client bound to this caller's key. It carries the shared fullnode
+   * client too, because `coins.*` reads (books, fees, quotes, account state)
+   * are on-chain simulations rather than indexer routes.
+   */
   readClient(): ReadOnlyClient
   /**
    * A client capable of *building* writes for `sender`. Its executor is the
    * capture executor, so it can build but never submit.
+   *
+   * Omit `sender` for fullnode reads that live only on `TriexClient` and take
+   * their address per call (`orders.fees`, `account.caps`): the client then has
+   * no configured identity to fall back on.
    */
-  writeClient(sender: string): TriexClient
+  writeClient(sender?: string): TriexClient
   /**
    * A Keyspace lookup client bound to this caller's key.
    *
@@ -74,13 +82,14 @@ export function createContext(
       new ReadOnlyClient({
         apiKey,
         network: config.network,
+        suiClient: sui(),
         ...(config.indexerUrl ? { indexerUrl: config.indexerUrl } : {}),
       }),
-    writeClient: (sender: string) =>
+    writeClient: (sender?: string) =>
       new TriexClient({
         suiClient: sui(),
         apiKey,
-        address: sender,
+        ...(sender ? { address: sender } : {}),
         executor: captureExecutor,
         network: config.network,
         ...(config.indexerUrl ? { indexerUrl: config.indexerUrl } : {}),

@@ -115,9 +115,9 @@ const book = await ro.orderbook({ storageUnitId, assetId })
 console.log('mid', midPrice(book), 'spread', spread(book)?.bps, 'bps')
 console.log('bid levels', aggregateLevels(book.bids))
 
-// Stream a balance manager's full trade history (auto-pagination) …
+// Stream a trading account's full trade history (auto-pagination) …
 const history = []
-for await (const trade of iterateTrades(ro.indexer, balanceManagerId)) {
+for await (const trade of iterateTrades(ro.indexer, tradingAccountId)) {
   history.push(trade) // { price, baseQuantity, quoteQuantity, fee, side, tradedAt, … }
 }
 // … and summarize it.
@@ -130,12 +130,15 @@ console.log('lifetime VWAP', vwap(history))
 import { estimateMarketBuyCost } from '@trinaryex/sdk'
 
 // 1. Fund + place in ONE atomic transaction: the SDK deposits only the
-//    deficit (existing balance-manager funds are consumed first), creates
+//    deficit (existing trading-account funds are consumed first), creates
 //    the trading account if missing, and rolls everything back on failure.
 await client.orders.limit({ storageUnitId, assetId, side: 'sell', price, quantity })
 
-// Market buys need a worst-case budget from the current book:
-const est = estimateMarketBuyCost(book.asks, quantity, meta.feeRateScaled)
+// Market buys need a budget from the current book, at YOUR taker rate
+// (fee tiers lower it as your trailing fee turnover grows):
+const fees = await client.orders.fees({ storageUnitId, assetId })
+const taker = fees.account?.takerFeeRate ?? fees.entryTakerFeeRate
+const est = estimateMarketBuyCost(book.asks, quantity, taker)
 await client.orders.market({ storageUnitId, assetId, side: 'buy', quantity, quoteBudget: est.total })
 
 // 2. Watch state. The indexer trails the chain by seconds — untilIndexed()
@@ -157,6 +160,7 @@ await client.account.withdrawItems({ storageUnitId, items: [{ assetId }] })
 
 // Housekeeping.
 await client.orders.cancel({ storageUnitId, assetId, orderId })
+await client.orders.cancelMany({ storageUnitId, assetId, orderIds })
 await client.orders.cancelAll({ storageUnitId, assetId })
 ```
 
@@ -178,13 +182,25 @@ try {
     case TriexError.InsufficientBalance: // top up and retry
     case TriexError.PoolNotFound:        // no market for this item at this hub
     case TriexError.TransactionFailed:   // on-chain abort, e.message explains why
-      console.error(e.message)           // e.g. "…Max 100 open orders per balance manager…"
+      console.error(e.message)           // e.g. "…Max 100 open orders per trading account…"
   }
 }
 
 // Or translate raw Sui errors from anywhere:
 explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
+
+// …or get the parts separately instead of one prose string:
+explainMoveAbortDetailed(rawError)
+// { module: 'order_info', constant: 'EPOSTOrderCrossesOrderbook', code: 5,
+//   explanation: 'POST-ONLY order would cross the book — use a plain limit order',
+//   resolution: 'resolved', source: 'packages/triex/sources/book/order_info.move:18', … }
 ```
+
+A failed transaction's `effects.status.error` carries only the raw `u64` abort code —
+no constant name — so the SDK parses that string and resolves the code against
+`MOVE_ABORT_CATALOG`, generated from the contract sources. `resolution` tells you
+whether the abort was `resolved`, came from a dependency package
+(`external-module`), or is a code the catalog doesn't know yet (`unknown-code`).
 
 | Code | Raised when | Recovery |
 |---|---|---|
@@ -192,7 +208,9 @@ explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 | `RateLimited` | compute-unit budget exhausted (HTTP 429) | wait `e.retryAfterMs`, retry |
 | `IndexerError` | 5xx / unexpected HTTP failure (`e.status` set) | retry with backoff |
 | `UnexpectedResponse` | response didn't match the pinned schema | report — API drift |
-| `HubNotFound` / `PoolNotFound` / `BalanceManagerNotFound` | unknown id for the target resource | check inputs |
+| `HubNotFound` / `PoolNotFound` / `TradingAccountNotFound` / `OrderNotFound` / `FillNotFound` / `CharacterNotFound` / `TribeNotFound` / `ItemNotFound` / `SolarSystemNotFound` | unknown id for the target resource | check inputs (a system *name* may simply be unreported yet — try its id) |
+| `RouteNotFound` | a route endpoint name is unknown/unreported, or the pair is unreachable with these ship parameters | check names via `spatial.autocompleteSystems`, or raise `maxJumpRangeLy` |
+| `TransactionFailed` | the transaction aborted on-chain | `e.message` carries the decoded abort |
 | `InsufficientBalance` | wallet/hangar/BM can't fund the operation | deposit / top up |
 | `CollectionMismatch` | item receipts from a different deployment | wrong network/receipts |
 | `CharacterNotFound` | hangar flows need an on-chain character | pass `characterId` / create one |
@@ -203,15 +221,165 @@ explainMoveAbort(rawError) // "No liquidity available (EEmptyOrderbook)" | null
 
 | Group | Methods |
 |---|---|
-| `account` | `get` · `ensure` · `depositCurrency` · `depositItems` · `withdrawCurrency` · `withdrawItems` · `sweepable` · `claimSettled` · `owners` |
+| `account` | `get` · `ensure` · `register` · `depositCurrency` · `depositItems` · `withdrawCurrency` · `withdrawItems` · `sweepable` · `claimSettled` · `owners` · `mintCap` · `revokeCap` · `caps` |
 | `balances` | `atHub` (items: warehouse/marketplace/hangar) · `currency` (CRED wallet + BM, fullnode) |
-| `market` | `discover` · `hub` · `itemsAtHub` · `resolvePool` · `orderbook` · `poolMetadata` |
+| `market` | `discover` · `hub` · `itemsAtHub` · `searchItems` · `resolvePool` · `orderbook` · `poolMetadata` · `createPool` · `claimOperatorShare` |
+| `market` (feeds & prices) | `recentTrades` · `displayPrices` · `displayPrice` · `hubEconomics` · `topPoolsByFees` · `stats` |
 | `market` (locations) | `hubLocations` · `itemLocations` · `nearbyHubs` · `nearbyHubsBySystem` · `hubsEnriched` · `assemblyOwners` · `assembliesEnriched` · `solarSystemNames` |
-| `orders` | `limit` · `market` · `cancel` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
+| `orders` | `fees` · `limit` · `market` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` · `get` (any order, any state) · `fill` (by event digest) |
 | `spatial` | `system` · `systems` · `nearbySystems` · `systemsNearCoordinates` · `autocompleteSystems` · `stats` |
-| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades` · `untilIndexed` · `explainMoveAbort` · `toBase` / `fromBase` |
+| `routing` | `route` · `compare` · `stats` |
+| `characters` | `get` · `byAddress` · `byName` · `batch` · `tribe` |
+| `world` | `items` · `item` · `recipes` · `recipesFor` |
+| `coins` | `list` · `resolvePool` · `orderbook` · `tradeParams` · `quote` · `estimateMarket` · `openOrders` · `account` · `balances` · `deposit` · `withdraw` · `limit` · `market` · `swap` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `claimSettled` · `createPool` — see below |
+| `orgs` | `get` · `batch` · `directory` · `forPlayer` · `search` · `proposals` · `seats` · `tradingAccount` · `accessibleKeyspaces` · `vaultsAtHub` |
+| `org(id)` handle | `.governance` · `.members` · `.metadata` · `.types` · `.treasury` · `.orders` · `.vault` — see below |
+| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `estimateMarketSellProceeds` · `computeBidQuoteDeposit` · `computeAskProceeds` · `computeQuoteFee` · `iterateDiscovery/Fills/Trades/OpenOrders/RecentTrades/HubLocations/ItemLocations/OrgDirectory` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
+
+`ReadOnlyClient` exposes the same reads flat (`ro.recentTrades()`,
+`ro.order()`, `ro.character()`, `ro.route()`, `ro.worldItems()`, …) with
+identity always explicit. Every read's JSDoc gives its compute-unit cost —
+from 20 CU (a single lookup) to 150 CU (`discover`) and 300 CU
+(`routing.compare`, three route searches).
 
 Runnable examples live in [`examples/`](./examples).
+
+### Reading the market, the map and the players
+
+```ts
+// The public tape — human-readable prices, newest first.
+const { trades } = await client.market.recentTrades({ assetId: '77800' })
+
+// What became of an order you placed (open / filled / cancelled + fills).
+const order = await client.orders.get({ poolId, orderId })
+
+// Who is behind an address, and their tribe.
+const [who] = await client.characters.batch({ addresses: [wallet] })
+
+// Static reference data — fetch once, cache.
+const items = await client.world.items()            // assetId strings
+const bom = await client.world.recipesFor('77753')  // [] if not craftable
+
+// Routes take system NAMES — see the note below.
+const route = await client.routing.route({
+  origin: 'U4T-SL7', destination: 'U.L6B.HNX', maxJumpRangeLy: 500,
+})
+```
+
+> **Solar system names are player-reported (cycle 7).** The star map ships
+> with ids, coordinates and stargates, but a system's *name* is known only once
+> a player reports it. Until then `solarSystemName` is `null` on every read,
+> a lookup **by name** fails (`SolarSystemNotFound` / `RouteNotFound`) while the
+> same system resolves **by id**, and routing — which is name-only — cannot
+> reach it. Key on `solarSystemId`; use `spatial.autocompleteSystems()` to find
+> names that resolve, and `spatial.stats().knownSolarSystemNames` for coverage.
+
+> **Display prices carry no fee.** `market.displayPrice(s)` is the plain
+> market price; pool metadata's `feeRateScaled` is the fee class's *entry*
+> tier — use `orders.fees()` for maker rates and your own tier — and the rate a fill actually charged is on the fill
+> (`fee`, `makerFee`/`takerFee`, `feeRateBps`).
+
+## Coin markets (currency pairs)
+
+`client.coins` trades `triex::pool::Pool<Base, Quote>` order books — one Move
+coin against another, usually CRED. Name a pool by `poolId` or by
+`baseCoinType` (+ `quoteCoinType`, default CRED):
+
+```ts
+import { coinPriceToRaw } from '@trinaryex/sdk'
+
+const pool = { baseCoinType: '0x…::wbtc::WBTC' }        // vs CRED
+
+const book = await client.coins.orderbook({ ...pool, depth: 20 })
+const fees = await client.coins.tradeParams(pool)      // live FeePolicy rates
+
+// Limit buy 2 WBTC (8 dp) at 61,250 CRED (6 dp) each — price is 1e9-scaled.
+await client.coins.limit({
+  ...pool, side: 'buy',
+  price: coinPriceToRaw('61250', 8, 6),
+  quantity: 200_000_000n,
+})
+await client.coins.market({ ...pool, side: 'sell', quantity: 50_000_000n })
+await client.coins.swap({ ...pool, side: 'buy', amountIn: 1_000_000n }) // wallet → wallet
+await client.coins.claimSettled({ pools: [pool], withdrawCoinTypes: ['0x…::wbtc::WBTC'] })
+```
+
+- **Reads come from the fullnode.** The coin-pool indexer routes are not on the
+  gateway, so books, fees, open orders and account state are simulated view
+  calls (head-current, no API key cost). Only `coins.list()` (`GET /v1/coins`)
+  is an indexer read. `ReadOnlyClient` takes an optional `suiClient` for these.
+- **Prices are 1e9-scaled:** `quote = base × price / 1e9`; human price is
+  `raw / 10^(9 + quoteDecimals − baseDecimals)` (`coinPriceToRaw` /
+  `formatCoinPrice`). No lot/tick size; a resting order needs
+  `quantity ≥ coinMinOrderQuantity(price)`.
+- **Both sides pay fees, in quote.** Bids pay the taker fee on top and escrow a
+  maker fee for the resting part; asks pay out of their proceeds. Bid funding
+  is `computeCoinBidDeposit` at the highest entry-rung rate (taker or maker,
+  current or staged) — it never under-funds. A market buy holds the exact cost
+  against the live book (`estimateMarket`) unless you pass `quoteBudget`.
+- `coins.swap` needs no trading account and is charged the entry-rung rate;
+  `coins.quote` without `tradingAccountId` is its exact dry-run.
+
+Design notes and Move references: [DESIGN-COINS.md](./DESIGN-COINS.md).
+
+## Organizations & governance (Armature)
+
+An organization is a **tree of DAOs** — a root plus its units — and every write
+goes through a governance pipeline whose shape depends on who is calling. Acting
+as one means binding both the organization *and* a seat within it:
+
+```ts
+const org = await client.org(orgId)   // any unit id resolves the whole tree
+org.seats                             // boards you sit on, highest authority first
+org.as(officersDaoId)                 // act through a different seat you hold
+```
+
+### The same call is not the same transaction
+
+```ts
+const outcome = await org.members.add(['0x…'])
+switch (outcome.status) {
+  case 'executed': break                       // your vote cleared quorum — done
+  case 'proposed': outcome.proposalId; break   // the board still has to vote
+  case 'blocked':  outcome.reason; break       // no path available, and why
+}
+```
+
+`blocked` is a **returned value, not a throw** — "you are not on this board" is
+an ordinary answer. Real failures still throw `TriexClientError`. Use
+`org.governance.resolve(action)` to ask without signing, and
+`org.governance.paths(action)` for the full trace of why.
+
+Whether a lone vote suffices is a question about **per-type config**, not about
+rank: it clears quorum only when `boardSize × quorum ≤ 10000` and the execution
+delay is zero. `org.governance.read()` returns those configs.
+
+### The rest of the handle
+
+| Group | Methods |
+|---|---|
+| `governance` | `read` · `resolve` · `paths` · `run` · `runBatch` · `runComposite` · `canComposite` · `vote` · `execute` · `tryExpire` · `proposals` |
+| `members` | `add` · `remove` · `setBoard` |
+| `metadata` | `update` |
+| `types` | `enable` · `updateConfig` · `enableComposite` · `enableSendCoin` · `enableTrading` |
+| `treasury` | `balances` · `balance` · `itemBalance` · `deposit` · `send` · `sendToOrg` |
+| `orders` | `ensureAccount` · `limit` · `cancel` · `buyFromTreasury` · `sellFromDaoVault` · `sweepCoin` · `sweepItems` · `sweepAll` |
+| `vault` | `atHub` · `resolve` · `info` · `balance` · `init` · `deposit` · `withdraw` · `grant` · `revoke` · `deinit` |
+
+Four things worth knowing before you call them:
+
+- **Funding a treasury is permissionless.** `treasury.deposit()` needs no seat
+  and no vote, and returns a plain `TxResult`. Paying out returns `RunOutcome`
+  because it is governance. The return types are the authorization model.
+- **Trading never degrades into a proposal.** A limit order deferred by a week
+  is priced against a book that no longer exists, and a funded buy split into
+  two proposals loses its atomic deposit-then-place guarantee — so these
+  `blocked` instead.
+- **Shared storage is keyed by (storage unit, organization).** There is no "the
+  vault at this hub": anyone can register one at any SSU. `vault.resolve()`
+  answers for *your* organization.
+- **`types.enableTrading({ bindToBaseType })` is irreversible.** It binds the
+  coin-pool order types to one base coin permanently. Leave it unset.
 
 ## Units & money
 
@@ -219,10 +387,18 @@ Runnable examples live in [`examples/`](./examples).
   timestamps are epoch **milliseconds**. Items are identified by `assetId`
   (numeric item-type id as a string).
 - Item pools price in CRED base units per item (no price scaling). Pool
-  metadata carries `feeRateScaled` (× 1e9; `20_000_000` = 2%) and the
-  base/quote `decimals` for display conversion via `toBase`/`fromBase`.
-- Only buyers pay fees. A limit bid deposits
-  `quote × (1e9 + feeRateScaled) / 1e9` — computed for you.
+  metadata carries the base/quote `decimals` for display conversion via
+  `toBase`/`fromBase`, and `feeRateScaled` — the pool's entry-tier taker rate.
+- Fees are quote-denominated, `floor(quote × rate / 1e9)`, and **both sides
+  pay**: bids on top of what they owe (taker fee when they match, maker fee
+  escrowed while they rest), asks out of their proceeds. Rates come from the
+  pool's fee class (multicoin launch ladder: 2.2% taker / 1.8% maker, falling
+  with your trailing 30-epoch fee turnover). `orders.fees()` reads the ladder,
+  your tier, and the cancel retention (the share of a bid's escrowed maker fee
+  kept when you cancel, modify down, or it expires) from the chain.
+- A limit bid is funded for `notional + floor(notional × bidEscrowFeeRate /
+  1e9)` — the pool's highest rate, so it can never be under-funded; anything
+  unused stays in the trading account. Sells need no CRED.
 - Order expiry defaults to good-til-cancelled (`GTC_EXPIRE`).
 
 ## Consistency model
@@ -230,7 +406,7 @@ Runnable examples live in [`examples/`](./examples).
 The indexer is eventually-consistent (seconds behind head). On-chain writes
 are authoritative and atomic — a stale read can only make a transaction abort
 and roll back, never lose funds. The SDK reads everything that funds
-transactions (balance-manager resolution, currency balances, receipts, hangar
+transactions (trading-account resolution, currency balances, receipts, hangar
 slots) from the **fullnode**, head-current. Prefer ids returned from writes
 (`TxResult.createdObjects`) over immediate re-reads.
 
@@ -279,6 +455,32 @@ CI stays hermetic and deterministic, and drives the comparison with doctored
 inputs to prove the gate fails when it should. A vendored copy cannot see the
 gateway moving underneath us, so a scheduled job runs the same check against
 the live document — see `.github/workflows/gateway_drift.yml`.
+
+### Regenerating the abort catalog
+
+`src/moveAbortCatalog.generated.ts` is generated from the Move sources of all four
+contract repositories: [trinary-exchange](https://github.com/loash-industries/trinary-exchange)
+(triex + CRED) and the three Armature repos (`armature`, `armature-vault`,
+`armature-trading`), so organization aborts are explained as well as trading ones.
+It is committed, so building and testing the SDK never needs those checkouts — only
+regenerating does, after an error constant is added, removed or renumbered:
+
+```bash
+npm run generate:error-codes -- \
+  --contracts <trinary-exchange> \          # or $TRIEX_CONTRACTS            (default ../trinary-exchange)
+  --armature <armature> \                    # or $ARMATURE_CONTRACTS         (default ../armature)
+  --armature-vault <armature-vault> \        # or $ARMATURE_VAULT_CONTRACTS   (default ../armature-vault)
+  --armature-trading <armature-trading>      # or $ARMATURE_TRADING_CONTRACTS (default ../armature-trading)
+npm run check:error-codes -- <same flags>    # fail if the catalog is stale
+```
+
+Every repository is required; a missing checkout fails rather than shrinking the
+catalog.
+
+`check:error-codes` needs the contract checkouts, so it is a local/release step
+rather than a CI one. Drift is caught in CI a different way: the curated messages in
+`src/moveAbort.ts` are keyed by `MoveAbortName`, a union generated from the
+contracts, so a renamed or deleted constant fails `npm run tscheck`.
 
 ## Links
 

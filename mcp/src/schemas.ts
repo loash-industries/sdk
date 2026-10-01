@@ -11,6 +11,21 @@ export const u64 = z
   .string()
   .regex(/^\d+$/, 'expected a non-negative integer as a decimal string')
 
+const MAX_U128 = (1n << 128n) - 1n
+
+/**
+ * A Move `u128` as a decimal string — order ids since cycle 7. Past 2^53, so
+ * never a JSON number.
+ */
+export const u128 = z
+  .string()
+  .regex(/^\d+$/, 'expected a non-negative integer as a decimal string')
+  // The regex check does not stop later checks, so guard BigInt() here.
+  .refine(
+    (v) => !/^\d+$/.test(v) || BigInt(v) <= MAX_U128,
+    'exceeds the u128 range',
+  )
+
 /**
  * A signed integer as a decimal string — star-map coordinates in metres.
  *
@@ -40,6 +55,38 @@ export const senderShape = {
 export const hubAssetShape = {
   storageUnitId: objectId.describe('Trade hub / storage unit object id.'),
   assetId: z.string().describe('EVE Frontier item asset id, e.g. "70810".'),
+}
+
+/**
+ * A fully-qualified Move coin type, `0x…::module::NAME` — the identity of a
+ * coin on the coin-pool surface, where an item's numeric asset id would be on
+ * the item surface. The SDK normalizes it, so short addresses (`0x2::sui::SUI`)
+ * are fine.
+ */
+export const coinType = z
+  .string()
+  .regex(
+    /^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$/,
+    'expected a fully-qualified coin type, 0x…::module::NAME',
+  )
+
+/**
+ * Which coin pool a call targets: `poolId`, or `baseCoinType` (+
+ * `quoteCoinType`, default CRED). Give all three to skip every lookup — the
+ * SDK then trusts the pairing as given.
+ */
+export const coinPoolSelectorShape = {
+  poolId: objectId
+    .optional()
+    .describe('Coin pool object id. Give this or baseCoinType.'),
+  baseCoinType: coinType
+    .optional()
+    .describe(
+      'Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.',
+    ),
+  quoteCoinType: coinType
+    .optional()
+    .describe('Quote coin type; defaults to CRED, the permissionless quote.'),
 }
 
 const limitShape = {

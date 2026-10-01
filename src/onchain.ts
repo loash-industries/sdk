@@ -1,5 +1,10 @@
 import { bcs } from '@mysten/sui/bcs'
 import type { ClientWithCoreApi } from '@mysten/sui/client'
+import { Transaction } from '@mysten/sui/transactions'
+
+import { TriexClientError, TriexError, explainMoveAbort } from './errors'
+import { FEE_RATE_SCALING } from './money'
+import type { TradingAccountCapKind } from './transactions'
 import type { PackageIds } from './types'
 
 /**
@@ -16,11 +21,13 @@ import type { PackageIds } from './types'
  * The unified (gRPC-era) Sui client takes dynamic-field names as BCS bytes and
  * returns values as BCS bytes, so the exact Move layouts are declared here
  * (see the CLOB Move contracts: https://github.com/loash-industries/trinary-exchange):
- *   sources/balance_manager.move
+ *   sources/trading_account.move
  *     `BalanceKey<phantom T> {}`                 (empty struct — one dummy bool)
  *     `MultiCoinBalanceKey { collection_id: ID, asset_id: u64 }`
- *   sources/registry.move
- *     `MultiCoinCollectionKey {}`                (empty struct)
+ *     `TradeCap | DepositCap | WithdrawCap { id: UID, trading_account_id: ID }`
+ *   sources/state/fee_schedule.move
+ *     `FeeSchedule { tiers: vector<FeeTier { min_turnover: u128,
+ *                    taker_fee: u64, maker_fee: u64 }> }`
  *   multicoin/sources/multicoin.move
  *     `Balance { id: UID, collection: ID, asset_id: u64, amount: u64 }`
  *   sui::balance::Balance<T> is a bare u64 in BCS.
@@ -37,7 +44,7 @@ export function serializeBalanceKey(): Uint8Array {
   return BalanceKeyBcs.serialize({ dummy_field: false }).toBytes()
 }
 
-/** `balance_manager::MultiCoinBalanceKey { collection_id, asset_id }`. */
+/** `trading_account::MultiCoinBalanceKey { collection_id, asset_id }`. */
 const MultiCoinBalanceKeyBcs = bcs.struct('MultiCoinBalanceKey', {
   collection_id: bcs.Address,
   asset_id: bcs.u64(),
@@ -145,17 +152,17 @@ export async function getWalletCurrencyBalance(
 }
 
 /**
- * CRED held inside a balance manager, read via the BM's `balances` Bag:
+ * CRED held inside a trading account, read via the BM's `balances` Bag:
  * `BalanceKey<CRED>` → `sui::balance::Balance<CRED>` (bare u64). Returns 0n
  * when the BM has no CRED entry (or the object cannot be read).
  */
-export async function getBalanceManagerCurrencyBalance(
+export async function getTradingAccountCurrencyBalance(
   suiClient: ClientWithCoreApi,
   ids: PackageIds,
-  balanceManagerId: string,
+  tradingAccountId: string,
 ): Promise<bigint> {
   const bmObj = await core(suiClient)
-    .getObject({ objectId: balanceManagerId, include: { json: true } })
+    .getObject({ objectId: tradingAccountId, include: { json: true } })
     .catch(() => null)
 
   const bmFields = bmObj?.object?.json
@@ -163,7 +170,7 @@ export async function getBalanceManagerCurrencyBalance(
   const balancesBagId = tryIdToString(balancesBag?.id)
   if (!balancesBagId) return 0n
 
-  const keyType = `${ids.triex}::balance_manager::BalanceKey<${ids.credCoinType}>`
+  const keyType = `${ids.triexOriginal}::trading_account::BalanceKey<${ids.credCoinType}>`
   const df = await core(suiClient)
     .getDynamicField({
       parentId: balancesBagId,
@@ -178,21 +185,21 @@ export async function getBalanceManagerCurrencyBalance(
 // ─── Item balances ───────────────────────────────────────────────────────────
 
 /**
- * Item balance held inside a balance manager for one (collection, asset).
+ * Item balance held inside a trading account for one (collection, asset).
  * `MultiCoinBalanceKey → multicoin::Balance` is a dynamic *object* field; the
  * child's content is BCS-decoded (mirrors the app / server).
  */
-export async function getBalanceManagerItemBalance(
+export async function getTradingAccountItemBalance(
   suiClient: ClientWithCoreApi,
   ids: PackageIds,
-  balanceManagerId: string,
+  tradingAccountId: string,
   collectionId: string,
   assetId: bigint,
 ): Promise<{ hasKey: boolean; balance: bigint }> {
-  const keyType = `${ids.triex}::balance_manager::MultiCoinBalanceKey`
+  const keyType = `${ids.triexOriginal}::trading_account::MultiCoinBalanceKey`
   const resp = await core(suiClient)
     .getDynamicObjectField({
-      parentId: balanceManagerId,
+      parentId: tradingAccountId,
       name: {
         type: keyType,
         bcs: serializeMultiCoinBalanceKey(collectionId, assetId),
@@ -204,29 +211,6 @@ export async function getBalanceManagerItemBalance(
   if (!resp) return { hasKey: false, balance: 0n }
   const bal = MultiCoinBalanceBcs.parse(resp.object.content)
   return { hasKey: true, balance: BigInt(bal.amount) }
-}
-
-/**
- * The registry's canonical MultiCoin collection id — the collection CLOB
- * markets trade against (singleton `MultiCoinCollectionKey` dynamic field).
- */
-export async function getRegistryMulticoinCollectionId(
-  suiClient: ClientWithCoreApi,
-  ids: PackageIds,
-): Promise<string> {
-  const keyType = `${ids.triex}::registry::MultiCoinCollectionKey`
-  const resp = await core(suiClient)
-    .getDynamicField({
-      parentId: ids.triexRegistry,
-      name: { type: keyType, bcs: serializeBalanceKey() },
-    })
-    .catch(() => null)
-  if (!resp) {
-    throw new Error(
-      'Registry MultiCoin collection id not found (registry not initialized?).',
-    )
-  }
-  return bcs.Address.parse(resp.dynamicField.value.bcs)
 }
 
 /** One wallet-held item receipt (`multicoin::Balance` object). */
@@ -414,4 +398,293 @@ export async function fetchInventorySlotQuantity(
     total += BigInt(String(entry?.value?.quantity ?? '0'))
   }
   return total
+}
+
+// ─── Trading-account capabilities ────────────────────────────────────────────
+
+/** `TradeCap | DepositCap | WithdrawCap { id, trading_account_id }`. */
+const TradingAccountCapBcs = bcs.struct('TradingAccountCap', {
+  id: bcs.Address,
+  trading_account_id: bcs.Address,
+})
+
+/** A trading-account capability object held by an address. */
+export interface OwnedTradingAccountCap {
+  objectId: string
+  kind: TradingAccountCapKind
+  /** The account the cap acts on (it may belong to someone else). */
+  tradingAccountId: string
+}
+
+const CAP_STRUCTS: Record<TradingAccountCapKind, string> = {
+  trade: 'TradeCap',
+  deposit: 'DepositCap',
+  withdraw: 'WithdrawCap',
+}
+
+/** The Move struct type of a trading-account capability kind. */
+export function tradingAccountCapType(
+  ids: PackageIds,
+  kind: TradingAccountCapKind,
+): string {
+  return `${ids.triexOriginal}::trading_account::${CAP_STRUCTS[kind]}`
+}
+
+/**
+ * Every TradeCap / DepositCap / WithdrawCap `owner` holds, for any account.
+ * A cap only works while its id is on the account's allow-list — compare
+ * with {@link getTradingAccountAllowList}.
+ */
+export async function findOwnedTradingAccountCaps(
+  suiClient: ClientWithCoreApi,
+  ids: PackageIds,
+  owner: string,
+): Promise<OwnedTradingAccountCap[]> {
+  const out: OwnedTradingAccountCap[] = []
+  for (const kind of Object.keys(CAP_STRUCTS) as TradingAccountCapKind[]) {
+    const type = tradingAccountCapType(ids, kind)
+    let cursor: string | null | undefined
+    for (let i = 0; i < 40; i++) {
+      const page = await core(suiClient).listOwnedObjects({
+        owner,
+        type,
+        limit: 50,
+        include: { content: true },
+        ...(cursor ? { cursor } : {}),
+      })
+      for (const obj of page?.objects ?? []) {
+        try {
+          const parsed = TradingAccountCapBcs.parse(obj.content)
+          out.push({
+            objectId: obj.objectId,
+            kind,
+            tradingAccountId: parsed.trading_account_id,
+          })
+        } catch {
+          // Not decodable as a cap — skip.
+        }
+      }
+      const hasNext = page?.hasNextPage ?? page?.pageInfo?.hasNextPage
+      cursor = page?.cursor ?? page?.pageInfo?.endCursor
+      if (!hasNext || !cursor || (page?.objects?.length ?? 0) === 0) break
+    }
+  }
+  return out
+}
+
+/**
+ * The ids on a trading account's `allow_listed` set — every live
+ * Trade/Deposit/WithdrawCap minted for it and not yet revoked. Empty when the
+ * account cannot be read.
+ */
+export async function getTradingAccountAllowList(
+  suiClient: ClientWithCoreApi,
+  tradingAccountId: string,
+): Promise<string[]> {
+  const res = await core(suiClient)
+    .getObject({ objectId: tradingAccountId, include: { json: true } })
+    .catch(() => null)
+  const set = unwrapMoveFields(res?.object?.json?.allow_listed)
+  const contents: unknown = Array.isArray(set) ? set : set?.contents
+  if (!Array.isArray(contents)) return []
+  return contents
+    .map((v) => tryIdToString(v))
+    .filter((v): v is string => v !== null)
+}
+
+// ─── Fees (FeePolicy class ladder + per-account tier) ────────────────────────
+
+/** `fee_schedule::FeeSchedule { tiers: vector<FeeTier> }`. */
+export const FeeScheduleBcs = bcs.struct('FeeSchedule', {
+  tiers: bcs.vector(
+    bcs.struct('FeeTier', {
+      min_turnover: bcs.u128(),
+      taker_fee: bcs.u64(),
+      maker_fee: bcs.u64(),
+    }),
+  ),
+})
+
+/** One rung of a fee ladder (`fee_schedule::FeeTier`); rates are × 1e9. */
+export interface FeeTier {
+  /** Inclusive lower bound on trailing fee turnover, in quote base units. */
+  minTurnover: bigint
+  takerFeeRate: bigint
+  makerFeeRate: bigint
+}
+
+/** The rates one trading account resolves to on a pool right now. */
+export interface AccountFeeRates {
+  tradingAccountId: string
+  /** Index into `schedule` of the tier the account occupies. */
+  tier: number
+  /**
+   * Fees the account paid over the trailing 30-epoch window in this quote
+   * (exchange-wide, plus this pool's pending maker credits) — what tiers
+   * resolve against.
+   */
+  turnover: bigint
+  takerFeeRate: bigint
+  makerFeeRate: bigint
+}
+
+/**
+ * Fee configuration for one item pool, read head-current from the chain
+ * (`multicoin_pool::pool_fee_class` / `pool_fee_schedule` /
+ * `pool_fee_schedule_next` / `trade_params_for_account` / `account_fee_tier`
+ * / `account_fee_turnover`, `fee_policy::cancel_retention_bps`). All rates
+ * are 1e9-scaled (22_000_000 = 2.2%).
+ */
+export interface TradingFees {
+  poolId: string
+  /** The pool's pricing class in the shared FeePolicy. */
+  feeClass: number
+  /** Epoch the rates were resolved in, when the fullnode reports it. */
+  epoch: bigint | null
+  /** The ladder pricing trades this epoch (tier 0 first, rates descending). */
+  schedule: FeeTier[]
+  /** The ladder staged to take over — equal to `schedule` when none is. */
+  nextSchedule: FeeTier[]
+  /** Epoch `nextSchedule` takes effect (≤ `epoch` when nothing is pending). */
+  nextScheduleEpoch: bigint
+  /** Tier-0 taker rate: what an account with no turnover pays (the indexer's `fee`). */
+  entryTakerFeeRate: bigint
+  /** Tier-0 maker rate. */
+  entryMakerFeeRate: bigint
+  /**
+   * Share (bps) of a bid's escrowed maker fee kept by the protocol when the
+   * order is cancelled, modified down or expires (the rest is refunded).
+   */
+  cancelRetentionBps: bigint
+  /** The account's own tier and rates; null when no account was given. */
+  account: AccountFeeRates | null
+  /**
+   * The rate a bid's deposit must cover so it is never under-funded:
+   * the highest taker or maker rate any account can be charged across the
+   * active and staged ladders (tier-0 rates bound every tier). Feed it to
+   * `computeBidQuoteDeposit`.
+   */
+  bidEscrowFeeRate: bigint
+}
+
+function parseFeeSchedule(bytes: Uint8Array): FeeTier[] {
+  return FeeScheduleBcs.parse(bytes).tiers.map((t) => ({
+    minTurnover: BigInt(t.min_turnover),
+    takerFeeRate: BigInt(t.taker_fee),
+    makerFeeRate: BigInt(t.maker_fee),
+  }))
+}
+
+function maxRate(...rates: bigint[]): bigint {
+  const max = rates.reduce((a, b) => (b > a ? b : a), 0n)
+  return max > FEE_RATE_SCALING ? FEE_RATE_SCALING : max
+}
+
+/**
+ * Read an item pool's fee ladder — and, given a trading account, the tier and
+ * rates that account trades at — in one simulated transaction of view calls
+ * (nothing executes). Needs a client whose `simulateTransaction` returns
+ * `commandResults` (the gRPC / GraphQL v2 clients). `sender` must own the
+ * trading account when one is passed (the account is an owned object).
+ */
+export async function getPoolTradingFees(
+  suiClient: ClientWithCoreApi,
+  ids: PackageIds,
+  params: {
+    poolId: string
+    sender: string
+    tradingAccountId?: string | null
+    /** The pool's quote coin type. Defaults to CRED. */
+    quoteType?: string
+  },
+): Promise<TradingFees> {
+  const tx = new Transaction()
+  tx.setSender(params.sender)
+  const q = [params.quoteType ?? ids.credCoinType]
+  const pool = tx.object(params.poolId)
+  const policy = tx.object(ids.triexFeePolicy)
+  const view = (fn: string, args: any[]) =>
+    tx.moveCall({
+      target: `${ids.triex}::multicoin_pool::${fn}`,
+      typeArguments: q,
+      arguments: args,
+    })
+  const [feeClass] = view('pool_fee_class', [pool]) // 0
+  view('pool_fee_schedule', [pool, policy]) // 1
+  view('pool_fee_schedule_next', [pool, policy]) // 2
+  tx.moveCall({
+    target: `${ids.triex}::fee_policy::cancel_retention_bps`,
+    arguments: [policy, feeClass],
+  }) // 3
+  const taId = params.tradingAccountId ?? null
+  if (taId) {
+    const ta = tx.object(taId)
+    view('trade_params_for_account', [pool, policy, ta]) // 4
+    view('account_fee_tier', [pool, policy, ta]) // 5
+    view('account_fee_turnover', [pool, ta]) // 6
+  }
+
+  const res = await core(suiClient).simulateTransaction({
+    transaction: tx,
+    include: { commandResults: true, effects: true },
+    checksEnabled: false,
+  })
+  if (res?.$kind === 'FailedTransaction' || res?.FailedTransaction) {
+    const error = res.FailedTransaction?.status?.error ?? 'unknown error'
+    const explained = explainMoveAbort(JSON.stringify(error))
+    throw new TriexClientError(
+      TriexError.TransactionFailed,
+      `Fee read for pool ${params.poolId} failed${explained ? `: ${explained}` : ''}.`,
+      error,
+    )
+  }
+  const results: any[] | undefined = res?.commandResults
+  const value = (cmd: number, i = 0): Uint8Array => {
+    const bytes = results?.[cmd]?.returnValues?.[i]?.bcs
+    if (!bytes) {
+      throw new TriexClientError(
+        TriexError.UnexpectedResponse,
+        'Fee read returned no command results — use a Sui client whose simulateTransaction supports `include: { commandResults: true }` (gRPC or GraphQL).',
+      )
+    }
+    return bytes
+  }
+
+  const schedule = parseFeeSchedule(value(1))
+  const nextSchedule = parseFeeSchedule(value(2, 0))
+  const entry = schedule[0] ?? {
+    minTurnover: 0n,
+    takerFeeRate: 0n,
+    makerFeeRate: 0n,
+  }
+  const nextEntry = nextSchedule[0] ?? entry
+  const account: AccountFeeRates | null = taId
+    ? {
+        tradingAccountId: taId,
+        takerFeeRate: BigInt(bcs.u64().parse(value(4, 0))),
+        makerFeeRate: BigInt(bcs.u64().parse(value(4, 1))),
+        tier: Number(bcs.u64().parse(value(5))),
+        turnover: BigInt(bcs.u128().parse(value(6))),
+      }
+    : null
+  const epoch = res?.Transaction?.epoch
+
+  return {
+    poolId: params.poolId,
+    feeClass: bcs.u16().parse(value(0)),
+    epoch: epoch === null || epoch === undefined ? null : BigInt(epoch),
+    schedule,
+    nextSchedule,
+    nextScheduleEpoch: BigInt(bcs.u64().parse(value(2, 1))),
+    entryTakerFeeRate: entry.takerFeeRate,
+    entryMakerFeeRate: entry.makerFeeRate,
+    cancelRetentionBps: BigInt(bcs.u64().parse(value(3))),
+    account,
+    bidEscrowFeeRate: maxRate(
+      entry.takerFeeRate,
+      entry.makerFeeRate,
+      nextEntry.takerFeeRate,
+      nextEntry.makerFeeRate,
+    ),
+  }
 }

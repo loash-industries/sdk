@@ -41,7 +41,7 @@ const client = new TriexClient({
 
 // ── 1. Know your position ────────────────────────────────────────────────────
 const cred = await client.balances.currency()
-console.log(`wallet ${fromBase(cred.wallet, 6)} CRED · trading account ${fromBase(cred.balanceManager, 6)} CRED`)
+console.log(`wallet ${fromBase(cred.wallet, 6)} CRED · trading account ${fromBase(cred.tradingAccount, 6)} CRED`)
 
 // ── 2. Place a limit bid — funding, account creation, and placement are ONE
 //       atomic transaction; only the deficit leaves the wallet. ──────────────

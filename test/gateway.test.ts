@@ -103,6 +103,49 @@ describe('lock-step with the gateway', () => {
 })
 
 /**
+ * Coverage the other way round: every operation the gateway publishes has an
+ * SDK method, unless it is deprecated or explicitly owned elsewhere. A new
+ * route therefore shows up here as a failing test rather than as a count in
+ * an informational log line nobody reads.
+ */
+describe('the SDK wraps the published surface', () => {
+  /**
+   * Published operations intentionally not wrapped here, and why. Entries
+   * may go stale once wrapped — the assertion is a subset, so that is fine.
+   */
+  const NOT_WRAPPED_HERE = new Set([
+    // Coin (currency-pair) markets — wrapped by the coin-pool module.
+    'GET /v1/coins',
+  ])
+
+  it('wraps every live, non-deprecated operation', () => {
+    const missing = diff.unusedEndpoints
+      .filter((op) => !op.deprecated)
+      .map((op) => `${op.method} ${op.path}`)
+      .filter((key) => !NOT_WRAPPED_HERE.has(key))
+    expect(missing).toEqual([])
+  })
+
+  it('reads deprecation from either the OpenAPI flag or the gateway extension', () => {
+    const ops = readGatewaySurface({
+      paths: {
+        '/v1/old': { get: { deprecated: true } },
+        '/v1/legacy': {
+          get: { 'x-deprecation-date': '2026-08-20T00:00:00Z' },
+        },
+        '/v1/current': { get: {} },
+      },
+    })
+    const byPath = Object.fromEntries(ops.map((o) => [o.path, o.deprecated]))
+    expect(byPath).toEqual({
+      '/v1/old': true,
+      '/v1/legacy': true,
+      '/v1/current': false,
+    })
+  })
+})
+
+/**
  * A gate that cannot fail is not a gate. These drive `diffGateway` with
  * doctored inputs to prove each failure mode is actually detected.
  */

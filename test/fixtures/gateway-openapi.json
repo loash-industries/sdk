@@ -4,7 +4,7 @@
     "title": "Trinary Exchange API",
     "version": "1.0.0",
     "description": "Public API for Trinary Exchange - the market data and enrichment layer for the EVE Frontier economy.\n\nThis API exposes four data domains:\n\n- **Trading data**: order books, trades, price history, and market activity across Trinary Exchange trade hubs.\n- **Keyspace enrichment**: decoded and contextualized on-chain state from the EVE Frontier world contracts.\n- **Organization data**: Armature organizations, including governance structure, treasuries, and organizational units.\n- **Frontier enrichment**: general reference data for EVE Frontier entities such as items, systems, and structures.\n\nAll requests are served through an authenticated gateway. Authenticate with the `x-api-key` header. Each operation's `x-cu-cost` is the Compute-Unit charge deducted per call.",
-    "x-generated-at": "2026-08-26T03:04:25.435Z"
+    "x-generated-at": "2026-10-01T01:01:50.431Z"
   },
   "servers": [
     {
@@ -115,370 +115,6 @@
           "Marketplace | Locations"
         ],
         "x-cu-cost": 50
-      }
-    },
-    "/v1/balance-managers/owners": {
-      "get": {
-        "description": "**Cost:** 50 compute units per request.\n\nResolves balance manager object IDs to their owner, tagged by owner type: `player:<wallet_address>` for a character-owned balance manager, or `ou:<org_id>` for an organization-owned one. `owner_name` is the matching character or organization's display name, or null if unresolved. `root_ou_id` is set when the owning organization is a sub-organization, pointing to its top-level organization. Results are cached for 5 minutes. Pass a comma-separated list of Sui object IDs (max 200).",
-        "operationId": "batchGetBalanceManagerOwners",
-        "parameters": [
-          {
-            "name": "ids",
-            "required": true,
-            "in": "query",
-            "description": "Comma-separated Sui object IDs (max 200)",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/BalanceManagerOwner"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Get owner info for balance manager IDs",
-        "tags": [
-          "Marketplace | Locations"
-        ],
-        "x-cu-cost": 50
-      }
-    },
-    "/v1/balance-managers/{balance_manager_id}/fills": {
-      "get": {
-        "description": "**Cost:** 30 compute units per request.\n\nReturns the individual fills (order executions) a balance manager participated in, newest first, from that account’s perspective. Use `before` (epoch milliseconds) to page backward — pass the previous response’s `next_cursor` as `before`. Use `after` to poll for fills executed since a given time. Filter with `pool_id` and `side` (role in the fill).",
-        "operationId": "listAccountFills",
-        "parameters": [
-          {
-            "name": "balance_manager_id",
-            "required": true,
-            "in": "path",
-            "description": "Balance manager object ID",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "before",
-            "required": false,
-            "in": "query",
-            "description": "Only return entries strictly older than this Unix-epoch-millisecond timestamp.",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "name": "after",
-            "required": false,
-            "in": "query",
-            "description": "Only return entries strictly newer than this Unix-epoch-millisecond timestamp.",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "Maximum number of results to return (1–100).",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50,
-              "type": "integer"
-            }
-          },
-          {
-            "name": "pool_id",
-            "required": false,
-            "in": "query",
-            "description": "Only return fills from this pool (order book).",
-            "schema": {
-              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-              "type": "string"
-            }
-          },
-          {
-            "name": "side",
-            "required": false,
-            "in": "query",
-            "description": "Filter by the account's role in the fill.",
-            "schema": {
-              "default": "all",
-              "type": "string",
-              "enum": [
-                "maker",
-                "taker",
-                "all"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FillPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid query parameters.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "List a balance manager's fills",
-        "tags": [
-          "Marketplace | Accounts"
-        ],
-        "x-cu-cost": 30
-      }
-    },
-    "/v1/balance-managers/{balance_manager_id}/open-orders": {
-      "get": {
-        "description": "**Cost:** 30 compute units per request.\n\nReturns the orders a balance manager currently has resting on item-market order books, newest activity first. Use `before` (epoch milliseconds) to page backward through older orders — pass the previous response’s `next_cursor` as `before`. Use `after` to fetch only orders updated since a given time.",
-        "operationId": "listAccountOpenOrders",
-        "parameters": [
-          {
-            "name": "balance_manager_id",
-            "required": true,
-            "in": "path",
-            "description": "Balance manager object ID.",
-            "schema": {
-              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-              "type": "string"
-            }
-          },
-          {
-            "name": "before",
-            "required": false,
-            "in": "query",
-            "description": "Only return entries strictly older than this Unix-epoch-millisecond timestamp.",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "name": "after",
-            "required": false,
-            "in": "query",
-            "description": "Only return entries strictly newer than this Unix-epoch-millisecond timestamp.",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "Maximum number of results to return (1–100).",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ItemOpenOrderPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid query parameters.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "List a balance manager's open orders",
-        "tags": [
-          "Marketplace | Accounts"
-        ],
-        "x-cu-cost": 30
-      }
-    },
-    "/v1/balance-managers/{balance_manager_id}/sweepable": {
-      "get": {
-        "description": "**Cost:** 30 compute units per request.\n\nReturns everything a \"sweep all to hangar\" operation would move for this balance manager: per-pool settled (claimable) and owed balances with open-order counts, plus idle item balances already held by the account. Each entry carries the trade-hub storage unit and vault configuration needed to build the withdrawal transaction. `as_of_checkpoint` indicates how current the snapshot is.",
-        "operationId": "listAccountSweepable",
-        "parameters": [
-          {
-            "name": "balance_manager_id",
-            "required": true,
-            "in": "path",
-            "description": "Balance manager object ID.",
-            "schema": {
-              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Sweepable"
-                }
-              }
-            }
-          }
-        },
-        "summary": "List a balance manager's sweepable balances and items",
-        "tags": [
-          "Marketplace | Accounts"
-        ],
-        "x-cu-cost": 30
-      }
-    },
-    "/v1/balance-managers/{balance_manager_id}/trades": {
-      "get": {
-        "description": "**Cost:** 30 compute units per request.\n\nReturns the trades (fills) a balance manager participated in, newest first, from that account’s perspective. Use `before` (epoch milliseconds) to page backward — pass the previous response’s `next_cursor` as `before`. Use `after` to poll for trades executed since a given time. Filter with `side` (role in the trade) and `asset_id` (item type).",
-        "operationId": "listAccountTrades",
-        "parameters": [
-          {
-            "name": "balance_manager_id",
-            "required": true,
-            "in": "path",
-            "description": "Balance manager object ID.",
-            "schema": {
-              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-              "type": "string"
-            }
-          },
-          {
-            "name": "before",
-            "required": false,
-            "in": "query",
-            "description": "Only return entries strictly older than this Unix-epoch-millisecond timestamp.",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "name": "after",
-            "required": false,
-            "in": "query",
-            "description": "Only return entries strictly newer than this Unix-epoch-millisecond timestamp.",
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "Maximum number of results to return (1–100).",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50,
-              "type": "integer"
-            }
-          },
-          {
-            "name": "side",
-            "required": false,
-            "in": "query",
-            "description": "Filter by the account's role in the trade.",
-            "schema": {
-              "default": "all",
-              "type": "string",
-              "enum": [
-                "maker",
-                "taker",
-                "all"
-              ]
-            }
-          },
-          {
-            "name": "asset_id",
-            "required": false,
-            "in": "query",
-            "description": "Only return trades for this item type (numeric asset ID).",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ItemAccountTradePage"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid query parameters.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "List a balance manager's trade history",
-        "tags": [
-          "Marketplace | Accounts"
-        ],
-        "x-cu-cost": 30
       }
     },
     "/v1/characters/address/{address}": {
@@ -805,7 +441,7 @@
     },
     "/v1/discovery": {
       "get": {
-        "description": "**Cost:** 150 compute units per request.\n\nLive open orders across trade hub markets, ordered by last activity (newest first). Orders on hubs that no longer exist are excluded. Each row carries the hub display name (`hub_name`) and power state (`hub_state`, online/offline), so callers need not resolve them separately. All filters compose freely: scope by trade hubs (`storage_unit_ids`), by item (`asset_id`), by owner (`balance_manager_id`), and by side. Private-shared hubs are resolved by the caller — pass the hub list you can see; omit it for all hubs, or set `public_only=true` to restrict to location-revealed (public) hubs. Pagination is a single self-contained `cursor` param: pass `next_cursor` to page backward or `prev_cursor` to poll for new activity. Cursors embed the original filters, so no other params are needed (and filters are ignored) on cursor requests.",
+        "description": "**Cost:** 150 compute units per request.\n\nLive open orders across trade hub markets, ordered by last activity (newest first). Orders on hubs that no longer exist are excluded. Each row carries the hub display name (`hub_name`) and power state (`hub_state`, online/offline), so callers need not resolve them separately. All filters compose freely: scope by trade hubs (`storage_unit_ids`), by item (`asset_id`), by owner (`trading_account_id`), and by side. Private-shared hubs are resolved by the caller — pass the hub list you can see; omit it for all hubs, or set `public_only=true` to restrict to location-revealed (public) hubs. Pagination is a single self-contained `cursor` param: pass `next_cursor` to page backward or `prev_cursor` to poll for new activity. Cursors embed the original filters, so no other params are needed (and filters are ignored) on cursor requests.",
         "operationId": "getDiscovery",
         "parameters": [
           {
@@ -827,10 +463,10 @@
             }
           },
           {
-            "name": "balance_manager_id",
+            "name": "trading_account_id",
             "required": false,
             "in": "query",
-            "description": "Only orders owned by this balance manager (\"my orders\").",
+            "description": "Only orders owned by this trading account (\"my orders\").",
             "schema": {
               "type": "string"
             }
@@ -908,7 +544,7 @@
     },
     "/v1/display-prices": {
       "get": {
-        "description": "**Cost:** 50 compute units per request.\n\nNet-to-seller display prices from the `display_price` view. Pass `item_ids` alone for vault-independent item-tier prices (one per item). Pass `item_ids` + `storage_unit_ids` to run the full traded → item → book → unknown waterfall per (item, vault); a pair with no pool falls back to the vault-independent item-tier price (`tier: \"item\"` with a null `pool_id`) unless `fallback=false`, and comes back `tier: \"unknown\"` when the item has no price anywhere. `storage_unit_ids` may hold either trade hub ids or vault item collection ids.",
+        "description": "**Cost:** 50 compute units per request.\n\nPlain market display prices (no trading fee applied) from the `display_price` view; a client that wants to show a fee applies the viewer's own rate for the pool. Pass `item_ids` alone for vault-independent item-tier prices (one per item). Pass `item_ids` + `storage_unit_ids` to run the full traded → item → book → unknown waterfall per (item, vault); a pair with no pool falls back to the vault-independent item-tier price (`tier: \"item\"` with a null `pool_id`) unless `fallback=false`, and comes back `tier: \"unknown\"` when the item has no price anywhere. `storage_unit_ids` may hold either trade hub ids or vault item collection ids.",
         "operationId": "listDisplayPrices",
         "parameters": [
           {
@@ -1032,7 +668,7 @@
     },
     "/v1/fills/{event_digest}": {
       "get": {
-        "description": "**Cost:** 30 compute units per request.\n\nReturns the raw record of a single fill event, with no account perspective applied: both maker and taker fees and balance managers are included. `asset_id` and `storage_unit_id` are `null` until the market’s metadata has been indexed. Responds 404 if the event digest is unknown.",
+        "description": "**Cost:** 30 compute units per request.\n\nReturns the raw record of a single fill event, with no account perspective applied: both maker and taker fees and trading accounts are included. `asset_id` and `storage_unit_id` are `null` until the market’s metadata has been indexed. Responds 404 if the event digest is unknown.",
         "operationId": "getFill",
         "parameters": [
           {
@@ -1256,7 +892,7 @@
     },
     "/v1/hubs/nearby-by-system": {
       "get": {
-        "description": "**Cost:** 50 compute units per request.\n\nSame as /hubs/{hub_id}/nearby but accepts a solar system ID or name directly. Useful when the requesting hub is private and has no published location.",
+        "description": "**Cost:** 50 compute units per request.\n\nSame as /hubs/{hub_id}/nearby but accepts a solar system ID or name directly. Useful when the requesting hub is private and has no published location. Returns `null` when `system_id` is a name that could not be resolved; `[]` means the system resolved but no hubs are in range.",
         "operationId": "listHubsNearSolarSystem",
         "parameters": [
           {
@@ -1294,6 +930,7 @@
               "application/json": {
                 "schema": {
                   "type": "array",
+                  "nullable": true,
                   "items": {
                     "$ref": "#/components/schemas/NearbyHubResponse"
                   }
@@ -1647,7 +1284,7 @@
     },
     "/v1/inventory/balances": {
       "get": {
-        "description": "**Cost:** 50 compute units per request.\n\nAuthoritative current contents per storage, straight from the chain indexer — the spendable truth that overlay containers merely arrange. The whole read is scoped by `storage_unit_id`; the item collection is derived from it server-side. One call can read several storages at once: pass `owner_address` for the wallet warehouse, `balance_manager_id` for marketplace (balance manager) holdings, `vault_ids` for organization (DAO) receipt vaults, and/or `inventory_key` for the trade hub hangar (keyed by game `type_id`, not collection-scoped). Sections whose selector was not passed come back empty. All amounts are raw integers as decimal strings.",
+        "description": "**Cost:** 50 compute units per request.\n\nAuthoritative current contents per storage, straight from the chain indexer — the spendable truth that overlay containers merely arrange. The whole read is scoped by `storage_unit_id`; the item collection is derived from it server-side. One call can read several storages at once: pass `owner_address` for the wallet warehouse, `trading_account_id` for marketplace (trading account) holdings, `vault_ids` for organization (DAO) receipt vaults, and/or `inventory_key` for the trade hub hangar (keyed by game `type_id`, not collection-scoped). Sections whose selector was not passed come back empty. All amounts are raw integers as decimal strings.",
         "operationId": "getInventoryBalances",
         "parameters": [
           {
@@ -1671,10 +1308,10 @@
             }
           },
           {
-            "name": "balance_manager_id",
+            "name": "trading_account_id",
             "required": false,
             "in": "query",
-            "description": "Balance manager — returns marketplace balances.",
+            "description": "Trading account — returns marketplace balances.",
             "schema": {
               "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
               "type": "string"
@@ -1980,7 +1617,7 @@
     },
     "/v1/orgs/{org_id}/proposals": {
       "get": {
-        "description": "**Cost:** 30 compute units per request.\n\nReturns every governance proposal of the organization, newest first: identity, lifecycle status, vote tallies, and — for composite proposals — the ordered step list. Per-proposal governance configuration and snapshot weights are not included; read those from the live on-chain object when hydrating a single proposal.",
+        "description": "**Cost:** 30 compute units per request.\n\nReturns every governance proposal of the organization, newest first: identity, creation time, lifecycle status, vote tallies, the off-chain metadata IPFS CID, the governance config the proposal was created under (still available after the on-chain proposal is deleted on execution or expiry), and — for composite proposals — the ordered step list. Snapshot weights are not included; read those from the live on-chain object while the proposal exists.",
         "operationId": "listOrgProposals",
         "parameters": [
           {
@@ -2028,7 +1665,7 @@
     },
     "/v1/players/{address}/accessible-keyspaces": {
       "get": {
-        "description": "**Cost:** 30 compute units per request.\n\nReturns every keyspace the address can reach: keyspaces registered by one of the player’s organizations (`created`), keyspaces granted directly to the player (`player_grant`), and keyspaces granted to one of the player’s organizations (`ou_grant`). The player’s organizations are resolved automatically, so only the address is required. Results are cached for 5 minutes.",
+        "description": "**Cost:** 30 compute units per request.\n\nReturns every keyspace the address can reach: keyspaces registered by one of the player’s organizations (`created`), keyspaces granted directly to the address as a player (`player_grant`) or machine key (`machine_grant`), and keyspaces granted to one of the player’s organizations (`ou_grant`). The player’s organizations are resolved automatically, so only the address is required. Results are read live on every call — never cached — so a freshly granted keyspace shows up as soon as the indexer has it.",
         "operationId": "listAccessibleKeyspaces",
         "parameters": [
           {
@@ -3314,6 +2951,370 @@
         "x-cu-cost": 50
       }
     },
+    "/v1/trading-accounts/owners": {
+      "get": {
+        "description": "**Cost:** 50 compute units per request.\n\nResolves trading account object IDs to their owner, tagged by owner type: `player:<wallet_address>` for a character-owned trading account, or `ou:<org_id>` for an organization-owned one. `owner_name` is the matching character or organization's display name, or null if unresolved. `root_ou_id` is set when the owning organization is a sub-organization, pointing to its top-level organization. Results are cached for 5 minutes. Pass a comma-separated list of Sui object IDs (max 200).",
+        "operationId": "batchGetTradingAccountOwners",
+        "parameters": [
+          {
+            "name": "ids",
+            "required": true,
+            "in": "query",
+            "description": "Comma-separated Sui object IDs (max 200)",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TradingAccountOwner"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get owner info for trading account IDs",
+        "tags": [
+          "Marketplace | Locations"
+        ],
+        "x-cu-cost": 50
+      }
+    },
+    "/v1/trading-accounts/{trading_account_id}/fills": {
+      "get": {
+        "description": "**Cost:** 30 compute units per request.\n\nReturns the individual fills (order executions) a trading account participated in, newest first, from that account’s perspective. Use `before` (epoch milliseconds) to page backward — pass the previous response’s `next_cursor` as `before`. Use `after` to poll for fills executed since a given time. Filter with `pool_id` and `side` (role in the fill).",
+        "operationId": "listAccountFills",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "required": true,
+            "in": "path",
+            "description": "Trading account object ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "required": false,
+            "in": "query",
+            "description": "Only return entries strictly older than this Unix-epoch-millisecond timestamp.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "after",
+            "required": false,
+            "in": "query",
+            "description": "Only return entries strictly newer than this Unix-epoch-millisecond timestamp.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of results to return (1–100).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pool_id",
+            "required": false,
+            "in": "query",
+            "description": "Only return fills from this pool (order book).",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "side",
+            "required": false,
+            "in": "query",
+            "description": "Filter by the account's role in the fill.",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "maker",
+                "taker",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FillPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a trading account's fills",
+        "tags": [
+          "Marketplace | Accounts"
+        ],
+        "x-cu-cost": 30
+      }
+    },
+    "/v1/trading-accounts/{trading_account_id}/open-orders": {
+      "get": {
+        "description": "**Cost:** 30 compute units per request.\n\nReturns the orders a trading account currently has resting on item-market order books, newest activity first. Use `before` (epoch milliseconds) to page backward through older orders — pass the previous response’s `next_cursor` as `before`. Use `after` to fetch only orders updated since a given time.",
+        "operationId": "listAccountOpenOrders",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "required": true,
+            "in": "path",
+            "description": "Trading account object ID.",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "required": false,
+            "in": "query",
+            "description": "Only return entries strictly older than this Unix-epoch-millisecond timestamp.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "after",
+            "required": false,
+            "in": "query",
+            "description": "Only return entries strictly newer than this Unix-epoch-millisecond timestamp.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of results to return (1–100).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemOpenOrderPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a trading account's open orders",
+        "tags": [
+          "Marketplace | Accounts"
+        ],
+        "x-cu-cost": 30
+      }
+    },
+    "/v1/trading-accounts/{trading_account_id}/sweepable": {
+      "get": {
+        "description": "**Cost:** 30 compute units per request.\n\nReturns everything a \"sweep all to hangar\" operation would move for this trading account: per-pool settled (claimable) and owed balances with open-order counts, plus idle item balances already held by the account. Each entry carries the trade-hub storage unit and vault configuration needed to build the withdrawal transaction. `as_of_checkpoint` indicates how current the snapshot is.",
+        "operationId": "listAccountSweepable",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "required": true,
+            "in": "path",
+            "description": "Trading account object ID.",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sweepable"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a trading account's sweepable balances and items",
+        "tags": [
+          "Marketplace | Accounts"
+        ],
+        "x-cu-cost": 30
+      }
+    },
+    "/v1/trading-accounts/{trading_account_id}/trades": {
+      "get": {
+        "description": "**Cost:** 30 compute units per request.\n\nReturns the trades (fills) a trading account participated in, newest first, from that account’s perspective. Use `before` (epoch milliseconds) to page backward — pass the previous response’s `next_cursor` as `before`. Use `after` to poll for trades executed since a given time. Filter with `side` (role in the trade) and `asset_id` (item type).",
+        "operationId": "listAccountTrades",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "required": true,
+            "in": "path",
+            "description": "Trading account object ID.",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "required": false,
+            "in": "query",
+            "description": "Only return entries strictly older than this Unix-epoch-millisecond timestamp.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "after",
+            "required": false,
+            "in": "query",
+            "description": "Only return entries strictly newer than this Unix-epoch-millisecond timestamp.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of results to return (1–100).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "side",
+            "required": false,
+            "in": "query",
+            "description": "Filter by the account's role in the trade.",
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "maker",
+                "taker",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "asset_id",
+            "required": false,
+            "in": "query",
+            "description": "Only return trades for this item type (numeric asset ID).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemAccountTradePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a trading account's trade history",
+        "tags": [
+          "Marketplace | Accounts"
+        ],
+        "x-cu-cost": 30
+      }
+    },
     "/v1/tribes/{tribe_id}": {
       "get": {
         "description": "**Deprecated** as of 2026-08-20 (`2026-08-20T00:00:00Z`).\n\n**Cost:** 20 compute units per request.\n\nReturns tribe metadata (name, short name, tax rate, …) for the given numeric tribe ID. Tribes are game-world factions distinct from on-chain organizations.",
@@ -3656,9 +3657,10 @@
             "enum": [
               "created",
               "player_grant",
+              "machine_grant",
               "ou_grant"
             ],
-            "description": "How the player reaches this keyspace: `created` (registered by one of the player’s organizations), `player_grant` (granted directly to the player), or `ou_grant` (granted to one of the player’s organizations). `created` takes precedence over grants."
+            "description": "How the player reaches this keyspace: `created` (registered by one of the player’s organizations), `player_grant` (granted directly to the player), `machine_grant` (granted directly to the address as a service or bot key), or `ou_grant` (granted to one of the player’s organizations). `created` takes precedence over grants."
           },
           "roles": {
             "type": "array",
@@ -3921,37 +3923,6 @@
           }
         }
       },
-      "BalanceManagerOwner": {
-        "type": "object",
-        "properties": {
-          "balance_manager_id": {
-            "type": "string",
-            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Balance manager Sui object ID."
-          },
-          "owner": {
-            "type": "string",
-            "nullable": true,
-            "description": "`player:<wallet_address>` for a character-owned balance manager, or `ou:<org_id>` for an organization-owned one; null if unresolved."
-          },
-          "owner_name": {
-            "type": "string",
-            "nullable": true,
-            "description": "Matching character or organization's display name, or null."
-          },
-          "root_ou_id": {
-            "type": "string",
-            "nullable": true,
-            "description": "Top-level organization ID when the owner is a sub-organization; else null."
-          }
-        },
-        "required": [
-          "balance_manager_id",
-          "owner",
-          "owner_name",
-          "root_ou_id"
-        ]
-      },
       "BatchSystemsResponse": {
         "type": "object",
         "description": "Result of a batch solar-system lookup.",
@@ -4179,13 +4150,13 @@
             "type": "string",
             "nullable": true,
             "example": "20000000",
-            "description": "Raw pool fee, scaled by 1e9 (e.g. `20000000` = 2%), or `null` if unknown."
+            "description": "Current pool taker fee — the entry tier of the pool's fee class, or its creation-time rate when no class schedule is indexed — scaled by 1e9 (e.g. `20000000` = 2%), or `null` if unknown."
           },
           "fee_rate": {
             "type": "number",
             "nullable": true,
             "example": 0.02,
-            "description": "Decimal form of the pool fee (`fee` / 1e9)."
+            "description": "Decimal form of the pool taker fee (`fee` / 1e9)."
           },
           "best_bid": {
             "type": "string",
@@ -4472,10 +4443,10 @@
             "type": "boolean",
             "description": "True for a buy order (bid), false for a sell order (ask)."
           },
-          "balance_manager_id": {
+          "trading_account_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Balance manager that placed the order."
+            "description": "Trading account that placed the order."
           },
           "remaining_quantity": {
             "type": "string",
@@ -4546,7 +4517,7 @@
           "trader_address": {
             "type": "string",
             "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
-            "description": "Wallet that owns the balance manager; null when unresolved.",
+            "description": "Wallet that owns the trading account; null when unresolved.",
             "nullable": true
           },
           "trader_name": {
@@ -4560,7 +4531,7 @@
           "order_id",
           "price",
           "is_bid",
-          "balance_manager_id",
+          "trading_account_id",
           "remaining_quantity",
           "filled_quantity",
           "expires_at",
@@ -4658,13 +4629,13 @@
             "type": "string",
             "nullable": true,
             "example": "12.5",
-            "description": "Human-readable net-to-seller price in quote units (scaled by `quote_decimals`). Null = unknown; do not prefill."
+            "description": "Human-readable market price in quote units, with no trading fee applied (scaled by `quote_decimals`). Null = unknown; do not prefill."
           },
           "price_raw": {
             "type": "string",
             "nullable": true,
             "example": "12500000000",
-            "description": "Raw net-to-seller price (integer quote units per item). Null = unknown."
+            "description": "Raw market price, with no trading fee applied (integer quote units per item). Null = unknown."
           },
           "best_bid": {
             "type": "string",
@@ -4751,10 +4722,10 @@
             "type": "string",
             "description": "The queried account's order ID involved in this fill (u128 decimal string)."
           },
-          "counterparty_balance_manager_id": {
+          "counterparty_trading_account_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Balance manager object ID of the counterparty."
+            "description": "Trading account object ID of the counterparty."
           },
           "price": {
             "type": "string",
@@ -4795,7 +4766,7 @@
           "event_digest",
           "pool_id",
           "order_id",
-          "counterparty_balance_manager_id",
+          "counterparty_trading_account_id",
           "price",
           "base_quantity",
           "quote_quantity",
@@ -4852,15 +4823,15 @@
             "type": "boolean",
             "description": "True when the taker side of this fill was buying (the incoming order was a bid)."
           },
-          "maker_balance_manager_id": {
+          "maker_trading_account_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Balance manager object ID of the maker."
+            "description": "Trading account object ID of the maker."
           },
-          "taker_balance_manager_id": {
+          "taker_trading_account_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Balance manager object ID of the taker."
+            "description": "Trading account object ID of the taker."
           },
           "filled_at": {
             "type": "integer",
@@ -4880,8 +4851,8 @@
           "maker_fee",
           "taker_fee",
           "taker_is_bid",
-          "maker_balance_manager_id",
-          "taker_balance_manager_id",
+          "maker_trading_account_id",
+          "taker_trading_account_id",
           "filled_at"
         ]
       },
@@ -4970,14 +4941,15 @@
             "type": "string",
             "enum": [
               "player",
+              "machine",
               "ou"
             ],
-            "description": "Kind of principal: `player` (individual wallet) or `ou` (organization)."
+            "description": "Kind of principal: `player` (individual wallet), `machine` (service or bot key) or `ou` (organization)."
           },
           "principal_value": {
             "type": "string",
             "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
-            "description": "Player address (kind `player`) or organization ID (kind `ou`)."
+            "description": "Player or machine address (kind `player` or `machine`), or organization ID (kind `ou`)."
           }
         },
         "required": [
@@ -5278,7 +5250,7 @@
             }
           },
           "marketplace": {
-            "description": "BalanceManager-held (marketplace) balances for balance_manager_id; empty when balance_manager_id was not passed.",
+            "description": "TradingAccount-held (marketplace) balances for trading_account_id; empty when trading_account_id was not passed.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AssetBalance"
@@ -5389,10 +5361,10 @@
             "type": "string",
             "description": "The queried account's order ID involved in this trade (u128 decimal string)."
           },
-          "counterparty_balance_manager_id": {
+          "counterparty_trading_account_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Balance manager object ID of the counterparty."
+            "description": "Trading account object ID of the counterparty."
           },
           "price": {
             "type": "string",
@@ -5447,7 +5419,7 @@
           "event_digest",
           "pool_id",
           "order_id",
-          "counterparty_balance_manager_id",
+          "counterparty_trading_account_id",
           "price",
           "base_quantity",
           "quote_quantity",
@@ -5631,7 +5603,7 @@
           "fee_rate_bps": {
             "type": "integer",
             "example": 5,
-            "description": "Effective fee rate applied to this trade, in basis points."
+            "description": "Effective taker fee rate of this trade, in basis points, derived from the fill (taker fee / quote quantity × 10000, rounded)."
           },
           "fee_amount": {
             "type": "string",
@@ -6164,7 +6136,7 @@
             "nullable": true,
             "description": "Human-readable item name, or `null` if unavailable."
           },
-          "balance_manager": {
+          "trading_account": {
             "description": "Account that placed the order.",
             "allOf": [
               {
@@ -6212,7 +6184,7 @@
           "updated_at",
           "asset_id",
           "asset_name",
-          "balance_manager",
+          "trading_account",
           "hub",
           "currency",
           "fills"
@@ -6249,10 +6221,10 @@
             ],
             "description": "This order's role in the fill: `maker` or `taker`."
           },
-          "counterparty_balance_manager_id": {
+          "counterparty_trading_account_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Balance manager object ID of the counterparty."
+            "description": "Trading account object ID of the counterparty."
           },
           "counterparty": {
             "nullable": true,
@@ -6277,7 +6249,7 @@
           "quote_quantity",
           "fee",
           "role",
-          "counterparty_balance_manager_id",
+          "counterparty_trading_account_id",
           "counterparty",
           "traded_at"
         ]
@@ -6371,12 +6343,12 @@
           "id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Balance manager object ID."
+            "description": "Trading account object ID."
           },
           "owner": {
             "type": "string",
             "nullable": true,
-            "description": "Wallet address that owns the balance manager, or `null` if not resolved."
+            "description": "Wallet address that owns the trading account, or `null` if not resolved."
           },
           "character": {
             "nullable": true,
@@ -6633,11 +6605,11 @@
             },
             "description": "Member addresses across the whole tree resolved to character names, keyed by address. Present on the top-level organization only; addresses that did not resolve to a character are omitted."
           },
-          "balance_manager_id": {
+          "trading_account_id": {
             "type": "string",
             "nullable": true,
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Object ID of the organization's trading balance manager. Null when the organization has no trading account set up."
+            "description": "Object ID of the organization's trading trading account. Null when the organization has no trading account set up."
           },
           "subdao_control_cap_id": {
             "type": "string",
@@ -6657,7 +6629,7 @@
           "metadata",
           "members",
           "ous",
-          "balance_manager_id",
+          "trading_account_id",
           "subdao_control_cap_id"
         ]
       },
@@ -6787,7 +6759,7 @@
           "fee": {
             "type": "string",
             "nullable": true,
-            "description": "Raw pool taker fee, scaled by 1e9 (20000000 = 2%)."
+            "description": "Current pool taker fee — the entry tier of the pool's fee class, or its creation-time rate when no class schedule is indexed — scaled by 1e9 (20000000 = 2%)."
           },
           "fee_rate": {
             "type": "number",
@@ -6847,6 +6819,66 @@
           "step_type"
         ]
       },
+      "ProposalConfigResponse": {
+        "type": "object",
+        "properties": {
+          "quorum": {
+            "type": "integer",
+            "description": "Share of the snapshot weight that must vote, in basis points (1–10000)."
+          },
+          "approval_threshold": {
+            "type": "integer",
+            "description": "Share of cast weight that must vote yes, in basis points (5000–10000)."
+          },
+          "propose_threshold": {
+            "type": "string",
+            "example": "0",
+            "description": "Minimum voting weight the proposer needs to create one (0 = none). u64 as a decimal string."
+          },
+          "expiry_ms": {
+            "type": "string",
+            "example": "604800000",
+            "description": "How long voting stays open, and how long a passed proposal stays executable once its execution delay has elapsed, in milliseconds. u64 as a decimal string; very large values mean \"never expires\" (can exceed 2^53)."
+          },
+          "execution_delay_ms": {
+            "type": "string",
+            "example": "3600000",
+            "description": "Delay between passing and becoming executable, in milliseconds. u64 as a decimal string."
+          },
+          "cooldown_ms": {
+            "type": "string",
+            "example": "0",
+            "description": "Minimum time between executions of this proposal type, in milliseconds (0 = none). u64 as a decimal string."
+          },
+          "composable_allowed": {
+            "type": "boolean",
+            "description": "Whether this type may be used as a composite step."
+          },
+          "permissions": {
+            "type": "string",
+            "example": "128",
+            "description": "Bits from `armature::permissions` naming the OU-wide mutations a proposal of this type may perform. u64 as a decimal string."
+          },
+          "borrow_scope": {
+            "description": "Capability types a proposal of this type may borrow from the capability vault.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "quorum",
+          "approval_threshold",
+          "propose_threshold",
+          "expiry_ms",
+          "execution_delay_ms",
+          "cooldown_ms",
+          "composable_allowed",
+          "permissions",
+          "borrow_scope"
+        ]
+      },
       "ProposalResponse": {
         "type": "object",
         "properties": {
@@ -6904,6 +6936,26 @@
             "type": "integer",
             "description": "Checkpoint sequence number at which the proposal was first observed (approximately its creation). Note: a checkpoint number, not a timestamp."
           },
+          "metadata_ipfs": {
+            "type": "string",
+            "nullable": true,
+            "description": "IPFS CID of the proposal's off-chain metadata, as recorded when the proposal was created, or null when none was set."
+          },
+          "config": {
+            "nullable": true,
+            "description": "Governance config the proposal was created under: its type slot's config as of the creation event. Stays available after the on-chain proposal is deleted on execution or expiry. Null when the slot had been removed at creation or no slot history is indexed for it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProposalConfigResponse"
+              }
+            ]
+          },
+          "created_ms": {
+            "type": "integer",
+            "nullable": true,
+            "example": 1775739423394,
+            "description": "Creation time of the proposal (Unix epoch milliseconds): the timestamp of the checkpoint holding its creation event. Null when the creation event is not indexed."
+          },
           "composite": {
             "description": "Ordered steps of a composite proposal; omitted for every other proposal type.",
             "type": "array",
@@ -6922,7 +6974,10 @@
           "no_weight",
           "payload_type",
           "frame_id",
-          "created_checkpoint"
+          "created_checkpoint",
+          "metadata_ipfs",
+          "config",
+          "created_ms"
         ]
       },
       "Recipe": {
@@ -7648,10 +7703,10 @@
       "Sweepable": {
         "type": "object",
         "properties": {
-          "balance_manager_id": {
+          "trading_account_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Balance manager object ID the snapshot is for."
+            "description": "Trading account object ID the snapshot is for."
           },
           "as_of_checkpoint": {
             "type": "string",
@@ -7666,7 +7721,7 @@
             }
           },
           "items": {
-            "description": "Idle item balances already held by the balance manager.",
+            "description": "Idle item balances already held by the trading account.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SweepableItem"
@@ -7674,7 +7729,7 @@
           }
         },
         "required": [
-          "balance_manager_id",
+          "trading_account_id",
           "as_of_checkpoint",
           "pools",
           "items"
@@ -7773,7 +7828,7 @@
             "description": "Object ID of the hub's vault configuration."
           },
           "settled": {
-            "description": "Settled amounts, claimable into the balance manager.",
+            "description": "Settled amounts, claimable into the trading account.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/SweepableBalances"
@@ -7803,6 +7858,37 @@
           "settled",
           "owed",
           "open_order_count"
+        ]
+      },
+      "TradingAccountOwner": {
+        "type": "object",
+        "properties": {
+          "trading_account_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Trading account Sui object ID."
+          },
+          "owner": {
+            "type": "string",
+            "nullable": true,
+            "description": "`player:<wallet_address>` for a character-owned trading account, or `ou:<org_id>` for an organization-owned one; null if unresolved."
+          },
+          "owner_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Matching character or organization's display name, or null."
+          },
+          "root_ou_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Top-level organization ID when the owner is a sub-organization; else null."
+          }
+        },
+        "required": [
+          "trading_account_id",
+          "owner",
+          "owner_name",
+          "root_ou_id"
         ]
       },
       "TribeResponse": {

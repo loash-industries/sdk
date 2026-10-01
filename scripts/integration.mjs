@@ -5,7 +5,7 @@
  *
  *   npm run build && node --env-file=.env scripts/integration.mjs
  *
- * Exercises: currency balances (fullnode), balance-manager creation inside a
+ * Exercises: currency balances (fullnode), trading-account creation inside a
  * real PTB, ensure() idempotency + cold resolution, own order-status reads,
  * the sweepable manifest, typed InsufficientBalance on funding paths, and the
  * TransactionFailed + Move-abort translation on a real on-chain abort.
@@ -70,27 +70,27 @@ let walletCred = 0n
 await step('balances.currency (pre)', async () => {
   const c = await client.balances.currency()
   walletCred = c.wallet
-  return `wallet=${c.wallet} bm=${c.balanceManager} bmId=${c.balanceManagerId}`
+  return `wallet=${c.wallet} bm=${c.tradingAccount} bmId=${c.tradingAccountId}`
 })
 
 // ── 2. ensure(): real on-chain BM creation, then idempotency ─────────────────
 let bmId
 await step('account.ensure — creates the BM on-chain', async () => {
   const r = await client.account.ensure()
-  bmId = r.balanceManagerId
-  return `created=${r.created} id=${r.balanceManagerId}`
+  bmId = r.tradingAccountId
+  return `created=${r.created} id=${r.tradingAccountId}`
 })
 await step('account.ensure — idempotent on second call', async () => {
   const r = await client.account.ensure()
   if (r.created) throw new Error('second ensure() reported created=true')
-  if (r.balanceManagerId !== bmId) throw new Error('BM id changed!')
+  if (r.tradingAccountId !== bmId) throw new Error('BM id changed!')
   return `created=false id stable`
 })
 await step('cold client resolves the BM via listOwnedObjects', async () => {
   if (!bmId) throw new Error('skipped: ensure() did not create a BM')
   for (let i = 0; i < 10; i++) {
     const acct = await makeClient().account.get()
-    if (acct?.balanceManagerId === bmId) return `resolved after ${i} retries`
+    if (acct?.tradingAccountId === bmId) return `resolved after ${i} retries`
     await new Promise((r) => setTimeout(r, 1500))
   }
   throw new Error('cold resolution did not observe the new BM')

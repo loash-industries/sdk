@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ALL_TOOLS } from '../src/registry.js'
+import { u128 } from '../src/schemas.js'
 
 /**
  * JSON Schema snapshots for every tool input.
@@ -60,6 +61,27 @@ describe('tool input schemas', () => {
   it('tells the model that prepare tools do not submit', () => {
     for (const tool of ALL_TOOLS.filter((t) => t.kind === 'prepare')) {
       expect(tool.description).toMatch(/never signs or submits/)
+    }
+  })
+
+  it('takes order ids as u128 decimal strings', () => {
+    const max = ((1n << 128n) - 1n).toString()
+    expect(u128.safeParse(max).success).toBe(true)
+    expect(u128.safeParse('42').success).toBe(true)
+    expect(u128.safeParse((1n << 128n).toString()).success).toBe(false)
+    expect(u128.safeParse('abc').success).toBe(false)
+    expect(u128.safeParse('-1').success).toBe(false)
+    for (const name of ['prepare_cancel_order', 'prepare_modify_order']) {
+      const tool = ALL_TOOLS.find((t) => t.name === name)!
+      const shape = z.object(tool.inputShape)
+      const base = { sender: '0x1', storageUnitId: '0x2', assetId: '1' }
+      const extra = name === 'prepare_modify_order' ? { newQuantity: '1' } : {}
+      expect(
+        shape.safeParse({ ...base, ...extra, orderId: '42' }).success,
+      ).toBe(true)
+      expect(
+        shape.safeParse({ ...base, ...extra, orderId: 'abc' }).success,
+      ).toBe(false)
     }
   })
 })
