@@ -3,6 +3,8 @@ import type { Transaction } from '@mysten/sui/transactions'
 // satisfies); `@mysten/sui` v2 no longer type-exports a `SuiClient` name.
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 import type { z } from 'zod'
+import type { OwnedTradingAccountCap } from './onchain'
+import type { TradingAccountCapKind } from './transactions'
 import type {
   AssemblyEnrichedSchema,
   AssemblyOwnerSchema,
@@ -424,11 +426,12 @@ export interface WithdrawCurrencyParams {
 export interface WithdrawItemsParams {
   storageUnitId: string
   /**
-   * Each listed asset is withdrawn IN FULL (`withdraw_all_multicoin`) and
-   * redeemed into the hangar at the hub — partial item withdrawal is not part
-   * of the redeem flow (matches the app's sweep semantics).
+   * Each listed asset is withdrawn from the trading account and redeemed into
+   * the hangar at the hub: `amount` items (`withdraw_multicoin`), or the full
+   * balance when `amount` is omitted (`withdraw_all_multicoin`, the app's
+   * sweep semantics).
    */
-  items: { assetId: string }[]
+  items: { assetId: string; amount?: bigint }[]
   /** Defaults to the on-chain character resolved from the client address. */
   characterId?: string
 }
@@ -447,8 +450,10 @@ export interface LimitOrderParams {
   /** 0 = allowed (default), 1 = cancel taker, 2 = cancel maker. */
   selfMatchingOption?: number
   /**
-   * Override the quote (CRED) amount deposited for a bid; defaults to
-   * `computeBidQuoteDeposit(price, quantity, feeRateScaled)`.
+   * Override the quote (CRED) a bid needs in the trading account; defaults to
+   * `computeBidQuoteDeposit(price, quantity, fees.bidEscrowFeeRate)` — the
+   * notional plus a fee at the pool's highest taker/maker rate, read
+   * on-chain, so the order is never under-funded.
    */
   quoteDeposit?: bigint
 }
@@ -459,9 +464,11 @@ export interface MarketOrderParams {
   side: OrderSide
   quantity: bigint
   /**
-   * Required for market buys — worst-case CRED cost including taker fees,
-   * typically `estimateMarketBuyCost(book.asks, quantity, feeRateScaled)`.
-   * The SDK adds the app's per-fill rounding buffer on top.
+   * Required for market buys — the CRED cost including the taker fee,
+   * typically `estimateMarketBuyCost(book.asks, quantity, takerFeeRate)
+   * .total`. The trading account is topped up to this amount; note a market
+   * buy can spend whatever the account holds, so this is a funding target,
+   * not a price cap.
    */
   quoteBudget?: bigint
   /** 0 = allowed (default), 1 = cancel taker, 2 = cancel maker. */
@@ -491,4 +498,63 @@ export interface ModifyOrderParams extends CancelOrderParams {
 export interface ClaimSettledParams {
   /** Pools to claim from; defaults to every pool the sweepable read reports. */
   poolIds?: string[]
+}
+
+export interface CancelOrdersParams {
+  storageUnitId: string
+  assetId: string
+  /** Order ids (Move `u128`) — all must belong to the account, or none cancel. */
+  orderIds: (bigint | string)[]
+}
+
+/** Identify an item pool by hub + item, or directly by pool id. */
+export type PoolSelector =
+  { storageUnitId: string; assetId: string } | { poolId: string }
+
+export type TradingFeesParams = PoolSelector & {
+  /** Whose tier to resolve; defaults to the client address (if any). */
+  address?: string
+}
+
+export interface MintCapParams {
+  /** `trade` (TradeProof), `deposit` or `withdraw`. */
+  kind: TradingAccountCapKind
+  /** Who receives the cap; defaults to the trading-account owner. */
+  recipient?: string
+}
+
+export interface MintCapResult extends TxResult {
+  /** The minted cap's object id, when the executor surfaced created objects. */
+  capId: string | null
+}
+
+export interface RevokeCapParams {
+  /** Id of a Trade/Deposit/WithdrawCap on the account's allow-list. */
+  capId: string
+}
+
+/** Capabilities around one address's trading account. */
+export interface TradingAccountCaps {
+  /** The address's own trading account, if any. */
+  tradingAccountId: string | null
+  /** Cap ids live on that account's allow-list (empty without an account). */
+  allowListed: string[]
+  /** Caps the address holds, for any account. */
+  held: OwnedTradingAccountCap[]
+}
+
+export interface CreatePoolParams {
+  /** Hub whose vault collection the new market trades. */
+  storageUnitId: string
+  assetId: string
+}
+
+export interface CreatePoolResult extends TxResult {
+  /** The new pool's id, when the executor surfaced created objects. */
+  poolId: string | null
+}
+
+export interface ClaimOperatorShareParams {
+  /** Item pools to settle the hub operator's fee share for (batched in one PTB). */
+  poolIds: string[]
 }

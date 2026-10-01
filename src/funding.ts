@@ -12,7 +12,6 @@ import {
   findOwnedItemReceipts,
   getTradingAccountItemBalance,
   getObjectRef,
-  getRegistryMulticoinCollectionId,
 } from './onchain'
 import { depositMulticoinObject, sourceItemsFromHangar } from './transactions'
 import type { PackageIds } from './types'
@@ -124,6 +123,15 @@ export async function sourceItemsIntoTradingAccount(
       'Item amount must be positive.',
     )
   }
+  // The market's collection is the hub vault's — cycle 7 dropped the
+  // registry-wide `MultiCoinCollectionKey`, so pools may trade any collection.
+  const wantedCollection = params.vaultCollectionId.trim().toLowerCase()
+  if (!wantedCollection) {
+    throw new TriexClientError(
+      TriexError.ValidationFailed,
+      'vaultCollectionId is required to source items for a market.',
+    )
+  }
 
   const bmState =
     params.deficitMode && params.tradingAccountId
@@ -143,12 +151,6 @@ export async function sourceItemsIntoTradingAccount(
   const receipts = await findOwnedItemReceipts(suiClient, ids, params.owner, {
     assetId: assetId.toString(),
   })
-  const wantedCollection = (
-    params.vaultCollectionId ||
-    (await getRegistryMulticoinCollectionId(suiClient, ids))
-  )
-    .trim()
-    .toLowerCase()
 
   const usable = receipts
     .filter(

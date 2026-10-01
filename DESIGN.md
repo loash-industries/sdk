@@ -228,9 +228,9 @@ observe. Currency balances (a fullnode read) live on `TriexClient.balances.curre
 ### 5.2 Methods → user stories
 
 ```ts
-// account (balance manager lifecycle)
+// account (trading account lifecycle)
 client.account.get(address): Promise<TradingAccount | null>            // #1 read (on-chain)
-client.account.ensure(): Promise<{ balanceManagerId: string; created: boolean }>  // #1 write (idempotent)
+client.account.ensure(): Promise<{ tradingAccountId: string; created: boolean }>  // #1 write (idempotent)
 
 // balances — items are hub-scoped indexer reads; currency is a fullnode read
 client.balances.atHub({ storageUnitId, inventoryKey? }): Promise<InventoryBalances>  // #2 (warehouse/marketplace/hangar)
@@ -259,7 +259,7 @@ client.market.hubsEnriched({ hubIds }): Promise<HubEnriched[]>        // batch �
 client.market.assemblyOwners({ assemblyIds }): Promise<AssemblyOwner[]>        // batch ≤200
 client.market.assembliesEnriched({ assemblyIds }): Promise<AssemblyEnriched[]> // batch ≤200: + character/name
 client.market.solarSystemNames({ solarSystemIds }): Promise<SolarSystemName[]> // batch ≤200
-client.account.owners({ balanceManagerIds }): Promise<BalanceManagerOwner[]>   // batch ≤200: player:/ou: tagged
+client.account.owners({ tradingAccountIds }): Promise<TradingAccountOwner[]>   // batch ≤200: player:/ou: tagged
 
 // spatial — the star map (Universe | Solar Systems); no account or signer
 client.spatial.system(nameOrId): Promise<SolarSystem>                 // coords + constellation + region
@@ -279,9 +279,18 @@ client.orders.limit({ storageUnitId, assetId, side, price, quantity, expireAt? }
 client.orders.market({ storageUnitId, assetId, side, quantity, quoteBudget? }): Promise<TxResult>      // #11
 
 // pulled forward from post-MVP (bots are not viable without them):
-client.orders.cancel({ storageUnitId, assetId, orderId }) / cancelAll / modify
+client.orders.cancel({ storageUnitId, assetId, orderId }) / cancelMany({ …, orderIds }) / cancelAll / modify
+client.orders.fees({ storageUnitId, assetId } | { poolId }): Promise<TradingFees>  // ladder + own tier (fullnode)
 client.account.sweepable(): Promise<Sweepable>          // claimable proceeds + idle BM items
 client.account.claimSettled({ poolIds? })               // withdraw_settled_amounts per pool
+
+// trading-account administration (owner-only)
+client.account.register()                               // registry::get_trading_account_ids bookkeeping
+client.account.mintCap({ kind, recipient? }) / revokeCap({ capId }) / caps(address?)
+
+// item-pool lifecycle
+client.market.createPool({ storageUnitId, assetId })    // 500 CRED, permissionless
+client.market.claimOperatorShare({ poolIds })           // hub revenue share, permissionless
 ```
 
 `side: 'buy' | 'sell'` maps to `isBid`; items are identified by `assetId` (the indexer's
@@ -294,27 +303,51 @@ are inferred from the pinned zod wire schemas (`schemas.ts`) — single source o
 
 ## 6. On-chain transaction builders (`transactions.ts`)
 
-Confirmed Move entrypoints (personal, non-governance path), verified against the cycle-7
-contract: the `balance_manager` module is now `trading_account` (`BalanceManager` →
-`TradingAccount`), order ids are `u128`, and placement / cancel / cancel-all / modify take
-the shared `FeePolicy` (`triexFeePolicy`) right after the pool. The TypeScript API keeps
-its "balance manager" names. All are
-pure functions `(args) => Transaction`; the facade fills object IDs from indexer reads.
+Confirmed Move entrypoints (personal, non-governance path), verified against
+trinary-exchange `main` (cycle 7 + TRIEX-158): the `balance_manager` module is now
+`trading_account` (`BalanceManager` → `TradingAccount`), order ids are `u128`, and
+placement / cancel / cancel-many / cancel-all / modify / swaps take the shared `FeePolicy`
+(`triexFeePolicy`) right after the pool. All are pure functions that append to a caller's
+`Transaction`; the facade fills object IDs from indexer + fullnode reads. Unit tests pin
+each target's argument order (`test/writes.test.ts`, `test/transactions.test.ts`).
 
 | Builder | Move target | Notes |
 |---|---|---|
-| `newBalanceManager` | `${triex}::trading_account::new()` | returns BM; `transferObjects([bm], self)` when freshly created |
-| `depositCoin` | `${triex}::trading_account::deposit<T>(bm, coin)` | coin prepared via list/merge/split of wallet coins |
-| `depositMulticoinObject` | `${triex}::trading_account::deposit_multicoin(bm, object)` | deposit an owned multicoin `Balance` object (wallet receipts) into BM |
-| `withdrawAllCoin` | `${triex}::trading_account::withdraw_all<T>(bm)` → `transferObjects` | #13 |
-| `withdrawAllMulticoin` | `${triex}::trading_account::withdraw_all_multicoin(bm, collectionId, assetId)` | #12 step 1 |
+| `newTradingAccount` | `trading_account::new()` | `transferObjects([bm], self)` when freshly created |
+| `newTradingAccountWithOwner` / `…WithOwnerAndCaps` | `trading_account::new_with_custom_owner(_and_caps)(owner)` | builder only; the `_and_caps` caps go to `owner` on-chain |
+| `registerTradingAccount` | `trading_account::register_trading_account(bm, registry)` | `account.register()`; ≤100 per owner |
+| `mintTradingAccountCap` | `trading_account::mint_{trade,deposit,withdraw}_cap(bm)` | `account.mintCap()`; ≤1000 live caps |
+| `revokeTradingAccountCap` | `trading_account::revoke_trade_cap(bm, &ID)` | `account.revokeCap()`; revokes any of the three cap kinds |
+| `generateProofAsOwner` / `generateProofAsTrader` | `trading_account::generate_proof_as_{owner(bm), trader(bm, tradeCap)}` | proof before placing/cancelling/claiming |
+| `depositCoin` / `depositCoinWithCap` | `trading_account::deposit<T>(bm, coin)` / `deposit_with_cap<T>(bm, cap, coin)` | coin prepared via list/merge/split of wallet coins |
+| `depositMulticoinObject` / `depositMulticoinWithCap` | `trading_account::deposit_multicoin(bm, balance)` / `…_with_cap(bm, cap, balance)` | wallet receipts / hangar receipts into the account |
+| `withdrawCoin` / `withdrawAllCoin` / `withdrawCoinWithCap` | `trading_account::withdraw<T>(bm, amount)` / `withdraw_all<T>(bm)` / `withdraw_with_cap<T>(bm, cap, amount)` | #13 |
+| `withdrawMulticoin` / `withdrawAllMulticoin` / `withdrawMulticoinWithCap` | `trading_account::withdraw_multicoin(bm, collectionId, assetId, amount)` / `withdraw_all_multicoin(bm, collectionId, assetId)` / `…_with_cap` | #12 step 1 (`withdrawItems` uses the partial form when `amount` is set) |
 | `redeemReceipt` | `${warehouseReceipts}::receipt::redeem_receipt(balance, ssu, character, vaultConfig, collection, isOwner)` | #12 step 2 (BM item → hangar) |
-| `ownerProof` | `${triex}::trading_account::generate_proof_as_owner(bm)` | required before placing/withdrawing |
-| `placeLimitOrderItem` | `${triex}::multicoin_pool::place_limit_order<Quote>(pool, feePolicy, bm, proof, orderType, selfMatch, price, qty, isBid, expireTs, clock)` | items (multicoin) |
-| `placeMarketOrderItem` | `${triex}::multicoin_pool::place_market_order<Quote>(pool, feePolicy, bm, proof, selfMatch, qty, isBid, clock)` | items (multicoin) |
-| `cancelOrderItem` | `${triex}::multicoin_pool::cancel_order<Quote>(pool, feePolicy, bm, proof, orderId u128, clock)` | implemented (+ `cancel_all_orders`, `modify_order`, which also take `feePolicy`) |
-| `withdrawCoin` | `${triex}::trading_account::withdraw<T>(bm, amount)` | partial currency withdraw |
-| `withdrawSettledAmounts` | `${triex}::multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` | claim post-fill proceeds into the BM |
+| `placeLimitOrderItem` | `multicoin_pool::place_limit_order<Quote>(pool, policy, bm, proof, orderType, selfMatch, price, qty, isBid, expireTs, clock)` | `…_with_quote_fees` is an identical alias |
+| `placeMarketOrderItem` | `multicoin_pool::place_market_order<Quote>(pool, policy, bm, proof, selfMatch, qty, isBid, clock)` | IOC at the max/min price |
+| `cancelOrderItem` / `cancelOrdersItem` / `cancelAllOrdersItem` | `multicoin_pool::cancel_order(…, orderId u128, clock)` / `cancel_orders(…, vector<u128>, clock)` / `cancel_all_orders(…, clock)` | all `(pool, policy, bm, proof, …)` |
+| `modifyOrderItem` | `multicoin_pool::modify_order<Quote>(pool, policy, bm, proof, orderId u128, newQty, clock)` | reduce only |
+| `withdrawSettledAmounts` / `…Permissionless` | `multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` / `…_permissionless(pool, bm)` | no `FeePolicy` |
+| `swapExact{Base,Quote}For{Quote,Base}Item` | `multicoin_pool::swap_exact_*<Quote>(pool, policy, in, credIn, minOut, clock)` | builder only: account-less swaps (temporary account on-chain) |
+| `swapExact…WithTradingAccountItem` | `multicoin_pool::swap_exact_*_with_trading_account<Quote>(pool, policy, bm, tradeCap, depositCap, withdrawCap, in, minOut, clock)` | builder only |
+| `createPermissionlessPoolItem` | `multicoin_pool::create_permissionless_pool<Quote>(registry, policy, collection, assetId, fee)` | `market.createPool()`; fee = 500 CRED |
+| `claimOperatorShareItem` | `multicoin_pool::claim_operator_share<Quote>(pool, policy, registry, clock)` | `market.claimOperatorShare()` |
+| `updatePoolAllowedVersionsItem` | `multicoin_pool::update_pool_allowed_versions<Quote>(pool, registry)` | builder only (post-upgrade maintenance) |
+
+**Fee reads** (`onchain.ts` `getPoolTradingFees`, facade `orders.fees()`) are one
+simulated transaction (`simulateTransaction` + `commandResults`, nothing executes) of the
+view functions `multicoin_pool::{pool_fee_class, pool_fee_schedule,
+pool_fee_schedule_next, trade_params_for_account, account_fee_tier,
+account_fee_turnover}` and `fee_policy::cancel_retention_bps`.
+
+**Deliberately not wrapped:** `trading_account::new_with_uid_owner_and_caps` (TRIEX-158 —
+takes `&mut UID`, so only a Move module that owns the parent object can call it; Armature
+uses it), every `TriexAdminCap`-gated function (`create_pool_admin`, `set_pool_fee_class`,
+`unregister_pool_admin`, `update_allowed_versions`, `withdraw_pool_fees`, the
+`fee_policy` class / operator-share / adapter setters, the `registry` setters), and
+`fee_policy::register_operator_beneficiary_with_witness` (callable only through the
+admin-registered adapter package's witness).
 
 > `<Quote>` is the CRED coin type (`credCoinType`). Item markets are `multicoin_pool`; the
 > item is identified by `collectionId` + `assetId` (u64), not a Move type parameter.
@@ -381,12 +414,30 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
   against the production app, which passes the unscaled price straight to
   `place_limit_order`; TRIEX_SYSTEM_DESIGN §7's blanket "all prices ×1e9" describes coin
   pools).
-- **Bid deposit overhead:** v1 pools charge a **quote-denominated fee**; a bid must deposit
-  `quote × (1e9 + feeRateScaled) / 1e9` (floor-of-total — matches the app's
-  `computeBidQuoteDeposit` and the on-chain per-fill floor). `feeRateScaled` is pool
-  metadata's raw `fee` (scaled by 1e9; `20_000_000` = 2%, the default volatile fee) — the
-  endpoint exposes **no bps field**. Only buyers pay fees; asks are fee-free. Market bids
-  require an explicit `quoteBudget` (the app requires `quoteDepositAmount > 0`).
+- **Fee model (cycle 7).** Every fee is quote-denominated and priced by
+  `quote_fee::fee_from_scaled_rate` = `floor(quote × min(rate, 1e9) / 1e9)` (`computeQuoteFee`).
+  Rates live in the shared `FeePolicy`: each pool carries a fee class whose ladder
+  (`fee_schedule::FeeSchedule`, ≤16 tiers, taker and maker rates non-increasing by tier;
+  multicoin launch ladder 2.2%/1.8% → 1.1%/0.9%) is resolved against the account's trailing
+  30-epoch **fee turnover** (taker fees paid + maker fees earned at fill, exchange-wide per
+  quote). Schedule changes are staged for the next epoch. Who pays what
+  (`order_info::calculate_partial_fill_balances`, `state::process_fills`, `fill.move`):
+  - bid taker: `floor(taker × matched quote)` once on the aggregate, on top of the quote;
+  - bid maker: `floor(maker × resting quote)` escrowed at placement; on cancel / modify-down /
+    expiry the class's `cancel_retention_bps` share of the released escrow is kept;
+  - ask taker: `floor(taker × matched quote)` out of the proceeds;
+  - ask maker: `floor(maker × fill quote)` per fill, out of the proceeds.
+- **Bid deposit:** `computeBidQuoteDeposit(price, qty, rate)` = `notional + floor(notional ×
+  rate / 1e9)`. The facade passes `TradingFees.bidEscrowFeeRate` = max(tier-0 taker, tier-0
+  maker) over the active and staged ladders — tier 0 bounds every tier, and floors are
+  subadditive, so the deposit covers any match/rest split at any tier, even across an epoch
+  boundary. Surplus stays in the trading account. Asks deposit only items.
+- **Quotes:** `estimateMarketBuyCost` (asks low-first, fee on the aggregate — exact for an
+  unchanged book, so the old per-fill rounding buffer is gone; `marketBuyRoundingBuffer` is
+  deprecated), `estimateMarketSellProceeds` (bids high-first, net of the taker fee),
+  `computeAskProceeds`. Use the account's own rate from `orders.fees()`. Pool metadata's
+  `fee` is only the entry-tier taker rate (no maker rate, no tiers). Market bids require an
+  explicit `quoteBudget`; a market order fills at most 100 makers (`MAX_FILLS`).
 - **Decimals:** CRED and each item type carry `decimals` (pool metadata's
   `base_asset_decimals` / `quote_asset_decimals`); the SDK exposes both `bigint` base-unit
   and helper `toBase(human, decimals)` / `fromBase(base, decimals)`.
@@ -408,7 +459,7 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
 excluded**. The current stillness trading IDs (for the SDK `testnet` preset):
 
 ```
-triexPackageId            0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945   (cycle 7)
+triexPackageId            0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945   (cycle 7 + TRIEX-158 fresh publish; = original id)
 triexRegistryId           0x2f37ad133427cabf94653be9a67560f87ea7458eaef2b410f6497808cef722c2   (shared obj — not in /package-ids)
 triexFeePolicyId          0xcd63402799fe6b3a3ff2d963f90449e843f178659c349a08a1503db516163748   (shared obj — not in /package-ids)
 multicoinPackageId        0xdbb778cba30e7deccf61169fbfbcd10a867654e1e2822facd789a99bd2c4e2ba

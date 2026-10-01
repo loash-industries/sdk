@@ -15,32 +15,41 @@ import {
   prepareWalletCoinInput,
   sourceItemsIntoTradingAccount,
 } from './funding'
-import {
-  GTC_EXPIRE,
-  computeBidQuoteDeposit,
-  marketBuyRoundingBuffer,
-} from './money'
+import { GTC_EXPIRE, computeBidQuoteDeposit } from './money'
 import {
   fetchCharacterInfo,
   fetchSsuOwnerInfo,
+  findOwnedTradingAccountCaps,
+  getPoolTradingFees,
+  getTradingAccountAllowList,
   getTradingAccountCurrencyBalance,
   getWalletCurrencyBalance,
   toSsuObjectId,
+  tradingAccountCapType,
 } from './onchain'
+import type { TradingFees } from './onchain'
 import { IndexerClient } from './queries'
 import {
+  POOL_CREATION_FEE,
   cancelAllOrdersItem,
   cancelOrderItem,
+  cancelOrdersItem,
+  claimOperatorShareItem,
+  createPermissionlessPoolItem,
   depositCoin,
   generateProofAsOwner,
+  mintTradingAccountCap,
   modifyOrderItem,
   newTradingAccount,
   placeLimitOrderItem,
   placeMarketOrderItem,
   redeemReceipt,
+  registerTradingAccount,
+  revokeTradingAccountCap,
   withdrawAllCoin,
   withdrawAllMulticoin,
   withdrawCoin,
+  withdrawMulticoin,
   withdrawSettledAmounts,
 } from './transactions'
 import type {
@@ -55,7 +64,17 @@ import type {
   BalancesAtHubParams,
   CancelAllOrdersParams,
   CancelOrderParams,
+  CancelOrdersParams,
+  ClaimOperatorShareParams,
   ClaimSettledParams,
+  CreatePoolParams,
+  CreatePoolResult,
+  MintCapParams,
+  MintCapResult,
+  PoolSelector,
+  RevokeCapParams,
+  TradingAccountCaps,
+  TradingFeesParams,
   CurrencyBalances,
   DepositCurrencyParams,
   DepositItemsParams,
@@ -125,8 +144,8 @@ export class TriexClient {
   readonly indexer: IndexerClient
   private readonly executor?: TransactionExecutor
   private readonly address?: string
-  /** Read-your-writes cache for the resolved trading account id (see §12). */
-  private cachedTradingAccountId?: string
+  /** Read-your-writes cache of resolved trading account ids, per owner (§12). */
+  private readonly cachedTradingAccountIds = new Map<string, string>()
 
   readonly account: AccountApi
   readonly balances: BalancesApi
@@ -217,14 +236,20 @@ export class TriexClient {
     return addr
   }
 
+  /** @internal — the per-call or configured address, or undefined. */
+  optionalAddress(override?: string): string | undefined {
+    return override ?? this.address
+  }
+
   /**
    * Resolve the player's trading account id. On-chain first (authoritative,
    * head-current — avoids the indexer-lag double-create race, DESIGN.md §12),
-   * with an in-client cache for read-your-writes.
+   * with an in-client cache (keyed by owner) for read-your-writes.
    * @internal
    */
   async resolveTradingAccountId(address: string): Promise<string | null> {
-    if (this.cachedTradingAccountId) return this.cachedTradingAccountId
+    const cached = this.cachedTradingAccountIds.get(address)
+    if (cached) return cached
     const structType = `${this.ids.triex}::trading_account::TradingAccount`
     const core = (this.suiClient as any).core
     const page = await core.listOwnedObjects({
@@ -233,13 +258,33 @@ export class TriexClient {
       limit: 1,
     })
     const objectId: string | undefined = page?.objects?.[0]?.objectId
-    if (objectId) this.cachedTradingAccountId = objectId
+    if (objectId) this.cachedTradingAccountIds.set(address, objectId)
     return objectId ?? null
   }
 
   /** @internal */
-  rememberTradingAccountId(id: string): void {
-    this.cachedTradingAccountId = id
+  rememberTradingAccountId(owner: string, id: string): void {
+    this.cachedTradingAccountIds.set(owner, id)
+  }
+
+  /**
+   * @internal — the item pool for a hub + item (indexer: hub vault → pool),
+   * or the pool id itself when given directly.
+   */
+  async resolveItemPoolId(selector: PoolSelector): Promise<string> {
+    if ('poolId' in selector) return selector.poolId
+    const vault = await this.indexer.hubVault(selector.storageUnitId)
+    const poolId = await this.indexer.resolvePool({
+      collectionId: vault.collectionId,
+      assetId: selector.assetId,
+    })
+    if (!poolId) {
+      throw new TriexClientError(
+        TriexError.PoolNotFound,
+        `No pool for item ${selector.assetId} at hub ${selector.storageUnitId}.`,
+      )
+    }
+    return poolId
   }
 
   /**
@@ -273,7 +318,7 @@ export class TriexClient {
     const res = await executeAndNormalize(this.requireExecutor(), tx)
     if (!existingBmId) {
       const created = findCreatedTradingAccountId(res)
-      if (created) this.rememberTradingAccountId(created)
+      if (created) this.rememberTradingAccountId(owner, created)
     }
     return toTxResult(res)
   }
@@ -300,6 +345,9 @@ function findCreatedTradingAccountId(res: NormalizedExecution): string | null {
 }
 
 const MAX_U128 = (1n << 128n) - 1n
+
+/** Sender for read-only simulations when no address is configured. */
+const ZERO_ADDRESS = '0x' + '0'.repeat(64)
 
 /**
  * @internal — order ids are Move `u128` since cycle 7. Accept a bigint or a
@@ -371,8 +419,101 @@ class AccountApi {
         'Trading account created but no created-object info found — have the executor include effects+objectTypes (v2) or objectChanges (legacy).',
       )
     }
-    this.c.rememberTradingAccountId(id)
+    this.c.rememberTradingAccountId(owner, id)
     return { tradingAccountId: id, created: true }
+  }
+
+  /**
+   * File the trading account under its owner in the on-chain registry
+   * (`trading_account::register_trading_account`) — optional bookkeeping that
+   * lets `registry::get_trading_account_ids` list it. Owner-only; at most 100
+   * accounts per owner.
+   * @throws `AddressRequired` | `ExecutorRequired`; `TradingAccountNotFound`;
+   *   `TransactionFailed` on-chain (e.g. `EMaxTradingAccountsReached`).
+   */
+  async register(): Promise<TxResult> {
+    const owner = this.c.requireAddress()
+    const tradingAccountId = await this.c.requireTradingAccountId(owner)
+    const executor = this.c.requireExecutor()
+    const tx = new Transaction()
+    registerTradingAccount(tx, this.c.ids, tx.object(tradingAccountId))
+    return toTxResult(await executeAndNormalize(executor, tx))
+  }
+
+  /**
+   * Mint a capability on the trading account and transfer it to `recipient`
+   * (default: the owner). A TradeCap yields TradeProofs
+   * (`generate_proof_as_trader`), a DepositCap / WithdrawCap moves funds in /
+   * out. NOTE: the SDK's trading account is an address-owned object, so only
+   * transactions its owner signs can use it as an input. Caps matter for
+   * accounts owned by an object (TRIEX-158) or shared; they do not let another
+   * wallet trade this one.
+   * @throws `ValidationFailed` (unknown kind); `AddressRequired` |
+   *   `ExecutorRequired`; `TradingAccountNotFound`; `TransactionFailed`
+   *   on-chain (`EMaxCapsReached` past 1000 live caps).
+   */
+  async mintCap(params: MintCapParams): Promise<MintCapResult> {
+    if (!['trade', 'deposit', 'withdraw'].includes(params.kind)) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        `Unknown cap kind "${params.kind}" — expected trade, deposit or withdraw.`,
+      )
+    }
+    const owner = this.c.requireAddress()
+    const tradingAccountId = await this.c.requireTradingAccountId(owner)
+    const executor = this.c.requireExecutor()
+    const tx = new Transaction()
+    const cap = mintTradingAccountCap(
+      tx,
+      this.c.ids,
+      tx.object(tradingAccountId),
+      params.kind,
+    )
+    tx.transferObjects([cap], params.recipient ?? owner)
+    const res = await executeAndNormalize(executor, tx)
+    const created = findCreatedObject(
+      res,
+      tradingAccountCapType(this.c.ids, params.kind),
+    )
+    return { ...toTxResult(res), capId: created?.objectId ?? null }
+  }
+
+  /**
+   * Revoke a Trade/Deposit/WithdrawCap by id (`revoke_trade_cap` removes any
+   * of the three from the allow-list). Owner-only.
+   * @throws `AddressRequired` | `ExecutorRequired`; `TradingAccountNotFound`;
+   *   `TransactionFailed` (`ECapNotInList` when the id is not listed).
+   */
+  async revokeCap(params: RevokeCapParams): Promise<TxResult> {
+    const owner = this.c.requireAddress()
+    const tradingAccountId = await this.c.requireTradingAccountId(owner)
+    const executor = this.c.requireExecutor()
+    const tx = new Transaction()
+    revokeTradingAccountCap(
+      tx,
+      this.c.ids,
+      tx.object(tradingAccountId),
+      params.capId,
+    )
+    return toTxResult(await executeAndNormalize(executor, tx))
+  }
+
+  /**
+   * Capabilities around an address (default: the client address): the cap
+   * ids live on its trading account's allow-list, and the caps it holds for
+   * any account. Fullnode reads.
+   * @throws `AddressRequired`.
+   */
+  async caps(address?: string): Promise<TradingAccountCaps> {
+    const owner = this.c.requireAddress(address)
+    const [tradingAccountId, held] = await Promise.all([
+      this.c.resolveTradingAccountId(owner),
+      findOwnedTradingAccountCaps(this.c.suiClient, this.c.ids, owner),
+    ])
+    const allowListed = tradingAccountId
+      ? await getTradingAccountAllowList(this.c.suiClient, tradingAccountId)
+      : []
+    return { tradingAccountId, allowListed, held }
   }
 
   /**
@@ -460,12 +601,21 @@ class AccountApi {
   }
 
   /**
-   * #12 — withdraw items (in full) from the BM into the hangar at a hub.
-   * @throws `AddressRequired` | `ExecutorRequired`; `TradingAccountNotFound`;
-   *   `HubNotFound`; `CharacterNotFound` when no on-chain character resolves
-   *   (pass `characterId` explicitly); `TransactionFailed` on-chain.
+   * #12 — withdraw items from the BM into the hangar at a hub: `amount` per
+   * item, or the full balance when omitted.
+   * @throws `ValidationFailed` (non-positive amount); `AddressRequired` |
+   *   `ExecutorRequired`; `TradingAccountNotFound`; `HubNotFound`;
+   *   `CharacterNotFound` when no on-chain character resolves (pass
+   *   `characterId` explicitly); `TransactionFailed` on-chain (e.g.
+   *   `EMultiCoinBalanceTooLow` for an amount above the balance).
    */
   async withdrawItems(params: WithdrawItemsParams): Promise<TxResult> {
+    if (params.items.some((i) => i.amount !== undefined && i.amount <= 0n)) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'Item withdrawal amounts must be positive (omit `amount` to withdraw all).',
+      )
+    }
     const owner = this.c.requireAddress()
     const tradingAccountId = await this.c.requireTradingAccountId(owner)
     const executor = this.c.requireExecutor()
@@ -494,13 +644,24 @@ class AccountApi {
     const tx = new Transaction()
     const bm = tx.object(tradingAccountId)
     for (const item of params.items) {
-      const balance = withdrawAllMulticoin(
-        tx,
-        this.c.ids,
-        bm,
-        vault.collectionId,
-        BigInt(item.assetId),
-      )
+      const assetId = BigInt(item.assetId)
+      const balance =
+        item.amount !== undefined
+          ? withdrawMulticoin(
+              tx,
+              this.c.ids,
+              bm,
+              vault.collectionId,
+              assetId,
+              item.amount,
+            )
+          : withdrawAllMulticoin(
+              tx,
+              this.c.ids,
+              bm,
+              vault.collectionId,
+              assetId,
+            )
       redeemReceipt(tx, this.c.ids, balance, {
         ssuObjectId,
         characterId,
@@ -827,6 +988,68 @@ class MarketApi {
   }): Promise<SolarSystemName[]> {
     return this.c.indexer.solarSystemNames(params.solarSystemIds)
   }
+
+  // ─── Item-pool lifecycle (on-chain writes) ─────────────────────────────────
+
+  /**
+   * Open a new item market: `multicoin_pool::create_permissionless_pool` for
+   * `assetId` in the hub's vault collection, paying the 500 CRED creation fee
+   * (`POOL_CREATION_FEE`) from the wallet. The pool joins the CRED multicoin
+   * default fee class.
+   * @throws `AddressRequired` | `ExecutorRequired`; `HubNotFound`;
+   *   `InsufficientBalance` when the wallet holds under 500 CRED;
+   *   `TransactionFailed` on-chain (`EMulticoinPoolAlreadyExists` when the
+   *   market exists, `EQuoteNotApproved`).
+   */
+  async createPool(params: CreatePoolParams): Promise<CreatePoolResult> {
+    const owner = this.c.requireAddress()
+    const executor = this.c.requireExecutor()
+    const vault = await this.c.indexer.hubVault(params.storageUnitId)
+    const tx = new Transaction()
+    const fee = await prepareWalletCoinInput(
+      this.c.suiClient,
+      tx,
+      owner,
+      this.c.ids.credCoinType,
+      POOL_CREATION_FEE,
+      'Insufficient CRED in the wallet for the 500 CRED pool creation fee.',
+    )
+    createPermissionlessPoolItem(tx, this.c.ids, {
+      collectionId: vault.collectionId,
+      assetId: BigInt(params.assetId),
+      creationFee: fee,
+    })
+    const res = await executeAndNormalize(executor, tx)
+    const pool = findCreatedObject(res, '::multicoin_pool::MultiCoinPool<')
+    return { ...toTxResult(res), poolId: pool?.objectId ?? null }
+  }
+
+  /**
+   * Pay out accrued hub-operator fee shares (`claim_operator_share`, batched
+   * one call per pool): the operator's share goes to the collection's
+   * registered beneficiary, the remainder to the treasury. Permissionless —
+   * the destinations come from on-chain configuration, so any signer may run
+   * it.
+   * @throws `ValidationFailed` (no pools); `ExecutorRequired`;
+   *   `TransactionFailed` on-chain (`ENoOperatorBeneficiary` when a share is
+   *   owed but no beneficiary is registered for the collection).
+   */
+  async claimOperatorShare(
+    params: ClaimOperatorShareParams,
+  ): Promise<TxResult> {
+    if (params.poolIds.length === 0) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'claimOperatorShare needs at least one pool id.',
+      )
+    }
+    const executor = this.c.requireExecutor()
+    const tx = new Transaction()
+    for (const poolId of params.poolIds) {
+      claimOperatorShareItem(tx, this.c.ids, { poolId })
+    }
+    return toTxResult(await executeAndNormalize(executor, tx))
+  }
 }
 
 // ─── spatial ─────────────────────────────────────────────────────────────────
@@ -904,9 +1127,43 @@ class OrdersApi {
   constructor(private readonly c: TriexClient) {}
 
   /**
+   * The fee ladder of an item pool and — when an address resolves (param or
+   * client config) and has a trading account — the tier, trailing turnover
+   * and taker/maker rates that account trades at. Head-current fullnode read
+   * (one simulated transaction of view calls; nothing executes).
+   *
+   * Since cycle 7 both sides pay: bids on top of the quote (taker fee when
+   * they match, maker fee escrowed while they rest), asks out of their
+   * proceeds. Use `account.takerFeeRate` (or `entryTakerFeeRate`) with
+   * `estimateMarketBuyCost` / `estimateMarketSellProceeds`, and
+   * `bidEscrowFeeRate` with `computeBidQuoteDeposit`.
+   * @throws `HubNotFound` | `PoolNotFound` when resolving by hub + item;
+   *   `TransactionFailed` when the view calls abort (unknown pool);
+   *   `UnexpectedResponse` when the Sui client cannot return command results.
+   */
+  async fees(params: TradingFeesParams): Promise<TradingFees> {
+    const poolId = await this.c.resolveItemPoolId(params)
+    const address = this.c.optionalAddress(params.address)
+    const tradingAccountId = address
+      ? await this.c.resolveTradingAccountId(address)
+      : null
+    return getPoolTradingFees(this.c.suiClient, this.c.ids, {
+      poolId,
+      sender: address ?? ZERO_ADDRESS,
+      tradingAccountId,
+    })
+  }
+
+  /**
    * #10 — place a limit order, atomically: [create BM if missing] → deposit
    * only the deficit (items for sells, CRED+fee for bids; BM balance consumed
    * first) → owner proof → place. Defaults to good-til-cancelled.
+   *
+   * A bid is funded for its notional plus a fee at the pool's highest
+   * taker/maker rate (read on-chain, `TradingFees.bidEscrowFeeRate`), which
+   * covers any split between matching and resting at any tier; what the
+   * order does not use stays in the trading account. Asks need no quote —
+   * their fee comes out of the proceeds.
    * @throws `ValidationFailed` (non-positive price/quantity);
    *   `AddressRequired` | `ExecutorRequired`; `HubNotFound` | `PoolNotFound`;
    *   `InsufficientBalance` when the wallet/hangar cannot fund the deficit;
@@ -949,11 +1206,14 @@ class OrdersApi {
     } else {
       let quoteAmount = params.quoteDeposit
       if (quoteAmount === undefined) {
-        const meta = await this.c.indexer.poolMetadata(poolId)
+        const fees = await getPoolTradingFees(this.c.suiClient, this.c.ids, {
+          poolId,
+          sender: owner,
+        })
         quoteAmount = computeBidQuoteDeposit(
           params.price,
           params.quantity,
-          meta.feeRateScaled,
+          fees.bidEscrowFeeRate,
         )
       }
       if (quoteAmount <= 0n) {
@@ -981,10 +1241,11 @@ class OrdersApi {
   }
 
   /**
-   * #11 — place a market order. Sells fund items like a limit sell; buys
-   * REQUIRE `quoteBudget` (worst-case cost incl. fees — see
-   * `estimateMarketBuyCost`), topped up with the app's per-fill rounding
-   * buffer. Unspent quote stays in the trading account.
+   * #11 — place a market order. Sells fund items like a limit sell (the
+   * taker fee comes out of the proceeds); buys REQUIRE `quoteBudget` (cost
+   * incl. the taker fee, charged once on the whole matched quote — see
+   * `estimateMarketBuyCost`), and the trading account is topped up to it.
+   * Unspent quote stays in the trading account.
    * @throws as `limit()`, plus `ValidationFailed` when a buy has no
    *   `quoteBudget`; on-chain `TransactionFailed` includes empty-book /
    *   slippage aborts.
@@ -1028,16 +1289,12 @@ class OrdersApi {
           'Market buys require `quoteBudget` (see estimateMarketBuyCost).',
         )
       }
-      const meta = await this.c.indexer.poolMetadata(poolId)
-      const effectiveQuote =
-        params.quoteBudget +
-        marketBuyRoundingBuffer(params.quantity, meta.feeRateScaled)
       await this.depositQuoteDeficit(
         tx,
         bm,
         existingBmId,
         owner,
-        effectiveQuote,
+        params.quoteBudget,
       )
     }
 
@@ -1072,7 +1329,28 @@ class OrdersApi {
   }
 
   /**
+   * Cancel several resting orders on one pool in one call
+   * (`cancel_orders`) — all or nothing: if any id fails, none cancel.
+   * @throws as `cancel()`, plus `ValidationFailed` for an empty list.
+   */
+  async cancelMany(params: CancelOrdersParams): Promise<TxResult> {
+    if (params.orderIds.length === 0) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'cancelMany needs at least one order id.',
+      )
+    }
+    const orderIds = params.orderIds.map(parseOrderId)
+    const { tx, bm, poolId, execute } = await this.beginCancelTx(params)
+    const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
+    cancelOrdersItem(tx, this.c.ids, { poolId, bm, proof, orderIds })
+    return execute()
+  }
+
+  /**
    * Cancel every resting order on one pool (no-op success when none rest).
+   * Cancelling a bid refunds its escrowed maker fee minus the class's
+   * `cancelRetentionBps` share (see `fees()`).
    * @throws as `cancel()` minus the order-id abort.
    */
   async cancelAll(params: CancelAllOrdersParams): Promise<TxResult> {
