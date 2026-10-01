@@ -22,7 +22,7 @@ export class TransactionCaptured extends Error {
 /**
  * Raised when an SDK call completed without ever handing a transaction to the
  * executor — meaning there was nothing to prepare (e.g. `account.ensure()` on
- * an address that already has a balance manager).
+ * an address that already has a trading account).
  */
 export class NothingToPrepare extends Error {
   readonly result: unknown

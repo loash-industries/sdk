@@ -8,6 +8,7 @@ import {
   objectId,
   searchPagingShape,
   suiAddress,
+  u128,
 } from '../schemas.js'
 import type { ToolDef } from './types.js'
 
@@ -163,14 +164,16 @@ export const readTools: ToolDef[] = [
     name: 'market_nearby_hubs_by_system',
     title: 'Find hubs near a solar system',
     description:
-      'The same proximity search as market_nearby_hubs, centred on a solar system id or name instead of a hub. Use it when the origin hub is private and publishes no location.',
+      'The same proximity search as market_nearby_hubs, centred on a solar system id or name instead of a hub. Use it when the origin hub is private and publishes no location. Prefer the numeric id: names are not yet available for every system, and an unresolvable name fails with SolarSystemNotFound.',
     kind: 'read',
     sdkPath: 'market.nearbyHubsBySystem',
     inputShape: {
       solarSystem: z
         .string()
         .min(1)
-        .describe('Solar system id or name to search from, e.g. "Nod".'),
+        .describe(
+          'Solar system id (preferred) or name to search from, e.g. "30000142".',
+        ),
       rangeLy: z
         .number()
         .positive()
@@ -251,6 +254,136 @@ export const readTools: ToolDef[] = [
     },
     handler: async (ctx, args) =>
       ok(await ctx.readClient().solarSystemNames(args)),
+  },
+  {
+    name: 'market_recent_trades',
+    title: 'Read the public tape',
+    description:
+      'The latest trades across every item market, newest first — the public tape, not one account’s history (that is orders_trades). At most 50 per page: page back by passing nextCursor as `before`, poll for new trades with `after`. Unlike every other trade read, price, quantity and feeAmount are HUMAN-READABLE decimal strings already scaled by quoteCurrencyDecimals, and feeRateBps is that fill’s own effective taker rate. solarSystemName is null until a player reports it — key on solarSystemId. Costs 50 CU.',
+    kind: 'read',
+    sdkPath: 'market.recentTrades',
+    inputShape: {
+      assetId: z
+        .string()
+        .optional()
+        .describe('Only trades of this item type, e.g. "77800".'),
+      publicOnly: z
+        .boolean()
+        .optional()
+        .describe('Only trades at hubs that publish their location.'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(50)
+        .optional()
+        .describe('Trades per page (max 50 — the gateway caps it there).'),
+      before: historyPagingShape.before,
+      after: historyPagingShape.after,
+    },
+    handler: async (ctx, args) => ok(await ctx.readClient().recentTrades(args)),
+  },
+  {
+    name: 'market_display_prices',
+    title: 'Price many items',
+    description:
+      'Display prices for up to 100 items in one call. itemIds alone gives one item-wide price per item; add storageUnitIds for the per-hub price — one id applies to every item, otherwise give exactly one per item, paired by position. This is the PLAIN market price with no trading fee: use it to show or rank value, and orders_fees or market_orderbook to cost an actual trade. `tier` says where each price came from (traded → item → book → estimated → unknown); price is a human-readable decimal and priceRaw the raw quote integer, both strings. Costs 50 CU.',
+    kind: 'read',
+    sdkPath: 'market.displayPrices',
+    inputShape: {
+      itemIds: z
+        .array(z.string())
+        .min(1)
+        .max(100)
+        .describe('Item asset ids to price (max 100), e.g. ["77800"].'),
+      storageUnitIds: z
+        .array(objectId)
+        .min(1)
+        .max(100)
+        .optional()
+        .describe(
+          'Trade hub (or vault collection) ids: one for every item, or one per item in itemIds order.',
+        ),
+      fallback: z
+        .boolean()
+        .optional()
+        .describe(
+          'Per-hub mode only: false disables falling back to the item-wide price when the hub has no pool for an item (default true).',
+        ),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().displayPrices(args)),
+  },
+  {
+    name: 'market_display_price',
+    title: 'Price one item',
+    description:
+      'The single-item form of market_display_prices: the plain market price (no trading fee) for one item, item-wide or at one hub. Cheaper than the batch for one lookup. Costs 20 CU.',
+    kind: 'read',
+    sdkPath: 'market.displayPrice',
+    inputShape: {
+      itemId: z.string().min(1).describe('Item asset id, e.g. "77800".'),
+      storageUnitId: objectId
+        .optional()
+        .describe(
+          'Price at this trade hub (or vault collection); omit for the item-wide price.',
+        ),
+      fallback: z
+        .boolean()
+        .optional()
+        .describe(
+          'With storageUnitId: false disables falling back to the item-wide price (default true).',
+        ),
+    },
+    handler: async (ctx, args) => {
+      const { itemId, ...opts } = args
+      return ok(await ctx.readClient().displayPrice(itemId, opts))
+    },
+  },
+  {
+    name: 'market_hub_economics',
+    title: 'Compare hub liquidity',
+    description:
+      'Fee reserve (raw quote units) and open-order depth for up to 200 hubs, as decimal strings, plus how many distinct items have open orders. Use it to rank hubs from market_hub_locations or market_nearby_hubs by how much is actually trading there. Hubs that no longer exist are omitted. Cached upstream for 30 s. Costs 50 CU.',
+    kind: 'read',
+    sdkPath: 'market.hubEconomics',
+    inputShape: {
+      hubIds: z
+        .array(objectId)
+        .min(1)
+        .max(200)
+        .describe('Trade hub object ids (max 200).'),
+    },
+    handler: async (ctx, args) => ok(await ctx.readClient().hubEconomics(args)),
+  },
+  {
+    name: 'market_top_pools_by_fees',
+    title: 'Rank pools by unclaimed fees',
+    description:
+      'Item pools ranked by unclaimed fee balance, largest first; only pools with a positive balance appear. Amounts are raw quote units as decimal strings, and quoteType is the coin type as indexed — without its 0x prefix, so normalise it before comparing. Pair with prepare_claim_operator_share to claim the operator share. Costs 50 CU.',
+    kind: 'read',
+    sdkPath: 'market.topPoolsByFees',
+    inputShape: {
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(100)
+        .optional()
+        .describe('Pools to return (default 20, max 100).'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().topPoolsByFees(args)),
+  },
+  {
+    name: 'market_stats',
+    title: 'Get platform statistics',
+    description:
+      'Platform-wide aggregates: trades and active traders by time window, volume per quote currency, top items, organization, shared-storage and pilot totals, and 30-day daily series. A dashboard read — cached upstream for up to 60 s, so do not poll it faster. Costs 50 CU.',
+    kind: 'read',
+    sdkPath: 'market.stats',
+    inputShape: {},
+    handler: async (ctx) => ok(await ctx.readClient().stats()),
   },
   {
     name: 'spatial_system',
@@ -383,40 +516,77 @@ export const readTools: ToolDef[] = [
     name: 'account_resolve',
     title: 'Resolve a trading account',
     description:
-      'Return the BalanceManager object id for an address, or null when the address has no trading account yet. Pair with prepare_create_account.',
+      'Return the TradingAccount object id for an address, or null when the address has no trading account yet. Pair with prepare_create_account.',
     kind: 'read',
     sdkPath: 'account.get',
     inputShape: { address: suiAddress },
     handler: async (ctx, args) => {
       const id = await ctx
         .writeClient(args.address)
-        .resolveBalanceManagerId(args.address)
-      return ok({ address: args.address, balanceManagerId: id, exists: !!id })
+        .resolveTradingAccountId(args.address)
+      return ok({ address: args.address, tradingAccountId: id, exists: !!id })
     },
   },
   {
     name: 'account_balances_at_hub',
     title: 'Check balances at a hub',
     description:
-      'Item and currency balances for a trading account at one hub, across wallet, trading account, and hangar.',
+      'Item balances at one hub, in up to four sections: `marketplace` (deposited in a trading account), `warehouse` (receipts in a wallet), `hangar` (an owner_cap_id’s hangar) and `orgVaults` (organization receipt vaults). Each section is filled only when its selector is given — name at least one. Items only: CRED lives on the fullnode, so use account_currency_balances for it. Amounts are base units as decimal strings. Costs 50 CU.',
     kind: 'read',
     sdkPath: 'balances.atHub',
     inputShape: {
-      balanceManagerId: objectId,
-      storageUnitId: objectId,
-    },
-    handler: async (ctx, args) =>
-      ok(
-        await ctx
-          .readClient()
-          .balancesAtHub(args.balanceManagerId, args.storageUnitId),
+      storageUnitId: objectId.describe(
+        'Trade hub / storage unit object id; scopes the whole read.',
       ),
+      tradingAccountId: objectId
+        .optional()
+        .describe(
+          'Fills `marketplace`: items deposited in this trading account (from account_resolve).',
+        ),
+      address: suiAddress
+        .optional()
+        .describe(
+          'Fills `warehouse`: this wallet’s item receipts held at the hub.',
+        ),
+      inventoryKey: objectId
+        .optional()
+        .describe(
+          'Fills `hangar`: the hub or character owner_cap_id selecting the hangar.',
+        ),
+      vaultIds: z
+        .array(objectId)
+        .min(1)
+        .optional()
+        .describe(
+          'Fills `orgVaults`: organization receipt vault ids, keyed by id in the answer.',
+        ),
+    },
+    handler: async (ctx, args) => {
+      const { storageUnitId, tradingAccountId, address, inventoryKey } = args
+      const vaultIds: string[] | undefined = args.vaultIds
+      // Every section comes back empty unless its selector is given, so a call
+      // naming none would spend 50 CU to learn nothing.
+      if (!tradingAccountId && !address && !inventoryKey && !vaultIds) {
+        throw new Error(
+          'Name at least one section to read: tradingAccountId, address, inventoryKey or vaultIds.',
+        )
+      }
+      return ok(
+        await ctx.readClient().balancesAtHub({
+          storageUnitId,
+          ...(tradingAccountId ? { tradingAccountId } : {}),
+          ...(address ? { address } : {}),
+          ...(inventoryKey ? { inventoryKey } : {}),
+          ...(vaultIds ? { vaultIds } : {}),
+        }),
+      )
+    },
   },
   {
     name: 'account_currency_balances',
     title: 'Check CRED balances',
     description:
-      'CRED held by an address: loose in the wallet, and deposited inside its trading account. Works for an address that has no trading account yet — that answers with the wallet total, a zero deposited balance, and a null balanceManagerId, which is the signal to call prepare_create_account. Read head-current from the fullnode, so it reflects transactions the indexer has not caught up with yet. Amounts are base units as decimal strings.',
+      'CRED held by an address: loose in the wallet, and deposited inside its trading account. Works for an address that has no trading account yet — that answers with the wallet total, a zero deposited balance, and a null tradingAccountId, which is the signal to call prepare_create_account. Read head-current from the fullnode, so it reflects transactions the indexer has not caught up with yet. Amounts are base units as decimal strings.',
     kind: 'read',
     sdkPath: 'balances.currency',
     inputShape: {
@@ -432,26 +602,82 @@ export const readTools: ToolDef[] = [
       'Unclaimed proceeds and settled balances that can be claimed or withdrawn.',
     kind: 'read',
     sdkPath: 'account.sweepable',
-    inputShape: { balanceManagerId: objectId },
+    inputShape: { tradingAccountId: objectId },
     handler: async (ctx, args) =>
-      ok(await ctx.readClient().sweepable(args.balanceManagerId)),
+      ok(await ctx.readClient().sweepable(args.tradingAccountId)),
   },
   {
     name: 'account_owners',
     title: 'Resolve trading account owners',
     description:
-      'Who owns these trading accounts, for up to 200 BalanceManager ids — how a counterparty id from the order book gets a name. `owner` is tagged: `player:<wallet>` for a character-owned account, `ou:<org_id>` for an organization-owned one.',
+      'Who owns these trading accounts, for up to 200 TradingAccount ids — how a counterparty id from the order book gets a name. `owner` is tagged: `player:<wallet>` for a character-owned account, `ou:<org_id>` for an organization-owned one.',
     kind: 'read',
     sdkPath: 'account.owners',
     inputShape: {
-      balanceManagerIds: z
+      tradingAccountIds: z
         .array(objectId)
         .min(1)
         .max(200)
-        .describe('BalanceManager object ids (max 200).'),
+        .describe('TradingAccount object ids (max 200).'),
     },
     handler: async (ctx, args) =>
       ok(await ctx.readClient().accountOwners(args)),
+  },
+  {
+    name: 'account_caps',
+    title: 'List trading account capabilities',
+    description:
+      'Capabilities around an address, read head-current from the fullnode: the cap ids on its own trading account’s allow-list (what prepare_revoke_account_cap can revoke), and the Trade/Deposit/WithdrawCaps it holds for any account. tradingAccountId is null and allowListed empty when the address has no trading account. Pair with prepare_mint_account_cap.',
+    kind: 'read',
+    sdkPath: 'account.caps',
+    inputShape: {
+      address: suiAddress.describe('Sui address whose caps to read.'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.writeClient(args.address).account.caps(args.address)),
+  },
+  {
+    name: 'orders_fees',
+    title: 'Read item-pool fees',
+    description:
+      'Live fee state of one item pool, from the on-chain FeePolicy: the active and staged fee ladders, entry taker/maker rates, cancel retention, and bidEscrowFeeRate — the rate a bid deposit must cover. With an address, also that account’s own tier, turnover and rates. Rates are 1e9-scaled (11000000 = 1.10%) as decimal strings. Identify the pool by poolId, or by storageUnitId + assetId. Use it to size quoteBudget for prepare_market_order, or to price a bid before prepare_limit_order.',
+    kind: 'read',
+    sdkPath: 'orders.fees',
+    inputShape: {
+      storageUnitId: objectId
+        .optional()
+        .describe('Trade hub / storage unit object id; pair with assetId.'),
+      assetId: z
+        .string()
+        .optional()
+        .describe('EVE Frontier item asset id; pair with storageUnitId.'),
+      poolId: objectId
+        .optional()
+        .describe('Item pool id; use instead of storageUnitId + assetId.'),
+      address: suiAddress
+        .optional()
+        .describe('Also resolve this address’s fee tier and rates.'),
+    },
+    handler: async (ctx, args) => {
+      // The SDK branches on `'poolId' in params`, so an undefined key would
+      // pick the wrong selector — build the params from what was given.
+      const selector = args.poolId
+        ? { poolId: args.poolId }
+        : args.storageUnitId && args.assetId
+          ? { storageUnitId: args.storageUnitId, assetId: args.assetId }
+          : null
+      if (!selector) {
+        throw new Error(
+          'Identify the pool by poolId, or by storageUnitId together with assetId.',
+        )
+      }
+      return ok(
+        await ctx.writeClient(args.address).orders.fees({
+          ...selector,
+          ...(args.address ? { address: args.address } : {}),
+        }),
+      )
+    },
   },
   {
     name: 'orders_open',
@@ -459,10 +685,10 @@ export const readTools: ToolDef[] = [
     description: 'Resting orders for a trading account.',
     kind: 'read',
     sdkPath: 'orders.openOrders',
-    inputShape: { balanceManagerId: objectId, ...historyPagingShape },
+    inputShape: { tradingAccountId: objectId, ...historyPagingShape },
     handler: async (ctx, args) => {
-      const { balanceManagerId, ...rest } = args
-      return ok(await ctx.readClient().openOrders(balanceManagerId, rest))
+      const { tradingAccountId, ...rest } = args
+      return ok(await ctx.readClient().openOrders(tradingAccountId, rest))
     },
   },
   {
@@ -471,10 +697,10 @@ export const readTools: ToolDef[] = [
     description: "This account's side of each match, most recent first.",
     kind: 'read',
     sdkPath: 'orders.fills',
-    inputShape: { balanceManagerId: objectId, ...historyPagingShape },
+    inputShape: { tradingAccountId: objectId, ...historyPagingShape },
     handler: async (ctx, args) => {
-      const { balanceManagerId, ...rest } = args
-      return ok(await ctx.readClient().fills(balanceManagerId, rest))
+      const { tradingAccountId, ...rest } = args
+      return ok(await ctx.readClient().fills(tradingAccountId, rest))
     },
   },
   {
@@ -483,10 +709,45 @@ export const readTools: ToolDef[] = [
     description: 'Completed trades for a trading account.',
     kind: 'read',
     sdkPath: 'orders.trades',
-    inputShape: { balanceManagerId: objectId, ...historyPagingShape },
+    inputShape: { tradingAccountId: objectId, ...historyPagingShape },
     handler: async (ctx, args) => {
-      const { balanceManagerId, ...rest } = args
-      return ok(await ctx.readClient().trades(balanceManagerId, rest))
+      const { tradingAccountId, ...rest } = args
+      return ok(await ctx.readClient().trades(tradingAccountId, rest))
     },
+  },
+  {
+    name: 'orders_get',
+    title: 'Look up an order',
+    description:
+      'One order on one pool, whatever became of it: status open, filled or cancelled, original/remaining/filled quantity, owner (trading account and character), hub, quote currency, and its fill history oldest first. This is how to follow up an order after prepare_limit_order — orders_open only lists orders still resting. Not limited to your own orders. Order ids are unique only per pool, so both are required. Prices and quantities are raw integers as decimal strings. Costs 30 CU.',
+    kind: 'read',
+    sdkPath: 'orders.get',
+    inputShape: {
+      poolId: objectId.describe(
+        'Item pool id the order rests (or rested) on — from orders_open, orders_fills or market_orderbook.',
+      ),
+      orderId: u128.describe(
+        'Order id (Move u128) as a decimal string — past 2^53, never a JSON number.',
+      ),
+    },
+    handler: async (ctx, args) => ok(await ctx.readClient().order(args)),
+  },
+  {
+    name: 'orders_fill',
+    title: 'Look up a fill',
+    description:
+      'One fill by its eventDigest (as carried on orders_fills, orders_trades and orders_get), seen from neither side: both trading accounts, maker and taker fees, which side took, and when. Use it to identify a counterparty — pass the trading account ids to account_owners for a name. assetId and storageUnitId are null until the market’s metadata is indexed. Amounts are raw integers as decimal strings. Costs 30 CU.',
+    kind: 'read',
+    sdkPath: 'orders.fill',
+    inputShape: {
+      eventDigest: z
+        .string()
+        .min(1)
+        .describe(
+          'The fill’s event digest (transaction digest plus event index), exactly as a fill or trade read returned it.',
+        ),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.readClient().fill(args.eventDigest)),
   },
 ]

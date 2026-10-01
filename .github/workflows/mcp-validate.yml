@@ -1,0 +1,113 @@
+name: Validate MCP against this commit's SDK
+
+# The MCP package wraps the SDK's public client surface, and in this repository
+# the two change together: a PR that adds SDK methods adds their tools in the
+# same diff. Validating `mcp/` against the PUBLISHED @trinaryex/sdk (what a
+# plain `npm ci` installs) therefore fails every such PR on exports that only
+# exist on the branch — and on `main` it would grade the MCP against the
+# release being replaced rather than the one it ships with.
+#
+# So this builds the SDK at the checked-out commit and copies it into
+# mcp/node_modules (`npm run link:sdk`, the same step as local development)
+# before running the usual checks. The published-dependency path is still
+# exercised where it matters: `publish-mcp` builds the released package against
+# the SDK version it pins from npm.
+#
+# Job names match the shared js-validate-code workflow, so callers keep their
+# check names (`validate-mcp / linters`, `validate-mcp / unit-tests (test:cov)`).
+
+permissions:
+  contents: read
+  checks: write
+  actions: read
+
+on:
+  workflow_call:
+    inputs:
+      node_version:
+        description: Node.js version.
+        type: string
+        default: "22"
+
+jobs:
+  linters:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mcp/package-lock.json
+
+      - name: Build this commit's SDK and link it into mcp/
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          npm ci --no-audit --no-fund --prefix mcp
+          npm run link:sdk --prefix mcp
+
+      - name: Run eslint
+        working-directory: mcp
+        run: npm run lint:check
+
+      - name: Run prettier
+        working-directory: mcp
+        run: npm run prettier:check
+
+      - name: Type Check
+        working-directory: mcp
+        run: npm run tscheck
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        test: ["test:cov"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mcp/package-lock.json
+
+      - name: Build this commit's SDK and link it into mcp/
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          npm ci --no-audit --no-fund --prefix mcp
+          npm run link:sdk --prefix mcp
+
+      - name: Run ${{ matrix.test }}
+        working-directory: mcp
+        run: npm run ${{ matrix.test }}
+
+      - name: Test report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Tests report (MCP ${{ matrix.test }})
+          path: mcp/junit.xml
+          reporter: jest-junit
+          fail-on-empty: "false"
+
+      - name: Upload test artifacts
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-tests-artifacts
+          path: |
+            mcp/coverage/
+            mcp/junit.xml

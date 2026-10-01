@@ -83,7 +83,9 @@ describe('lock-step coverage', () => {
   it('gives every exclusion a reason', () => {
     for (const [path, reason] of Object.entries(EXCLUDED_SDK_PATHS)) {
       expect(reason.length).toBeGreaterThan(20)
-      expect(path).toMatch(/^[a-z]+\.[a-zA-Z]+$/)
+      // Two segments for a client group (`market.resolvePool`), three for a
+      // handle sub-API (`org.governance.run`).
+      expect(path).toMatch(/^[a-z]+(\.[a-zA-Z]+){1,2}$/)
     }
   })
 
@@ -133,7 +135,20 @@ describe('lock-step arguments', () => {
     // Read tools call ReadOnlyClient, whose methods take identity explicitly.
     // Without it, every account-scoped read would look like a violation.
     const openOrders = surface.find((m) => m.path === 'orders.openOrders')
-    expect(openOrders?.params.map((p) => p.name)).toContain('balanceManagerId')
+    expect(openOrders?.params.map((p) => p.name)).toContain('tradingAccountId')
+  })
+
+  it('does not alias a sub-API ReadOnlyClient exposes whole onto its flat methods', () => {
+    // ReadOnlyClient.coins IS CoinsReadApi; its `orderbook` is not the flat
+    // item-book `orderbook(storageUnitId, assetId)`. Borrowing that signature
+    // would demand inputs the coin book never takes, and let `coins.openOrders`
+    // accept history paging it silently drops.
+    const coinBook = surface.find((m) => m.path === 'coins.orderbook')
+    const names = coinBook?.params.map((p) => p.name)
+    expect(names).toEqual(expect.arrayContaining(['poolId', 'depth']))
+    expect(names).not.toContain('storageUnitId')
+    const coinOrders = surface.find((m) => m.path === 'coins.openOrders')
+    expect(coinOrders?.params.map((p) => p.name)).not.toContain('before')
   })
 
   it('expands object parameters without expanding primitives', () => {

@@ -12,40 +12,145 @@ import type { PackageIds } from './types'
  * handles; none execute. The high-level client resolves object IDs (from the
  * indexer + fullnode) and composes these into atomic transactions.
  *
- * Entry points confirmed against triex-app-api
- * (`useTriexbookMulticoinOrders.ts`, `sweepAllTx.ts`). Arg orders for the
- * `multicoin_pool::place_*` calls should be re-verified against the on-chain
- * module before Phase 3 sign-off (DESIGN.md §6).
+ * Every target and argument list is verified against trinary-exchange `main`
+ * (cycle 7 + TRIEX-158, `packages/triex/sources`: `trading_account.move`,
+ * `multicoin_pool.move`). Cycle 7 renamed the `balance_manager` module to
+ * `trading_account` (`BalanceManager` → `TradingAccount`), made order ids
+ * `u128`, and added a shared `&FeePolicy` argument to order placement,
+ * cancel, cancel-all, modify, swaps, pool creation and the operator-share
+ * claim. `ctx: &TxContext` parameters are implicit and never passed.
  */
 
-// ─── Balance manager lifecycle ───────────────────────────────────────────────
+// ─── Trading account lifecycle ───────────────────────────────────────────────
 
-/** `balance_manager::new()` → the new BalanceManager (transfer to self after). */
-export function newBalanceManager(
+/** `trading_account::new()` → the new TradingAccount (transfer to self after). */
+export function newTradingAccount(
   tx: Transaction,
   ids: PackageIds,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::new`,
+    target: `${ids.triex}::trading_account::new`,
     arguments: [],
   })
 }
 
-/** `balance_manager::generate_proof_as_owner(bm)` — required before trading. */
+/**
+ * `trading_account::new_with_custom_owner(owner)` → a TradingAccount owned by
+ * `owner` (owner-only functions then need `owner`'s signature).
+ */
+export function newTradingAccountWithOwner(
+  tx: Transaction,
+  ids: PackageIds,
+  owner: string,
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::trading_account::new_with_custom_owner`,
+    arguments: [tx.pure.address(owner)],
+  })
+}
+
+/**
+ * `trading_account::new_with_custom_owner_and_caps(owner)` → the account; a
+ * DepositCap, WithdrawCap and TradeCap are minted and sent to `owner` on-chain
+ * (never returned to the caller).
+ */
+export function newTradingAccountWithOwnerAndCaps(
+  tx: Transaction,
+  ids: PackageIds,
+  owner: string,
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::trading_account::new_with_custom_owner_and_caps`,
+    arguments: [tx.pure.address(owner)],
+  })
+}
+
+/**
+ * `trading_account::register_trading_account(bm, registry)` — file the account
+ * under its owner in the registry (owner-only; capped at 100 per owner,
+ * `registry::EMaxTradingAccountsReached`).
+ */
+export function registerTradingAccount(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+): void {
+  tx.moveCall({
+    target: `${ids.triex}::trading_account::register_trading_account`,
+    arguments: [bm, tx.object(ids.triexRegistry)],
+  })
+}
+
+// ─── Capabilities & proofs ───────────────────────────────────────────────────
+
+/** Which `trading_account` capability to mint. */
+export type TradingAccountCapKind = 'trade' | 'deposit' | 'withdraw'
+
+/**
+ * `trading_account::mint_{trade,deposit,withdraw}_cap(bm)` → the new cap
+ * (owner-only; at most 1000 live caps per account, `EMaxCapsReached`).
+ * Transfer it to whoever should hold it.
+ */
+export function mintTradingAccountCap(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+  kind: TradingAccountCapKind,
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::trading_account::mint_${kind}_cap`,
+    arguments: [bm],
+  })
+}
+
+/**
+ * `trading_account::revoke_trade_cap(bm, &capId)` — remove any cap (trade,
+ * deposit or withdraw) from the allow-list (owner-only; `ECapNotInList` when
+ * the id is not listed).
+ */
+export function revokeTradingAccountCap(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+  capId: string,
+): void {
+  tx.moveCall({
+    target: `${ids.triex}::trading_account::revoke_trade_cap`,
+    arguments: [bm, tx.pure.id(capId)],
+  })
+}
+
+/**
+ * `trading_account::generate_proof_as_trader(bm, tradeCap)` — a TradeProof
+ * for a TradeCap holder (`EInvalidTrader` once the cap is revoked).
+ */
+export function generateProofAsTrader(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+  tradeCap: TransactionObjectArgument,
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::trading_account::generate_proof_as_trader`,
+    arguments: [bm, tradeCap],
+  })
+}
+
+/** `trading_account::generate_proof_as_owner(bm)` — required before trading. */
 export function generateProofAsOwner(
   tx: Transaction,
   ids: PackageIds,
   bm: TransactionObjectArgument,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::generate_proof_as_owner`,
+    target: `${ids.triex}::trading_account::generate_proof_as_owner`,
     arguments: [bm],
   })
 }
 
 // ─── Deposits ────────────────────────────────────────────────────────────────
 
-/** `balance_manager::deposit<T>(bm, coin)` — deposit a prepared coin. */
+/** `trading_account::deposit<T>(bm, coin)` — deposit a prepared coin. */
 export function depositCoin(
   tx: Transaction,
   ids: PackageIds,
@@ -54,13 +159,13 @@ export function depositCoin(
   coinType: string = ids.credCoinType,
 ): void {
   tx.moveCall({
-    target: `${ids.triex}::balance_manager::deposit`,
+    target: `${ids.triex}::trading_account::deposit`,
     typeArguments: [coinType],
     arguments: [bm, coin],
   })
 }
 
-/** `balance_manager::deposit_multicoin(bm, object)` — deposit an item Balance. */
+/** `trading_account::deposit_multicoin(bm, object)` — deposit an item Balance. */
 export function depositMulticoinObject(
   tx: Transaction,
   ids: PackageIds,
@@ -68,14 +173,44 @@ export function depositMulticoinObject(
   itemObjectId: string,
 ): void {
   tx.moveCall({
-    target: `${ids.triex}::balance_manager::deposit_multicoin`,
+    target: `${ids.triex}::trading_account::deposit_multicoin`,
     arguments: [bm, tx.object(itemObjectId)],
+  })
+}
+
+/** `trading_account::deposit_with_cap<T>(bm, depositCap, coin)`. */
+export function depositCoinWithCap(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+  depositCap: TransactionObjectArgument,
+  coin: TransactionObjectArgument,
+  coinType: string = ids.credCoinType,
+): void {
+  tx.moveCall({
+    target: `${ids.triex}::trading_account::deposit_with_cap`,
+    typeArguments: [coinType],
+    arguments: [bm, depositCap, coin],
+  })
+}
+
+/** `trading_account::deposit_multicoin_with_cap(bm, depositCap, balance)`. */
+export function depositMulticoinWithCap(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+  depositCap: TransactionObjectArgument,
+  balance: TransactionObjectArgument,
+): void {
+  tx.moveCall({
+    target: `${ids.triex}::trading_account::deposit_multicoin_with_cap`,
+    arguments: [bm, depositCap, balance],
   })
 }
 
 // ─── Withdrawals ─────────────────────────────────────────────────────────────
 
-/** `balance_manager::withdraw<T>(bm, amount)` → coin (partial withdraw). */
+/** `trading_account::withdraw<T>(bm, amount)` → coin (partial withdraw). */
 export function withdrawCoin(
   tx: Transaction,
   ids: PackageIds,
@@ -84,13 +219,13 @@ export function withdrawCoin(
   coinType: string = ids.credCoinType,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::withdraw`,
+    target: `${ids.triex}::trading_account::withdraw`,
     typeArguments: [coinType],
     arguments: [bm, tx.pure.u64(amount)],
   })
 }
 
-/** `balance_manager::withdraw_all<T>(bm)` → coin (transfer to self after). */
+/** `trading_account::withdraw_all<T>(bm)` → coin (transfer to self after). */
 export function withdrawAllCoin(
   tx: Transaction,
   ids: PackageIds,
@@ -98,13 +233,13 @@ export function withdrawAllCoin(
   coinType: string = ids.credCoinType,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::withdraw_all`,
+    target: `${ids.triex}::trading_account::withdraw_all`,
     typeArguments: [coinType],
     arguments: [bm],
   })
 }
 
-/** `balance_manager::withdraw_all_multicoin(bm, collectionId, assetId)` → balance. */
+/** `trading_account::withdraw_all_multicoin(bm, collectionId, assetId)` → balance. */
 export function withdrawAllMulticoin(
   tx: Transaction,
   ids: PackageIds,
@@ -113,8 +248,72 @@ export function withdrawAllMulticoin(
   assetId: bigint,
 ): TransactionResult {
   return tx.moveCall({
-    target: `${ids.triex}::balance_manager::withdraw_all_multicoin`,
+    target: `${ids.triex}::trading_account::withdraw_all_multicoin`,
     arguments: [bm, tx.pure.id(collectionId), tx.pure.u64(assetId)],
+  })
+}
+
+/**
+ * `trading_account::withdraw_multicoin(bm, collectionId, assetId, amount)` →
+ * balance (partial item withdraw; `EMultiCoinBalanceTooLow` when short).
+ */
+export function withdrawMulticoin(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+  collectionId: string,
+  assetId: bigint,
+  amount: bigint,
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::trading_account::withdraw_multicoin`,
+    arguments: [
+      bm,
+      tx.pure.id(collectionId),
+      tx.pure.u64(assetId),
+      tx.pure.u64(amount),
+    ],
+  })
+}
+
+/** `trading_account::withdraw_with_cap<T>(bm, withdrawCap, amount)` → coin. */
+export function withdrawCoinWithCap(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+  withdrawCap: TransactionObjectArgument,
+  amount: bigint,
+  coinType: string = ids.credCoinType,
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::trading_account::withdraw_with_cap`,
+    typeArguments: [coinType],
+    arguments: [bm, withdrawCap, tx.pure.u64(amount)],
+  })
+}
+
+/**
+ * `trading_account::withdraw_multicoin_with_cap(bm, withdrawCap,
+ * collectionId, assetId, amount)` → balance.
+ */
+export function withdrawMulticoinWithCap(
+  tx: Transaction,
+  ids: PackageIds,
+  bm: TransactionObjectArgument,
+  withdrawCap: TransactionObjectArgument,
+  collectionId: string,
+  assetId: bigint,
+  amount: bigint,
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::trading_account::withdraw_multicoin_with_cap`,
+    arguments: [
+      bm,
+      withdrawCap,
+      tx.pure.id(collectionId),
+      tx.pure.u64(assetId),
+      tx.pure.u64(amount),
+    ],
   })
 }
 
@@ -166,10 +365,10 @@ export interface HangarSourceArgs {
 }
 
 /**
- * Pull items out of a hangar/SSU and deposit them into the balance manager, in
+ * Pull items out of a hangar/SSU and deposit them into the trading account, in
  * one PTB fragment:
  *   borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap
- *   → balance_manager::deposit_multicoin
+ *   → trading_account::deposit_multicoin
  *
  * TODO(RQ-3): confirm which owner cap (SSU vs character) applies for a personal
  * player at their own vs a public hub, and the exact `capTypeArg`.
@@ -211,7 +410,7 @@ export function sourceItemsFromHangar(
   })
 
   tx.moveCall({
-    target: `${ids.triex}::balance_manager::deposit_multicoin`,
+    target: `${ids.triex}::trading_account::deposit_multicoin`,
     arguments: [bm, receipt],
   })
 }
@@ -233,7 +432,10 @@ export interface PlaceLimitOrderArgs {
   expireTimestamp: bigint
 }
 
-/** `multicoin_pool::place_limit_order<Quote>(...)`. */
+/**
+ * `multicoin_pool::place_limit_order<Quote>(pool, policy, account, proof,
+ * orderType, selfMatchingOption, price, quantity, isBid, expireTimestamp, clock)`.
+ */
 export function placeLimitOrderItem(
   tx: Transaction,
   ids: PackageIds,
@@ -244,6 +446,7 @@ export function placeLimitOrderItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
       tx.pure.u8(args.orderType ?? 0),
@@ -266,7 +469,10 @@ export interface PlaceMarketOrderArgs {
   selfMatchingOption?: number
 }
 
-/** `multicoin_pool::place_market_order<Quote>(...)`. */
+/**
+ * `multicoin_pool::place_market_order<Quote>(pool, policy, account, proof,
+ * selfMatchingOption, quantity, isBid, clock)`.
+ */
 export function placeMarketOrderItem(
   tx: Transaction,
   ids: PackageIds,
@@ -277,6 +483,7 @@ export function placeMarketOrderItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
       tx.pure.u8(args.selfMatchingOption ?? 0),
@@ -288,9 +495,9 @@ export function placeMarketOrderItem(
 }
 
 /**
- * `multicoin_pool::cancel_order<Quote>(pool, bm, proof, orderId, clock)`.
- * `orderId` is the pool-local order id (u64) as surfaced by open-orders /
- * discovery reads — matches the app and TRIEX_SYSTEM_DESIGN §7.3.
+ * `multicoin_pool::cancel_order<Quote>(pool, policy, account, proof, orderId, clock)`.
+ * `orderId` is the `u128` order id as surfaced by open-orders / discovery
+ * reads (`order_id`), matching the app.
  */
 export function cancelOrderItem(
   tx: Transaction,
@@ -307,15 +514,16 @@ export function cancelOrderItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
-      tx.pure.u64(args.orderId),
+      tx.pure.u128(args.orderId),
       tx.object(ids.clock),
     ],
   })
 }
 
-/** `multicoin_pool::cancel_all_orders<Quote>(pool, bm, proof, clock)`. */
+/** `multicoin_pool::cancel_all_orders<Quote>(pool, policy, account, proof, clock)`. */
 export function cancelAllOrdersItem(
   tx: Transaction,
   ids: PackageIds,
@@ -330,6 +538,7 @@ export function cancelAllOrdersItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
       tx.object(ids.clock),
@@ -338,7 +547,35 @@ export function cancelAllOrdersItem(
 }
 
 /**
- * `multicoin_pool::modify_order<Quote>(pool, bm, proof, orderId, newQuantity, clock)`
+ * `multicoin_pool::cancel_orders<Quote>(pool, policy, account, proof,
+ * orderIds: vector<u128>, clock)` — all-or-nothing batch cancel.
+ */
+export function cancelOrdersItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    poolId: string
+    bm: TransactionObjectArgument
+    proof: TransactionObjectArgument
+    orderIds: bigint[]
+  },
+): void {
+  tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::cancel_orders`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
+      args.bm,
+      args.proof,
+      tx.pure.vector('u128', args.orderIds),
+      tx.object(ids.clock),
+    ],
+  })
+}
+
+/**
+ * `multicoin_pool::modify_order<Quote>(pool, policy, account, proof, orderId, newQuantity, clock)`
  * — reduce a resting order's quantity (newQuantity < original, > filled).
  */
 export function modifyOrderItem(
@@ -357,9 +594,10 @@ export function modifyOrderItem(
     typeArguments: [ids.credCoinType],
     arguments: [
       tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
       args.bm,
       args.proof,
-      tx.pure.u64(args.orderId),
+      tx.pure.u128(args.orderId),
       tx.pure.u64(args.newQuantity),
       tx.object(ids.clock),
     ],
@@ -367,8 +605,8 @@ export function modifyOrderItem(
 }
 
 /**
- * `multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` — claim
- * settled (post-fill) proceeds from a pool into the balance manager. Fill
+ * `multicoin_pool::withdraw_settled_amounts<Quote>(pool, account, proof)` — claim
+ * settled (post-fill) proceeds from a pool into the trading account. Fill
  * proceeds sit "settled" in the pool until claimed; bots must call this (or
  * `account.claimSettled`) before withdrawing.
  */
@@ -386,5 +624,231 @@ export function withdrawSettledAmounts(
     target: `${ids.triex}::multicoin_pool::withdraw_settled_amounts`,
     typeArguments: [args.quoteCoinType ?? ids.credCoinType],
     arguments: [tx.object(args.poolId), args.bm, args.proof],
+  })
+}
+
+/**
+ * `multicoin_pool::withdraw_settled_amounts_permissionless<Quote>(pool,
+ * account)` — push an account's settled proceeds into it without a proof
+ * (anyone may call; funds only ever move pool → account).
+ */
+export function withdrawSettledAmountsPermissionless(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    poolId: string
+    bm: TransactionObjectArgument
+    quoteCoinType?: string
+  },
+): void {
+  tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::withdraw_settled_amounts_permissionless`,
+    typeArguments: [args.quoteCoinType ?? ids.credCoinType],
+    arguments: [tx.object(args.poolId), args.bm],
+  })
+}
+
+// ─── Swaps (item pools, no resting order) ────────────────────────────────────
+
+/**
+ * `multicoin_pool::swap_exact_base_for_quote<Quote>(pool, policy, baseIn,
+ * credIn, minQuoteOut, clock)` → `[baseLeft, quoteOut, credLeft]`: sell an
+ * item `Balance` without a trading account (a temporary one is created and
+ * deleted on-chain). `credIn` comes back unchanged — pass a zero CRED coin.
+ * Aborts `EMinimumQuantityOutNotMet` below `minQuoteOut`.
+ */
+export function swapExactBaseForQuoteItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    poolId: string
+    baseIn: TransactionObjectArgument
+    credIn: TransactionObjectArgument
+    minQuoteOut: bigint
+  },
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::swap_exact_base_for_quote`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
+      args.baseIn,
+      args.credIn,
+      tx.pure.u64(args.minQuoteOut),
+      tx.object(ids.clock),
+    ],
+  })
+}
+
+/**
+ * `multicoin_pool::swap_exact_quote_for_base<Quote>(pool, policy, quoteIn,
+ * credIn, minBaseOut, clock)` → `[baseOut, quoteLeft, credLeft]`: buy items
+ * with a quote coin, without a trading account. The quantity bought is sized
+ * on-chain so notional plus the entry-tier taker fee fits in `quoteIn`.
+ */
+export function swapExactQuoteForBaseItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    poolId: string
+    quoteIn: TransactionObjectArgument
+    credIn: TransactionObjectArgument
+    minBaseOut: bigint
+  },
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::swap_exact_quote_for_base`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
+      args.quoteIn,
+      args.credIn,
+      tx.pure.u64(args.minBaseOut),
+      tx.object(ids.clock),
+    ],
+  })
+}
+
+export interface SwapWithTradingAccountArgs {
+  poolId: string
+  bm: TransactionObjectArgument
+  tradeCap: TransactionObjectArgument
+  depositCap: TransactionObjectArgument
+  withdrawCap: TransactionObjectArgument
+}
+
+/**
+ * `multicoin_pool::swap_exact_base_for_quote_with_trading_account<Quote>(pool,
+ * policy, account, tradeCap, depositCap, withdrawCap, baseIn, minQuoteOut,
+ * clock)` → `[baseLeft, quoteOut]`, priced at the account's own fee tier.
+ */
+export function swapExactBaseForQuoteWithTradingAccountItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: SwapWithTradingAccountArgs & {
+    baseIn: TransactionObjectArgument
+    minQuoteOut: bigint
+  },
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::swap_exact_base_for_quote_with_trading_account`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
+      args.bm,
+      args.tradeCap,
+      args.depositCap,
+      args.withdrawCap,
+      args.baseIn,
+      tx.pure.u64(args.minQuoteOut),
+      tx.object(ids.clock),
+    ],
+  })
+}
+
+/**
+ * `multicoin_pool::swap_exact_quote_for_base_with_trading_account<Quote>(pool,
+ * policy, account, tradeCap, depositCap, withdrawCap, quoteIn, minBaseOut,
+ * clock)` → `[baseOut, quoteLeft]`, priced at the account's own fee tier.
+ */
+export function swapExactQuoteForBaseWithTradingAccountItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: SwapWithTradingAccountArgs & {
+    quoteIn: TransactionObjectArgument
+    minBaseOut: bigint
+  },
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::swap_exact_quote_for_base_with_trading_account`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
+      args.bm,
+      args.tradeCap,
+      args.depositCap,
+      args.withdrawCap,
+      args.quoteIn,
+      tx.pure.u64(args.minBaseOut),
+      tx.object(ids.clock),
+    ],
+  })
+}
+
+// ─── Pool lifecycle & hub revenue ────────────────────────────────────────────
+
+/** `constants::pool_creation_fee()` — 500 CRED (6 decimals). */
+export const POOL_CREATION_FEE = 500_000_000n
+
+/**
+ * `multicoin_pool::create_permissionless_pool<Quote>(registry, policy,
+ * collection, assetId, creationFee)` → the new pool's `ID`. `creationFee` must
+ * be a `Coin<CRED>` of exactly {@link POOL_CREATION_FEE} (`EInvalidFee`); the
+ * pool joins its quote's multicoin default fee class.
+ */
+export function createPermissionlessPoolItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    collectionId: string
+    assetId: bigint
+    creationFee: TransactionObjectArgument
+  },
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::create_permissionless_pool`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(ids.triexRegistry),
+      tx.object(ids.triexFeePolicy),
+      tx.object(args.collectionId),
+      tx.pure.u64(args.assetId),
+      args.creationFee,
+    ],
+  })
+}
+
+/**
+ * `multicoin_pool::claim_operator_share<Quote>(pool, policy, registry, clock)`
+ * → `(hubAmount, treasuryAmount)`: pay the hub operator's accrued fee share to
+ * the collection's registered beneficiary and the rest to the treasury.
+ * Permissionless — both destinations come from on-chain configuration. Aborts
+ * `ENoOperatorBeneficiary` when a share is owed but no beneficiary is set.
+ */
+export function claimOperatorShareItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: { poolId: string },
+): TransactionResult {
+  return tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::claim_operator_share`,
+    typeArguments: [ids.credCoinType],
+    arguments: [
+      tx.object(args.poolId),
+      tx.object(ids.triexFeePolicy),
+      tx.object(ids.triexRegistry),
+      tx.object(ids.clock),
+    ],
+  })
+}
+
+/**
+ * `multicoin_pool::update_pool_allowed_versions<Quote>(pool, registry)` —
+ * permissionless: sync a pool's allowed package versions from the registry
+ * after an upgrade (trading aborts `EPackageVersionDisabled` until it is).
+ */
+export function updatePoolAllowedVersionsItem(
+  tx: Transaction,
+  ids: PackageIds,
+  args: { poolId: string },
+): void {
+  tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::update_pool_allowed_versions`,
+    typeArguments: [ids.credCoinType],
+    arguments: [tx.object(args.poolId), tx.object(ids.triexRegistry)],
   })
 }

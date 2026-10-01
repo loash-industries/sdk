@@ -17,14 +17,14 @@ describe('capture executor', () => {
   it('throws NothingToPrepare when no transaction was built', async () => {
     await expect(
       captureTransaction(async () => ({
-        balanceManagerId: '0x1',
+        tradingAccountId: '0x1',
         created: false,
       })),
     ).rejects.toBeInstanceOf(NothingToPrepare)
   })
 
   it('carries the SDK result on NothingToPrepare so callers can explain it', async () => {
-    const result = { balanceManagerId: '0xabc', created: false }
+    const result = { tradingAccountId: '0xabc', created: false }
     await captureTransaction(async () => result).catch((e) => {
       expect(e).toBeInstanceOf(NothingToPrepare)
       expect((e as NothingToPrepare).result).toBe(result)

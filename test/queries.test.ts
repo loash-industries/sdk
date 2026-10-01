@@ -113,7 +113,7 @@ describe('IndexerClient request building', () => {
     const client = new IndexerClient('https://api.example.test', 'k')
     await client.openOrders(HEX, { before: 200, after: 100, limit: 50 })
     const [url] = fetchMock.mock.calls[0] as [URL]
-    expect(String(url)).toContain(`/v1/balance-managers/${HEX}/open-orders`)
+    expect(String(url)).toContain(`/v1/trading-accounts/${HEX}/open-orders`)
     expect(url.searchParams.get('before')).toBe('200')
     expect(url.searchParams.get('after')).toBe('100')
     expect(url.searchParams.get('limit')).toBe('50')
@@ -162,7 +162,7 @@ describe('IndexerClient request building', () => {
     })
     respond(404, 'Not Found', {})
     await expect(client.openOrders(HEX)).rejects.toMatchObject({
-      code: TriexError.BalanceManagerNotFound,
+      code: TriexError.TradingAccountNotFound,
     })
 
     // 5xx → IndexerError, with the server's message surfaced
@@ -413,6 +413,18 @@ describe('IndexerClient location reads', () => {
     expect(url.searchParams.get('range')).toBe('100')
   })
 
+  it('maps a null by-system result to SolarSystemNotFound, keeping [] as "none in range"', async () => {
+    mockFetch([null])
+    await expect(
+      client.nearbyHubsBySystem({ solarSystem: 'EHK-KH7' }),
+    ).rejects.toMatchObject({ code: TriexError.SolarSystemNotFound })
+
+    mockFetch([[]])
+    await expect(
+      client.nearbyHubsBySystem({ solarSystem: '30000142' }),
+    ).resolves.toEqual([])
+  })
+
   it('joins batch ids into one comma-separated ids parameter', async () => {
     const fetchMock = mockFetch([
       [{ ...placement, pool_count: 3, last_activity_at: null }],
@@ -427,7 +439,7 @@ describe('IndexerClient location reads', () => {
     expect(hubs[0]).not.toHaveProperty('solarSystemName')
   })
 
-  it('parses assembly, balance-manager and solar-system batch reads', async () => {
+  it('parses assembly, trading-account and solar-system batch reads', async () => {
     mockFetch([
       [{ assembly_id: '0xass', owner: '0xowner' }],
       [
@@ -441,7 +453,7 @@ describe('IndexerClient location reads', () => {
       ],
       [
         {
-          balance_manager_id: HEX,
+          trading_account_id: HEX,
           owner: 'ou:0xorg',
           owner_name: 'Loash Industries',
           root_ou_id: '0xroot',
@@ -457,8 +469,8 @@ describe('IndexerClient location reads', () => {
       ownerCharacterName: 'Pilot',
       assemblyName: 'Depot',
     })
-    expect((await client.balanceManagerOwners([HEX]))[0]).toEqual({
-      balanceManagerId: HEX,
+    expect((await client.tradingAccountOwners([HEX]))[0]).toEqual({
+      tradingAccountId: HEX,
       owner: 'ou:0xorg',
       ownerName: 'Loash Industries',
       rootOuId: '0xroot',
@@ -475,7 +487,7 @@ describe('IndexerClient location reads', () => {
     expect(await client.hubsEnriched([])).toEqual([])
     expect(await client.assemblyOwners([])).toEqual([])
     expect(await client.assembliesEnriched([])).toEqual([])
-    expect(await client.balanceManagerOwners([])).toEqual([])
+    expect(await client.tradingAccountOwners([])).toEqual([])
     expect(await client.solarSystemNames([])).toEqual([])
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -530,6 +542,13 @@ describe('IndexerClient spatial reads', () => {
     // Round-tripping through a double would land on -6523761465801880000+ε.
     expect(BigInt(got.location.x)).toBe(-6523761465801880000n)
     expect(got.regionId).toBe(10000013)
+  })
+
+  it('accepts a system whose name is not yet published', async () => {
+    mockFetch([{ ...system, solar_system_name: null }])
+    const got = await client.solarSystem('30001053')
+    expect(got.solarSystemId).toBe(30001053)
+    expect(got.solarSystemName).toBeNull()
   })
 
   it('url-encodes a system name that needs it', async () => {
@@ -619,6 +638,31 @@ describe('IndexerClient spatial reads', () => {
     expect(res.systems[0].distanceLy).toBe('18.991165304211588')
   })
 
+  it('accepts a nearby-search origin whose name is not yet published', async () => {
+    mockFetch([
+      {
+        solar_system_id: 30000142,
+        solar_system_name: null,
+        radius_ly: '100',
+        count: 1,
+        systems: [
+          {
+            solar_system_id: 30001053,
+            solar_system_name: null,
+            distance_ly: '18.991165304211588',
+            location: coords,
+          },
+        ],
+      },
+    ])
+    const res = await client.nearbySystems({
+      solarSystem: '30000142',
+      radiusLy: 100,
+    })
+    expect(res.originSolarSystemName).toBeNull()
+    expect(res.systems[0].solarSystemName).toBeNull()
+  })
+
   it('accepts a nearby result missing its name and location', async () => {
     // A system in the stargate graph but absent from the coordinate index:
     // the gateway omits both fields rather than sending nulls.
@@ -685,6 +729,8 @@ describe('IndexerClient spatial reads', () => {
     mockFetch([{ total_systems: 24018, status: 'operational' }])
     expect(await client.spatialStats()).toEqual({
       totalSystems: 24018,
+      // Absent before location-api's cycle-7 names change.
+      knownSolarSystemNames: null,
       status: 'operational',
     })
   })

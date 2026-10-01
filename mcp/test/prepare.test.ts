@@ -15,7 +15,7 @@ const SENDER = '0x'.padEnd(66, 'a')
 function txWithCalls(): Transaction {
   const tx = new Transaction()
   tx.moveCall({
-    target: `${PKG}::balance_manager::generate_proof_as_owner`,
+    target: `${PKG}::trading_account::generate_proof_as_owner`,
     arguments: [
       tx.object(
         Inputs.ObjectRef({
@@ -36,7 +36,7 @@ function txWithCalls(): Transaction {
 describe('intent extraction', () => {
   it('lists every Move call target in command order', () => {
     expect(extractTargets(txWithCalls())).toEqual([
-      `${PKG_NORM}::balance_manager::generate_proof_as_owner`,
+      `${PKG_NORM}::trading_account::generate_proof_as_owner`,
       `${PKG_NORM}::multicoin_pool::place_limit_order`,
     ])
   })
@@ -77,7 +77,7 @@ describe('prepared contract', () => {
     // Targets come from the built transaction, not from the caller's params —
     // this is what makes the caller's verify-before-sign check meaningful.
     expect(prepared.intent.targets).toEqual([
-      `${PKG_NORM}::balance_manager::generate_proof_as_owner`,
+      `${PKG_NORM}::trading_account::generate_proof_as_owner`,
       `${PKG_NORM}::multicoin_pool::place_limit_order`,
     ])
     expect(prepared.intent.action).toBe('limit_order')

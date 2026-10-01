@@ -10,6 +10,8 @@ export interface GatewayOperation {
   normalized: string
   method: string
   operationId: string | undefined
+  /** Marked deprecated (`deprecated: true` or `x-deprecation-date`). */
+  deprecated?: boolean
   query: GatewayQueryParam[]
   pathParams: string[]
 }

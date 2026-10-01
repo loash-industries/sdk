@@ -3,12 +3,14 @@ import type { Transaction } from '@mysten/sui/transactions'
 // satisfies); `@mysten/sui` v2 no longer type-exports a `SuiClient` name.
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 import type { z } from 'zod'
+import type { OwnedTradingAccountCap } from './onchain'
+import type { TradingAccountCapKind } from './transactions'
 import type {
   AssemblyEnrichedSchema,
   AssemblyOwnerSchema,
   AssetBalanceSchema,
   AutocompleteSystemsSchema,
-  BalanceManagerOwnerSchema,
+  TradingAccountOwnerSchema,
   BatchSystemsSchema,
   CoordinateSearchSchema,
   CoordinatesSchema,
@@ -45,6 +47,33 @@ import type {
   SweepableSchema,
   TradeSchema,
   TradesPageSchema,
+  CharacterLookupSchema,
+  CharacterSchema,
+  DisplayPriceSchema,
+  FillDetailSchema,
+  HubEconomicsSchema,
+  ItemInfoSchema,
+  OrderCharacterSchema,
+  OrderCurrencySchema,
+  OrderDetailFillSchema,
+  OrderDetailSchema,
+  OrderHubSchema,
+  OrderPartySchema,
+  PlatformStatsSchema,
+  PoolFeesSchema,
+  RecentTradeSchema,
+  RecentTradesPageSchema,
+  RecipeMaterialSchema,
+  RecipeSchema,
+  RouteComparisonSchema,
+  RouteSchema,
+  RoutingStatsSchema,
+  StatsQuoteVolumeSchema,
+  StatsTopItemSchema,
+  StatsTopOrgSchema,
+  TribeSchema,
+  WaypointSchema,
+  WorldItemSchema,
 } from './schemas'
 
 // ─── Wallet / executor plumbing (mirrors keyspace) ──────────────────────────
@@ -89,12 +118,24 @@ export type TriexNetwork = 'testnet'
  */
 export interface PackageIds {
   /**
-   * Triex CLOB package: balance_manager + multicoin_pool. See the Move
+   * Triex CLOB package: trading_account + multicoin_pool. See the Move
    * contracts at https://github.com/loash-industries/trinary-exchange.
    */
   triex: string
+  /**
+   * The triex package's ORIGINAL id. Struct types (`TradingAccount`, cap and
+   * balance-key types) keep the id of the version that defined them, so type
+   * filters and dynamic-field key types use this; `moveCall` targets use
+   * {@link PackageIds.triex}. Equal to `triex` until the first upgrade.
+   */
+  triexOriginal: string
   /** Triex CLOB registry (shared object). */
   triexRegistry: string
+  /**
+   * Triex `fee_policy::FeePolicy` (shared object). Order placement, cancel,
+   * cancel-all and modify on a `MultiCoinPool` take it by reference.
+   */
+  triexFeePolicy: string
   /** multicoin package (defines the item `Balance` struct type). */
   multicoin: string
   /** warehouse_receipts package (`receipt::redeem_receipt` / `deposit_for_receipt`). */
@@ -107,6 +148,29 @@ export interface PackageIds {
   worldOriginal: string
   /** The Sui `Clock` shared object — always `0x6`. */
   clock: string
+
+  // ─── Armature (organizations & governance) — DESIGN-ARMATURE.md §9 ────────
+  //
+  // Each upgraded package carries a `*Original` sibling. `moveCall` targets use
+  // the CURRENT id; dynamic-field key types and `StructType` filters must use
+  // the ORIGINAL, because objects keep the type tag of the package version that
+  // created them. Cycle 7 fresh-published every package, so on `stillness` each
+  // pair is currently equal — they diverge again on the first upgrade.
+
+  /** armature_framework: ou, board_voting, proposal, composite, treasury_vault, controller. */
+  armature: string
+  armatureOriginal: string
+  /** armature_proposals: the governance payload types and their `execute_*` dispatchers. */
+  armatureProposals: string
+  armatureProposalsOriginal: string
+  /** armature_trading: governance-wrapped CLOB operations. */
+  armatureTrading: string
+  armatureTradingOriginal: string
+  /** armature_vault: `ou_receipt_vault` (shared storage) + `acl` principals. */
+  armatureVault: string
+  armatureVaultOriginal: string
+  /** `ou_receipt_vault::OuReceiptVaultRegistry` shared object (not a package). */
+  ouReceiptVaultRegistry: string
 }
 
 // ─── Client config ──────────────────────────────────────────────────────────
@@ -137,6 +201,11 @@ export interface ReadOnlyClientConfig {
   indexerUrl?: string
   network?: TriexNetwork
   packageIds?: Partial<PackageIds>
+  /**
+   * Optional fullnode client. Only `coins.*` reads use it (coin-pool books,
+   * orders and fees are on-chain reads); everything else stays indexer-only.
+   */
+  suiClient?: ClientWithCoreApi
 }
 
 // ─── Domain types (inferred from the pinned wire schemas — see schemas.ts) ───
@@ -154,7 +223,7 @@ export type NearbyHub = z.output<typeof NearbyHubSchema>
 export type HubEnriched = z.output<typeof HubEnrichedSchema>
 export type AssemblyOwner = z.output<typeof AssemblyOwnerSchema>
 export type AssemblyEnriched = z.output<typeof AssemblyEnrichedSchema>
-export type BalanceManagerOwner = z.output<typeof BalanceManagerOwnerSchema>
+export type TradingAccountOwner = z.output<typeof TradingAccountOwnerSchema>
 export type SolarSystemName = z.output<typeof SolarSystemNameSchema>
 export type Coordinates = z.output<typeof CoordinatesSchema>
 export type SolarSystem = z.output<typeof SolarSystemSchema>
@@ -183,6 +252,43 @@ export type TradesPage = z.output<typeof TradesPageSchema>
 export type SweepablePool = z.output<typeof SweepablePoolSchema>
 export type SweepableItem = z.output<typeof SweepableItemSchema>
 export type Sweepable = z.output<typeof SweepableSchema>
+
+// Point lookups: one order, one fill.
+export type OrderDetail = z.output<typeof OrderDetailSchema>
+export type OrderDetailFill = z.output<typeof OrderDetailFillSchema>
+export type OrderParty = z.output<typeof OrderPartySchema>
+export type OrderCharacter = z.output<typeof OrderCharacterSchema>
+export type OrderHub = z.output<typeof OrderHubSchema>
+export type OrderCurrency = z.output<typeof OrderCurrencySchema>
+export type FillDetail = z.output<typeof FillDetailSchema>
+
+// Market-wide feeds, prices & rankings.
+export type RecentTrade = z.output<typeof RecentTradeSchema>
+export type RecentTradesPage = z.output<typeof RecentTradesPageSchema>
+export type DisplayPrice = z.output<typeof DisplayPriceSchema>
+export type HubEconomics = z.output<typeof HubEconomicsSchema>
+export type PoolFees = z.output<typeof PoolFeesSchema>
+export type PlatformStats = z.output<typeof PlatformStatsSchema>
+export type StatsQuoteVolume = z.output<typeof StatsQuoteVolumeSchema>
+export type StatsTopItem = z.output<typeof StatsTopItemSchema>
+export type StatsTopOrg = z.output<typeof StatsTopOrgSchema>
+
+// Characters & tribes.
+export type Character = z.output<typeof CharacterSchema>
+export type CharacterLookup = z.output<typeof CharacterLookupSchema>
+export type Tribe = z.output<typeof TribeSchema>
+
+// World reference data.
+export type WorldItem = z.output<typeof WorldItemSchema>
+export type ItemInfo = z.output<typeof ItemInfoSchema>
+export type Recipe = z.output<typeof RecipeSchema>
+export type RecipeMaterial = z.output<typeof RecipeMaterialSchema>
+
+// Routing.
+export type Route = z.output<typeof RouteSchema>
+export type Waypoint = z.output<typeof WaypointSchema>
+export type RouteComparison = z.output<typeof RouteComparisonSchema>
+export type RoutingStats = z.output<typeof RoutingStatsSchema>
 
 /** Order book for one pool: resting orders (not aggregated price levels). */
 export interface Orderbook {
@@ -229,7 +335,7 @@ export interface TradeHubDetail {
 
 /** The player's on-chain trading account. */
 export interface TradingAccount {
-  balanceManagerId: string
+  tradingAccountId: string
   owner: string
 }
 
@@ -240,16 +346,16 @@ export interface TradingAccount {
 export interface CurrencyBalances {
   /** CRED held as wallet coins (base units). */
   wallet: bigint
-  /** CRED held inside the balance manager (base units); 0n when no BM. */
-  balanceManager: bigint
-  /** Resolved balance manager, when one exists. */
-  balanceManagerId: string | null
+  /** CRED held inside the trading account (base units); 0n when no BM. */
+  tradingAccount: bigint
+  /** Resolved trading account, when one exists. */
+  tradingAccountId: string | null
 }
 
 // ─── Method params ──────────────────────────────────────────────────────────
 
 export interface EnsureAccountResult {
-  balanceManagerId: string
+  tradingAccountId: string
   created: boolean
 }
 
@@ -258,8 +364,8 @@ export interface DiscoveryFilters {
   storageUnitIds?: string[]
   /** Numeric item type / asset id. */
   assetId?: string
-  /** Only orders owned by this balance manager ("my orders"). */
-  balanceManagerId?: string
+  /** Only orders owned by this trading account ("my orders"). */
+  tradingAccountId?: string
   /** Default `both`. */
   side?: 'buy' | 'sell' | 'both'
   /** Restrict to location-revealed (public) hubs. */
@@ -360,6 +466,77 @@ export interface BalancesAtHubParams {
   vaultIds?: string[]
 }
 
+/** Look up one order on one pool (order ids are only unique per pool). */
+export interface OrderLookupParams {
+  poolId: string
+  /**
+   * Order id (Move `u128`) — a decimal string or bigint, never a number
+   * (it exceeds 2^53). A `0x`-hex string is accepted and sent as decimal.
+   */
+  orderId: bigint | string
+}
+
+/** Filters for the universe-wide recent-trades feed. */
+export interface RecentTradesParams extends HistoryPageParams {
+  /** Only trades at location-revealed (public) hubs. */
+  publicOnly?: boolean
+  /** Only trades of this item type (numeric asset id). */
+  assetId?: string
+}
+
+/**
+ * Batch display prices. `itemIds` alone → one vault-independent item-tier
+ * price per item; with `storageUnitIds` → the per-hub waterfall per
+ * (item, hub) pair. `storageUnitIds` must be one id (applied to every item)
+ * or exactly as many as `itemIds` (paired by position).
+ */
+export interface DisplayPricesParams {
+  /** Numeric item ids (max 100). */
+  itemIds: string[]
+  /** Trade hub or vault collection ids. */
+  storageUnitIds?: string[]
+  /**
+   * Pair mode only: `false` disables falling back to the item-tier price for
+   * a pair with no pool at that hub (default: fallback enabled).
+   */
+  fallback?: boolean
+}
+
+/** Price one item, optionally at one hub. */
+export interface DisplayPriceParams {
+  /** Trade hub or vault collection id to price against. */
+  storageUnitId?: string
+  /** As {@link DisplayPricesParams.fallback}. */
+  fallback?: boolean
+}
+
+/** Request-side route modes (the response names them differently). */
+export type RouteOptimization = 'fuel' | 'time' | 'balanced'
+
+/** Ship parameters shared by the routing reads. */
+export interface RouteShipParams {
+  /**
+   * Departure system NAME (case-insensitive). Routing takes names only —
+   * and since cycle 7 names are player-reported, an unreported name 404s
+   * (`RouteNotFound`) even though the system exists. Resolve candidates with
+   * `spatial.autocompleteSystems()` first.
+   */
+  origin: string
+  /** Arrival system NAME (case-insensitive); same caveat as `origin`. */
+  destination: string
+  /** Ship mass in game units (default 1.0); heavier pushes fuel routes to gates. */
+  mass?: number
+  /** 0–1 preference for stargates over drives, `balanced` only (default 0.5). */
+  gateWeight?: number
+  /** Ship's jump-drive range in light years (default 50). */
+  maxJumpRangeLy?: number
+}
+
+export interface RouteParams extends RouteShipParams {
+  /** `time` (default), `fuel`, or `balanced`. */
+  optimization?: RouteOptimization
+}
+
 /** Cursorless history paging: epoch-ms bounds + limit (1–100). */
 export interface HistoryPageParams {
   before?: number
@@ -396,11 +573,12 @@ export interface WithdrawCurrencyParams {
 export interface WithdrawItemsParams {
   storageUnitId: string
   /**
-   * Each listed asset is withdrawn IN FULL (`withdraw_all_multicoin`) and
-   * redeemed into the hangar at the hub — partial item withdrawal is not part
-   * of the redeem flow (matches the app's sweep semantics).
+   * Each listed asset is withdrawn from the trading account and redeemed into
+   * the hangar at the hub: `amount` items (`withdraw_multicoin`), or the full
+   * balance when `amount` is omitted (`withdraw_all_multicoin`, the app's
+   * sweep semantics).
    */
-  items: { assetId: string }[]
+  items: { assetId: string; amount?: bigint }[]
   /** Defaults to the on-chain character resolved from the client address. */
   characterId?: string
 }
@@ -419,8 +597,10 @@ export interface LimitOrderParams {
   /** 0 = allowed (default), 1 = cancel taker, 2 = cancel maker. */
   selfMatchingOption?: number
   /**
-   * Override the quote (CRED) amount deposited for a bid; defaults to
-   * `computeBidQuoteDeposit(price, quantity, feeRateScaled)`.
+   * Override the quote (CRED) a bid needs in the trading account; defaults to
+   * `computeBidQuoteDeposit(price, quantity, fees.bidEscrowFeeRate)` — the
+   * notional plus a fee at the pool's highest taker/maker rate, read
+   * on-chain, so the order is never under-funded.
    */
   quoteDeposit?: bigint
 }
@@ -431,9 +611,11 @@ export interface MarketOrderParams {
   side: OrderSide
   quantity: bigint
   /**
-   * Required for market buys — worst-case CRED cost including taker fees,
-   * typically `estimateMarketBuyCost(book.asks, quantity, feeRateScaled)`.
-   * The SDK adds the app's per-fill rounding buffer on top.
+   * Required for market buys — the CRED cost including the taker fee,
+   * typically `estimateMarketBuyCost(book.asks, quantity, takerFeeRate)
+   * .total`. The trading account is topped up to this amount; note a market
+   * buy can spend whatever the account holds, so this is a funding target,
+   * not a price cap.
    */
   quoteBudget?: bigint
   /** 0 = allowed (default), 1 = cancel taker, 2 = cancel maker. */
@@ -443,7 +625,10 @@ export interface MarketOrderParams {
 export interface CancelOrderParams {
   storageUnitId: string
   assetId: string
-  /** Pool-local order id (u64), from `orders.openOrders()` / discovery. */
+  /**
+   * Order id (Move `u128`), from `orders.openOrders()` / discovery. Keep it as
+   * a decimal string or bigint — it exceeds 2^53.
+   */
   orderId: bigint | string
 }
 
@@ -460,4 +645,63 @@ export interface ModifyOrderParams extends CancelOrderParams {
 export interface ClaimSettledParams {
   /** Pools to claim from; defaults to every pool the sweepable read reports. */
   poolIds?: string[]
+}
+
+export interface CancelOrdersParams {
+  storageUnitId: string
+  assetId: string
+  /** Order ids (Move `u128`) — all must belong to the account, or none cancel. */
+  orderIds: (bigint | string)[]
+}
+
+/** Identify an item pool by hub + item, or directly by pool id. */
+export type PoolSelector =
+  { storageUnitId: string; assetId: string } | { poolId: string }
+
+export type TradingFeesParams = PoolSelector & {
+  /** Whose tier to resolve; defaults to the client address (if any). */
+  address?: string
+}
+
+export interface MintCapParams {
+  /** `trade` (TradeProof), `deposit` or `withdraw`. */
+  kind: TradingAccountCapKind
+  /** Who receives the cap; defaults to the trading-account owner. */
+  recipient?: string
+}
+
+export interface MintCapResult extends TxResult {
+  /** The minted cap's object id, when the executor surfaced created objects. */
+  capId: string | null
+}
+
+export interface RevokeCapParams {
+  /** Id of a Trade/Deposit/WithdrawCap on the account's allow-list. */
+  capId: string
+}
+
+/** Capabilities around one address's trading account. */
+export interface TradingAccountCaps {
+  /** The address's own trading account, if any. */
+  tradingAccountId: string | null
+  /** Cap ids live on that account's allow-list (empty without an account). */
+  allowListed: string[]
+  /** Caps the address holds, for any account. */
+  held: OwnedTradingAccountCap[]
+}
+
+export interface CreatePoolParams {
+  /** Hub whose vault collection the new market trades. */
+  storageUnitId: string
+  assetId: string
+}
+
+export interface CreatePoolResult extends TxResult {
+  /** The new pool's id, when the executor surfaced created objects. */
+  poolId: string | null
+}
+
+export interface ClaimOperatorShareParams {
+  /** Item pools to settle the hub operator's fee share for (batched in one PTB). */
+  poolIds: string[]
 }

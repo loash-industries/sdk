@@ -104,10 +104,11 @@ describe('pagination generators', () => {
   })
 
   it('iterateFills advances the strictly-older `before` bound', async () => {
+    // As the gateway pages: a full page's `nextCursor` is its last row's
+    // timestamp, and a short page's is null — so no empty page is fetched.
     const pages = [
-      { fills: [{ filledAt: 300 }, { filledAt: 200 }], nextCursor: null },
+      { fills: [{ filledAt: 300 }, { filledAt: 200 }], nextCursor: '200' },
       { fills: [{ filledAt: 100 }], nextCursor: null },
-      { fills: [], nextCursor: null },
     ]
     const befores: unknown[] = []
     const indexer = {
@@ -121,7 +122,7 @@ describe('pagination generators', () => {
       seen.push((f as any).filledAt)
     }
     expect(seen).toEqual([300, 200, 100])
-    expect(befores).toEqual([undefined, 200, 100])
+    expect(befores).toEqual([undefined, 200])
   })
 })
 

@@ -54,13 +54,69 @@ All configuration is **non-secret** — note the absence of any key, address, or
 
 ## Tools
 
-**Read** — `market_discover`, `market_search_items`, `market_hub`, `market_items_at_hub`, `market_orderbook`, `market_pool_metadata`, `account_resolve`, `account_balances_at_hub`, `account_currency_balances`, `account_sweepable`, `orders_open`, `orders_fills`, `orders_trades`.
+**Read** — `market_discover`, `market_search_items`, `market_hub`, `market_items_at_hub`, `market_orderbook`, `market_pool_metadata`, `account_resolve`, `account_balances_at_hub`, `account_currency_balances`, `account_sweepable`, `account_caps`, `orders_fees`, `orders_open`, `orders_fills`, `orders_trades`, `orders_get`, `orders_fill`. `orders_fees` and `account_caps` are head-current fullnode reads: the live fee ladder of an item pool (and, with an address, that account's tier), and the capabilities around a trading account. `orders_get` follows up any order on any pool — open, filled or cancelled, with its fills — and `orders_fill` reads one fill by `eventDigest` with both sides' accounts and fees. `account_balances_at_hub` returns item sections only for the selectors you pass (`tradingAccountId`, `address`, `inventoryKey`, `vaultIds`); name at least one.
 
 **Locations** — `market_hub_locations`, `market_item_locations`, `market_nearby_hubs`, `market_nearby_hubs_by_system`, `market_hubs_enriched`, `market_assembly_owners`, `market_assemblies_enriched`, `market_solar_system_names`, `account_owners`. These answer *where is it* and *who owns it*: start from `market_hub_locations` or `market_item_locations` when you hold no hub id, then `market_nearby_hubs` to widen the search. All are read tools.
 
+**Market feeds & prices** — `market_recent_trades`, `market_display_prices`, `market_display_price`, `market_hub_economics`, `market_top_pools_by_fees`, `market_stats`. Market-wide answers rather than one hub's book: the public tape, plain display prices, hub liquidity and platform aggregates. Two unit traps: the tape's `price`/`quantity`/`feeAmount` are **human-readable decimals**, unlike every other trade read; and display prices carry **no trading fee** — cost a real trade with `orders_fees` and `market_orderbook`.
+
+**Players, world & routing** — `characters_get`, `characters_by_address`, `characters_by_name`, `characters_batch`, `characters_tribe`, `world_items`, `world_item`, `world_recipes`, `world_recipes_for`, `routing_route`, `routing_compare`, `routing_stats`. Who is behind an address (`characters_batch` names up to 500 wallets in one call), the static item catalogue and crafting recipes (fetch once and cache), and routes between systems. Routing takes solar system **names only**, and since cycle 7 names are player-reported: a system nobody has named yet fails with `RouteNotFound` even though it exists, so a numeric id is refused at the schema. Find routable names with `spatial_autocomplete_systems`; key results on `solarSystemId`, since `solarSystemName` is null until reported.
+
+These reads state their compute-unit cost in their descriptions — from 20 CU for a single lookup up to 300 CU for `routing_compare`, which runs three route searches.
+
 **Spatial (star map)** — `spatial_system`, `spatial_systems`, `spatial_nearby_systems`, `spatial_systems_near_coordinates`, `spatial_autocomplete_systems`, `spatial_stats`. Where solar systems are and what is near what — no account, hub or signer needed. Coordinates are metres and distances light years, both as decimal strings: the values exceed 2^53.
 
-**Prepare** — `prepare_create_account`, `prepare_deposit_currency`, `prepare_deposit_items`, `prepare_withdraw_currency`, `prepare_withdraw_items`, `prepare_claim_settled`, `prepare_limit_order`, `prepare_market_order`, `prepare_cancel_order`, `prepare_cancel_all_orders`, `prepare_modify_order`.
+**Prepare** — `prepare_create_account`, `prepare_register_account`, `prepare_mint_account_cap`, `prepare_revoke_account_cap`, `prepare_deposit_currency`, `prepare_deposit_items`, `prepare_withdraw_currency`, `prepare_withdraw_items`, `prepare_claim_settled`, `prepare_limit_order`, `prepare_market_order`, `prepare_cancel_order`, `prepare_cancel_many_orders`, `prepare_cancel_all_orders`, `prepare_modify_order`, `prepare_create_pool`, `prepare_claim_operator_share`.
+
+**Coin markets** — currency-pair pools (`triex::pool::Pool<Base, Quote>`), the coin counterpart of the item markets above. A pool is named by `poolId`, or by `baseCoinType` (+ `quoteCoinType`, default CRED); start from `coins_list`, which turns a symbol into both.
+
+- *Read* — `coins_list`, `coins_orderbook`, `coins_trade_params`, `coins_quote`, `coins_estimate_market`, `coins_open_orders`, `coins_account`, `coins_balances`. Everything but `coins_list` is a fullnode simulation, so these need no indexer route and reflect the chain head.
+- *Prepare* — `prepare_coin_deposit`, `prepare_coin_withdraw`, `prepare_coin_limit_order`, `prepare_coin_market_order`, `prepare_coin_swap`, `prepare_coin_cancel_order`, `prepare_coin_cancel_many_orders`, `prepare_coin_cancel_all_orders`, `prepare_coin_modify_order`, `prepare_coin_claim_settled`, `prepare_coin_create_pool`.
+
+Coin units differ from item units: every amount is **raw base units of its coin**, and prices are **1e9-scaled raw** (`quote = floor(base × price / 1e9)`), not CRED per item. `worstCaseSpend.asset` on a coin tool is the full normalized coin type, since a pool need not be quoted in CRED. Where the SDK would size a figure from a live read — a bid's deposit, a market buy's budget, a swap's `minOut` — the tool runs that read first and passes the result in, so the amount `intent` declares is the amount the bytes commit to.
+
+**Organizations (Armature)** — an organization is a *tree* of DAOs, and almost every question about one is really a question about a specific unit: which board votes, whose treasury, whose shared storage. Any unit id resolves the whole tree, so `orgId` is forgiving, but the answers are per-unit.
+
+97 tools — 22 read, 75 prepare — covering every cycle-7 `orgs.*` and `org.*` method except the closure-taking governance generics (see `EXCLUDED_SDK_PATHS`).
+
+- *Identity & discovery* — `org_get`, `org_batch`, `org_directory`, `org_for_player`, `org_search`, `org_seats`, `org_trading_account`, `org_proposals`, `org_accessible_keyspaces`.
+- *Governance reads* — `org_governance` (slots, configs, permission bits, the unit's pause/migration flags and freeze state), `org_proposal` (one proposal's live tally and deadlines; `null` once executed or deleted), `org_expired_proposals`, `org_freeze`, `org_capabilities`, `org_entries`.
+- *Treasury reads* — `org_treasury_balances`, `org_treasury_balance`.
+- *Shared storage reads* — `org_vaults_at_hub`, `org_vaults_at_hub_for_org`, `org_vault_resolve`, `org_vault_info`, `org_vault_balance`.
+- *Create* — `prepare_org_create` (root + officers + members in one transaction), `prepare_org_create_standalone`.
+- *Membership & metadata* — `prepare_org_add_members`, `prepare_org_remove_members`, `prepare_org_set_board` (a `{ add, remove }` diff), `prepare_org_update_metadata`.
+- *Proposal types* — `prepare_org_enable_type`, `prepare_org_disable_type`, `prepare_org_update_type_config`, `prepare_org_enable_composite`, `prepare_org_enable_send_coin`, `prepare_org_enable_send_coin_to_org`, `prepare_org_enable_send_small_payment`, `prepare_org_enable_trading`, `prepare_org_enable_bypass`, `prepare_org_disable_bypass`.
+- *Voting & execution* — `prepare_org_vote`, `prepare_org_execute_proposal`, `prepare_org_delete_expired_proposals`, `prepare_org_delete_exhausted_frame`.
+- *Treasury* — `prepare_org_treasury_deposit`, `prepare_org_treasury_claim`, `prepare_org_treasury_send`, `prepare_org_treasury_send_small`, `prepare_org_treasury_send_to_org`.
+- *Trading as the organization* — `prepare_org_setup_trading`, `prepare_org_limit_order`, `prepare_org_market_order`, `prepare_org_cancel_order`, `prepare_org_buy_from_treasury`, `prepare_org_sell_from_vault`, `prepare_org_deposit_to_trading`, `prepare_org_enable_coin_pair`, `prepare_org_coin_limit_order`, `prepare_org_coin_cancel_order`, `prepare_org_create_pool`, `prepare_org_sweep_coin`, `prepare_org_sweep_items`, `prepare_org_sweep_all`.
+- *Shared storage* — `prepare_org_vault_init`, `prepare_org_vault_deposit`, `prepare_org_vault_withdraw`, `prepare_org_vault_grant`, `prepare_org_vault_revoke`, `prepare_org_vault_rekey`, `prepare_org_vault_deinit`.
+- *Currency* — `prepare_org_currency_enable`, `prepare_org_currency_adopt`, `prepare_org_currency_mint`, `prepare_org_currency_mint_allowance`, `prepare_org_currency_configure_allowance`, `prepare_org_currency_mint_with_allowance`, `prepare_org_currency_burn`, `prepare_org_currency_return_cap`.
+- *Sub-units & lifecycle* — `prepare_org_unit_create`, `prepare_org_unit_pause`, `prepare_org_unit_unpause`, `prepare_org_unit_transfer_cap`, `prepare_org_unit_reclaim_cap`, `prepare_org_unit_spin_out`, `prepare_org_spawn_successor`, `prepare_org_transfer_assets`, `prepare_org_unit_destroy`.
+- *Emergency freeze* — `prepare_org_freeze_type`, `prepare_org_unfreeze_type` (FreezeAdminCap holder, no vote), `prepare_org_unfreeze`, `prepare_org_freeze_set_max_duration`, `prepare_org_freeze_update_exempt`, `prepare_org_freeze_transfer_admin`.
+- *Encrypted entries* (member-gated, no vote) — `prepare_org_entry_publish`, `prepare_org_entry_update`, `prepare_org_entry_edit`, `prepare_org_entries_rotate_epoch`, `prepare_org_entry_remove`. These index ciphertext that is already uploaded; encrypting and decrypting need a wallet-signed Seal session and live in `@trinaryex/keyspace`.
+- *Upgrades* — `prepare_org_upgrade_propose`.
+
+`seat` and `unitId` are different things. `seat` is the unit you act *through*, meaning whose board votes. `unitId` is the unit you act *on*. A parent's board can target a child it does not sit on, and the action then routes through the parent's `SubOUControl`. Every governance write also takes `metadataIpfs`, which is recorded on the proposal.
+
+### Governance actions have three outcomes, not one
+
+This is the one way the org prepare tools differ from every other prepare tool, and skipping it will cost you.
+
+The **same call** resolves differently per caller. For an officer whose lone vote clears quorum it executes now; for someone whose does not it creates a **proposal** the board still has to vote on; for a third caller it is refused outright. So:
+
+- `intent.outcome` is `"executed"` or `"proposed"`. **A `proposed` result has not done the thing yet.** The outcome is read off the built bytes: a transaction that calls `board_voting::submit_proposal` or `composite::submit_composite` creates a proposal. Anything else executes. Permissionless, cap-holder and member-gated writes always report `executed`.
+- A refusal returns `prepared: false` with the resolver's `reason` and `code` — an answer, not an error, and there are no bytes to sign.
+- Trading tools never degrade into proposals. A limit order deferred by a week is priced against a book that no longer exists, and a funded buy split into two proposals loses its atomic deposit-then-place guarantee, so they return `prepared: false` instead.
+
+`org_governance` is what predicts this: a lone vote clears quorum only when `boardSize × quorum ≤ 10000` and `executionDelayMs` is 0. Pair it with `org_seats` to know which board you are on.
+
+### Two things that bite
+
+**Shared storage is keyed by (storage unit, organization).** There is no "the vault at this hub" — anyone can register one at any SSU, so `org_vaults_at_hub` may well list a stranger's. `org_vault_resolve` answers for *your* organization.
+
+**Some lifecycle steps cannot be undone.** `prepare_org_unit_spin_out` releases a child from its parent for good. `prepare_org_spawn_successor` puts a unit into `Migrating`, after which only `prepare_org_transfer_assets` runs on it.
+
+**Proposals are deleted on-chain once they finish.** Cycle 7 deletes a proposal when it executes and when it is cleaned up after expiry. After that, `org_proposal` returns `null` and only `org_proposals` (the indexer) remembers the outcome. A lapsed proposal shows as `pending` until someone runs `prepare_org_delete_expired_proposals`, which is permissionless and pays the storage rebate to the gas payer.
 
 u64-ish values (prices, quantities, amounts) cross the MCP boundary as **decimal strings**, never JSON numbers.
 
@@ -124,12 +180,19 @@ npm run check:parity   # readable lock-step report (builds first)
 npm run build && npm start
 ```
 
+Working against an **unpublished** SDK change? The dependency is a published
+version, so a surface added in a sibling checkout is invisible here — and the
+parity gate would cheerfully report lock-step against a version that predates
+the work. `npm run link:sdk` copies the sibling build in so local checks tell
+the truth; `npm install` restores the published copy.
+
 ### Lock-step with the SDK
 
 The tool surface is checked against the SDK's **shipped type declarations**, not against a hand-maintained list. `scripts/sdk-surface.mjs` parses `@trinaryex/sdk`'s `.d.ts` with the TypeScript compiler, which gives four things for free:
 
 - `private` helpers are excluded **structurally** — nothing to keep in sync;
-- each method's **return type classifies it**: `Promise<TxResult>` (or `EnsureAccountResult`) is a write, everything else is a read;
+- each method's **return type classifies it**: `Promise<TxResult>`, `EnsureAccountResult` or `RunOutcome` is a write, everything else is a read — including intersections like `RunOutcome & { skipped }`;
+- **handle sub-APIs are discovered**, not listed: the org handle's groups (`org.governance`, `org.treasury`, …) come from `OrgHandle`'s own property declarations, so adding a group to the SDK cannot silently escape the gate;
 - each method's **parameter types resolve** to the property names it accepts, following them into sibling declaration files;
 - it describes the **published contract**, which is what consumers actually see.
 
@@ -146,18 +209,19 @@ Two escape hatches exist, and each demands a written reason:
 
 The waivers are themselves checked: one naming a real SDK parameter, or one the tool no longer declares, fails as a stale claim.
 
-Read tools resolve against `ReadOnlyClient` as well as the namespaced APIs, since that is the client they actually call.
+Read tools resolve against `ReadOnlyClient` as well as the namespaced APIs, since that is the client they actually call. A group `ReadOnlyClient` exposes whole (`coins`, `orgs`) is the same class on both clients and is not aliased onto its flat methods — otherwise `coins.orderbook` would borrow the item book's `storageUnitId`/`assetId`.
 
 `npm run check:parity` prints the full report:
 
 ```
-SDK surface: 25 methods (14 read, 11 write)
-MCP tools:   23  ·  explicitly excluded: 2
-Parameters:  74 across the surface  ·  waivers: 1 global + 0 per-tool
+SDK surface: 199 methods (93 read, 106 write)
+MCP tools:   135  ·  explicitly excluded: 14
+Parameters:  645 across the surface  ·  waivers: 1 global + 124 per-tool
 
   ✓ write orders.limit               prepare_limit_order
   ✓ read  market.orderbook           market_orderbook
   – read  market.resolvePool         (excluded)
+  ✓ write coins.swap                 prepare_coin_swap
   …
 MCP covers the SDK surface in lock-step.
 ```

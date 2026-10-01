@@ -11,8 +11,8 @@ first module, with room to grow into a higher-level, full-featured client.
 **Audience:** players and bots trading on Trinary Exchange via an API key.
 **Target (MVP):** **testnet only**, the **`stillness`** tenant; **only the most-recent (v1)
 [CLOB contracts](https://github.com/loash-industries/trinary-exchange)** are supported.
-Item↔currency (CRED) markets via `multicoin_pool` ("pools"); coin-pools are out of scope
-for now.
+Item↔currency (CRED) markets via `multicoin_pool` ("pools"); coin (currency-pair) pools
+were added for cycle 7 as the `coins` group — see [DESIGN-COINS.md](./DESIGN-COINS.md).
 **Models after:** [`@trinaryex/keyspace`](https://www.npmjs.com/package/@trinaryex/keyspace)
 (client + `executor` pattern, `queries`/`transactions` split, zod validation, vite build,
 semantic-release).
@@ -61,20 +61,20 @@ The "Gateway" column is the **current** state in
 
 | # | User story | Plane | Indexer endpoint / Move entrypoint | Gateway today |
 |---|---|---|---|---|
-| 1 | Create trading account **iff** none exists (balance manager) | READ+WRITE | READ on-chain `listOwnedObjects` (authoritative; `GET /v1/inventory/balance-manager` stays disabled) → WRITE `balance_manager::new()` (+ `transferObjects` to self) | n/a (on-chain read) |
+| 1 | Create trading account **iff** none exists (balance manager) | READ+WRITE | READ on-chain `listOwnedObjects` (authoritative; `GET /v1/inventory/balance-manager` stays disabled) → WRITE `trading_account::new()` (+ `transferObjects` to self) | n/a (on-chain read) |
 | 2 | Fetch item balances | READ | `GET /v1/inventory/balances` — **hub-scoped** (`storage_unit_id` required): warehouse (wallet receipts, by `owner_address`), marketplace (BM, by `balance_manager_id`), hangar (by `inventory_key` owner-cap id) | **enabled** (50 CU) |
 | 3 | Fetch trade-currency (CRED) balance | READ | **fullnode** — wallet coins (`listCoins`) + BM `BalanceKey<CRED>` dynamic field; the indexer inventory endpoint serves *items only* | n/a (fullnode) |
-| 4 | Deposit items from hangar → trading account | READ+WRITE | READ `GET /v1/hubs/{hub_id}/vault` (vaultConfigId + collectionId) + on-chain owner-cap/char resolution → WRITE the **direct-from-hangar sequence** (borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap → balance_manager::deposit_multicoin); see §6.1 | **enabled** (vault) |
-| 5 | Deposit currency → trading account | WRITE | `balance_manager::deposit<CRED>` (wallet coin selected/merged/split) | n/a (on-chain) |
+| 4 | Deposit items from hangar → trading account | READ+WRITE | READ `GET /v1/hubs/{hub_id}/vault` (vaultConfigId + collectionId) + on-chain owner-cap/char resolution → WRITE the **direct-from-hangar sequence** (borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap → trading_account::deposit_multicoin); see §6.1 | **enabled** (vault) |
+| 5 | Deposit currency → trading account | WRITE | `trading_account::deposit<CRED>` (wallet coin selected/merged/split) | n/a (on-chain) |
 | 6 | Discover items with live buy/sell orders across the universe | READ | `GET /v1/discovery` — **open orders sorted by recency**, with filters (hubs/item/side/bm/public) | **enabled** (150 CU) |
 | 7 | Fetch trade-hub details (public/private, owner, location) | READ | `GET /v1/hubs/{hub_id}/vault` + `GET /v1/hubs/{hub_id}/location` (+ `GET /v1/collections/{collection_id}/hub` reverse lookup). `/location` **404s semantically** for unrevealed hubs (most of them) → `TradeHubDetail.location` is nullable. Tribe/fuel are NOT in these responses (post-MVP: hubs economics/enriched routes) | **enabled** |
 | 8 | Fetch items with buy/sell orders at a specific storage unit | READ | `GET /v1/hubs/{hub_id}/items` (`has_bids`/`has_asks` flags) | **enabled** |
 | 9 | Fetch order book for one item at that storage unit | READ | `GET /v1/hubs/{hub_id}/vault` → `GET /v1/pools/resolve` (**`collection_id`+`asset_id`**, not hub+item) → `GET /v1/pools/{pool_id}/orderbook` (returns resting **orders**, not levels) | **enabled** |
 | 10 | Create **limit** buy/sell order | READ+WRITE | READ resolve chain + `GET /v1/pools/{pool_id}/metadata` (fee is 1e9-scaled `fee`, not bps) → WRITE `multicoin_pool::place_limit_order<Quote>` + deposit deficit | **enabled** (reads) |
 | 11 | Create **market** buy/sell order | READ+WRITE | as #10 but `multicoin_pool::place_market_order<Quote>` (no price/expiry) | **enabled** (reads) |
-| 14 | Read own open orders / fills / trades (bots) | READ | `GET /v1/balance-managers/{bm}/open-orders`, `/fills`, `/trades` (epoch-ms `before`/`after` paging) | **enabled** |
-| 12 | Withdraw items from BM → storage unit | WRITE | `balance_manager::withdraw_all_multicoin` → `receipt::redeem_receipt(...ssu, character...)` | n/a (on-chain) |
-| 13 | Withdraw currency from BM → wallet | WRITE | `balance_manager::withdraw_all<CRED>` + `transferObjects` to self | n/a (on-chain) |
+| 14 | Read own open orders / fills / trades (bots) | READ | `GET /v1/trading-accounts/{trading_account_id}/open-orders`, `/fills`, `/trades` (epoch-ms `before`/`after` paging; `next_cursor` is the last row's timestamp, null on a short page) | **enabled** |
+| 12 | Withdraw items from BM → storage unit | WRITE | `trading_account::withdraw_all_multicoin` → `receipt::redeem_receipt(...ssu, character...)` | n/a (on-chain) |
+| 13 | Withdraw currency from BM → wallet | WRITE | `trading_account::withdraw_all<CRED>` + `transferObjects` to self | n/a (on-chain) |
 
 **Phase 0 status (2026-08-21): done.** The market surface (pools, hubs, collections,
 balance-manager reads, discovery) was enabled in DCR `62acb22`;
@@ -93,6 +93,49 @@ on the free/standard tier).
 > (no lag) and are not "reads" in the indexer sense. The BM-existence check (#1) is likewise
 > best done on-chain (`listOwnedObjects`) to avoid the double-create race (§13).
 
+### 2.1 Beyond the stories — full gateway read coverage (2026-10-01)
+
+Every operation the gateway publishes now has an SDK method (bar `/v1/coins`,
+owned by the coin-pool module, and the deprecated `/v1/tribes/{id}` alias).
+`test/gateway.test.ts` enforces it: a newly published, non-deprecated route
+fails the suite until it is wrapped or explicitly excluded, and
+`test/schema-conformance.test.ts` parses payloads synthesised from every
+wrapped operation's response schema (minimal: required fields only, nullables
+null; full: every field) so a requiredness/nullability drift fails CI before it
+throws on live data.
+
+| Need | Endpoint | SDK | CU |
+|---|---|---|---|
+| What became of an order (open / filled / cancelled + fills) | `GET /v1/pools/{pool_id}/orders/{order_id}` | `orders.get` · `ro.order` | 30 |
+| One fill, both sides + both fees | `GET /v1/fills/{event_digest}` | `orders.fill` · `ro.fill` | 30 |
+| Public tape, all item markets | `GET /v1/trades/recent` | `market.recentTrades` · `iterateRecentTrades` | 50 |
+| Plain market price (no fee), item-wide or per hub | `GET /v1/display-prices`, `/{item_id}` | `market.displayPrices` / `displayPrice` | 50 / 20 |
+| Hub fee reserve + depth | `GET /v1/hubs/economics` | `market.hubEconomics` | 50 |
+| Pools by unclaimed fees | `GET /v1/pools/top-by-fees` | `market.topPoolsByFees` | 50 |
+| Platform aggregates | `GET /v1/stats` | `market.stats` | 50 |
+| Characters | `GET /v1/characters/{id}`, `/address/{a}`, `/name/{n}`, `/batch` | `characters.get` / `byAddress` / `byName` / `batch` | 20 / 20 / 20 / 50 |
+| Tribes | `GET /v1/world/tribes/{tribe_id}` | `characters.tribe` | 20 |
+| World items & recipes (CDN, static) | `GET /v1/world/items`, `/{asset_id}`, `/v1/world/recipes`, `/{recipe_id}` | `world.items` / `item` / `recipes` / `recipesFor` | 20 each |
+| Routing (location-api) | `GET /v1/routing/route`, `/compare`, `/stats` | `routing.route` / `compare` / `stats` | 100 / 300 / 20 |
+
+Notes that change how results are read:
+
+- **Units on the public tape differ.** `/v1/trades/recent` returns
+  HUMAN-READABLE `price` / `quantity` / `fee_amount` (already shifted by the
+  quote decimals) — the SDK keeps them as strings. Every other trade/fill read
+  is raw integers → `bigint`.
+- **Fees (cycle 7).** Pool metadata's `fee` is the fee class's ENTRY tier (the
+  higher of old/new while a class change is pending) — an upper bound, right
+  for deposit buffers. The fee a fill charged is on the fill; `fee_rate_bps`
+  on the tape is derived per fill (`taker_fee × 10000 / quote_quantity`), and
+  the indexer now records maker fees too. Display prices carry no fee.
+- **Solar system names are player-reported (cycle 7).** location-api fills
+  names from EF-Map community reports; until a system is named, its
+  `solar_system_name` is null and name lookups 404 (`SolarSystemNotFound` /
+  `RouteNotFound`) while id lookups work. Routing is name-only.
+  `/v1/spatial/stats` gains `known_solar_system_names`. The SDK accepts both
+  the published (string) and post-deploy (nullable) shapes.
+
 ---
 
 ## 3. Architecture
@@ -104,8 +147,11 @@ on the free/standard tier).
                     │   TriexClient (high-level facade)            │
                     │   ├── account   (balance manager lifecycle)  │
                     │   ├── balances  (item + currency reads)      │
-                    │   ├── market    (discovery, hubs, orderbook) │
-                    │   └── orders    (limit/market, deposit/wdrw) │
+                    │   ├── market    (discovery, hubs, orderbook, │
+                    │   │              tape, prices, stats)        │
+                    │   ├── orders    (limit/market, status reads) │
+                    │   ├── spatial · routing  (star map, routes)  │
+                    │   └── characters · world (players, items)    │
                     │                                              │
                     │   queries.ts  ──READ──►  api.trinary.exchange│───► etl-api (indexer)
                     │     (fetch + x-api-key + zod validate)       │      (Postgres read models)
@@ -228,9 +274,9 @@ observe. Currency balances (a fullnode read) live on `TriexClient.balances.curre
 ### 5.2 Methods → user stories
 
 ```ts
-// account (balance manager lifecycle)
+// account (trading account lifecycle)
 client.account.get(address): Promise<TradingAccount | null>            // #1 read (on-chain)
-client.account.ensure(): Promise<{ balanceManagerId: string; created: boolean }>  // #1 write (idempotent)
+client.account.ensure(): Promise<{ tradingAccountId: string; created: boolean }>  // #1 write (idempotent)
 
 // balances — items are hub-scoped indexer reads; currency is a fullnode read
 client.balances.atHub({ storageUnitId, inventoryKey? }): Promise<InventoryBalances>  // #2 (warehouse/marketplace/hangar)
@@ -259,7 +305,7 @@ client.market.hubsEnriched({ hubIds }): Promise<HubEnriched[]>        // batch �
 client.market.assemblyOwners({ assemblyIds }): Promise<AssemblyOwner[]>        // batch ≤200
 client.market.assembliesEnriched({ assemblyIds }): Promise<AssemblyEnriched[]> // batch ≤200: + character/name
 client.market.solarSystemNames({ solarSystemIds }): Promise<SolarSystemName[]> // batch ≤200
-client.account.owners({ balanceManagerIds }): Promise<BalanceManagerOwner[]>   // batch ≤200: player:/ou: tagged
+client.account.owners({ tradingAccountIds }): Promise<TradingAccountOwner[]>   // batch ≤200: player:/ou: tagged
 
 // spatial — the star map (Universe | Solar Systems); no account or signer
 client.spatial.system(nameOrId): Promise<SolarSystem>                 // coords + constellation + region
@@ -273,15 +319,52 @@ client.spatial.stats(): Promise<SpatialStats>                         // star-ma
 client.orders.openOrders(params?): Promise<OpenOrdersPage>
 client.orders.fills(params?): Promise<FillsPage>
 client.orders.trades(params?): Promise<TradesPage>
+client.orders.get({ poolId, orderId }): Promise<OrderDetail>          // any order, any state, + fills
+client.orders.fill(eventDigest): Promise<FillDetail>                  // both sides + both fees
+
+// market-wide feeds, prices & rankings (§2.1)
+client.market.recentTrades({ before?, after?, limit?, publicOnly?, assetId? }): Promise<RecentTradesPage>
+client.market.displayPrices({ itemIds, storageUnitIds?, fallback? }): Promise<DisplayPrice[]>
+client.market.displayPrice(itemId, { storageUnitId?, fallback? }?): Promise<DisplayPrice>
+client.market.hubEconomics({ hubIds }): Promise<HubEconomics[]>
+client.market.topPoolsByFees({ limit? }?): Promise<PoolFees[]>
+client.market.stats(): Promise<PlatformStats>
+
+// routing — names only; names are player-reported in cycle 7
+client.routing.route({ origin, destination, optimization?, mass?, gateWeight?, maxJumpRangeLy? }): Promise<Route>
+client.routing.compare({ origin, destination, mass?, gateWeight?, maxJumpRangeLy? }): Promise<RouteComparison>
+client.routing.stats(): Promise<RoutingStats>
+
+// characters & tribes
+client.characters.get(characterId, { enrich? }?): Promise<Character>
+client.characters.byAddress(address?, { enrich? }?): Promise<Character[]>   // defaults to the player
+client.characters.byName(name): Promise<Character[]>
+client.characters.batch({ addresses }): Promise<CharacterLookup[]>   // ≤500
+client.characters.tribe(tribeId): Promise<Tribe>
+
+// world reference data (static — cache it)
+client.world.items(): Promise<WorldItem[]>
+client.world.item(assetId): Promise<ItemInfo>
+client.world.recipes(): Promise<Recipe[]>
+client.world.recipesFor(productAssetId): Promise<Recipe[]>          // [] when not craftable
 
 // orders (#10, #11) — each auto-ensures BM + deposits any deficit in one PTB
 client.orders.limit({ storageUnitId, assetId, side, price, quantity, expireAt? }): Promise<TxResult>   // #10
 client.orders.market({ storageUnitId, assetId, side, quantity, quoteBudget? }): Promise<TxResult>      // #11
 
 // pulled forward from post-MVP (bots are not viable without them):
-client.orders.cancel({ storageUnitId, assetId, orderId }) / cancelAll / modify
+client.orders.cancel({ storageUnitId, assetId, orderId }) / cancelMany({ …, orderIds }) / cancelAll / modify
+client.orders.fees({ storageUnitId, assetId } | { poolId }): Promise<TradingFees>  // ladder + own tier (fullnode)
 client.account.sweepable(): Promise<Sweepable>          // claimable proceeds + idle BM items
 client.account.claimSettled({ poolIds? })               // withdraw_settled_amounts per pool
+
+// trading-account administration (owner-only)
+client.account.register()                               // registry::get_trading_account_ids bookkeeping
+client.account.mintCap({ kind, recipient? }) / revokeCap({ capId }) / caps(address?)
+
+// item-pool lifecycle
+client.market.createPool({ storageUnitId, assetId })    // 500 CRED, permissionless
+client.market.claimOperatorShare({ poolIds })           // hub revenue share, permissionless
 ```
 
 `side: 'buy' | 'sell'` maps to `isBid`; items are identified by `assetId` (the indexer's
@@ -294,23 +377,51 @@ are inferred from the pinned zod wire schemas (`schemas.ts`) — single source o
 
 ## 6. On-chain transaction builders (`transactions.ts`)
 
-Confirmed Move entrypoints (from `triex-app-api` — personal, non-governance path). All are
-pure functions `(args) => Transaction`; the facade fills object IDs from indexer reads.
+Confirmed Move entrypoints (personal, non-governance path), verified against
+trinary-exchange `main` (cycle 7 + TRIEX-158): the `balance_manager` module is now
+`trading_account` (`BalanceManager` → `TradingAccount`), order ids are `u128`, and
+placement / cancel / cancel-many / cancel-all / modify / swaps take the shared `FeePolicy`
+(`triexFeePolicy`) right after the pool. All are pure functions that append to a caller's
+`Transaction`; the facade fills object IDs from indexer + fullnode reads. Unit tests pin
+each target's argument order (`test/writes.test.ts`, `test/transactions.test.ts`).
 
 | Builder | Move target | Notes |
 |---|---|---|
-| `newBalanceManager` | `${triex}::balance_manager::new()` | returns BM; `transferObjects([bm], self)` when freshly created |
-| `depositCoin` | `${triex}::balance_manager::deposit<T>(bm, coin)` | coin prepared via list/merge/split of wallet coins |
-| `depositMulticoinObject` | `${triex}::balance_manager::deposit_multicoin(bm, object)` | deposit an owned multicoin `Balance` object (wallet receipts) into BM |
-| `withdrawAllCoin` | `${triex}::balance_manager::withdraw_all<T>(bm)` → `transferObjects` | #13 |
-| `withdrawAllMulticoin` | `${triex}::balance_manager::withdraw_all_multicoin(bm, collectionId, assetId)` | #12 step 1 |
+| `newTradingAccount` | `trading_account::new()` | `transferObjects([bm], self)` when freshly created |
+| `newTradingAccountWithOwner` / `…WithOwnerAndCaps` | `trading_account::new_with_custom_owner(_and_caps)(owner)` | builder only; the `_and_caps` caps go to `owner` on-chain |
+| `registerTradingAccount` | `trading_account::register_trading_account(bm, registry)` | `account.register()`; ≤100 per owner |
+| `mintTradingAccountCap` | `trading_account::mint_{trade,deposit,withdraw}_cap(bm)` | `account.mintCap()`; ≤1000 live caps |
+| `revokeTradingAccountCap` | `trading_account::revoke_trade_cap(bm, &ID)` | `account.revokeCap()`; revokes any of the three cap kinds |
+| `generateProofAsOwner` / `generateProofAsTrader` | `trading_account::generate_proof_as_{owner(bm), trader(bm, tradeCap)}` | proof before placing/cancelling/claiming |
+| `depositCoin` / `depositCoinWithCap` | `trading_account::deposit<T>(bm, coin)` / `deposit_with_cap<T>(bm, cap, coin)` | coin prepared via list/merge/split of wallet coins |
+| `depositMulticoinObject` / `depositMulticoinWithCap` | `trading_account::deposit_multicoin(bm, balance)` / `…_with_cap(bm, cap, balance)` | wallet receipts / hangar receipts into the account |
+| `withdrawCoin` / `withdrawAllCoin` / `withdrawCoinWithCap` | `trading_account::withdraw<T>(bm, amount)` / `withdraw_all<T>(bm)` / `withdraw_with_cap<T>(bm, cap, amount)` | #13 |
+| `withdrawMulticoin` / `withdrawAllMulticoin` / `withdrawMulticoinWithCap` | `trading_account::withdraw_multicoin(bm, collectionId, assetId, amount)` / `withdraw_all_multicoin(bm, collectionId, assetId)` / `…_with_cap` | #12 step 1 (`withdrawItems` uses the partial form when `amount` is set) |
 | `redeemReceipt` | `${warehouseReceipts}::receipt::redeem_receipt(balance, ssu, character, vaultConfig, collection, isOwner)` | #12 step 2 (BM item → hangar) |
-| `ownerProof` | `${triex}::balance_manager::generate_proof_as_owner(bm)` | required before placing/withdrawing |
-| `placeLimitOrderItem` | `${triex}::multicoin_pool::place_limit_order<Quote>(pool, bm, proof, orderType, selfMatch, price, qty, isBid, expireTs, clock)` | items (multicoin) |
-| `placeMarketOrderItem` | `${triex}::multicoin_pool::place_market_order<Quote>(pool, bm, proof, selfMatch, qty, isBid, clock)` | items (multicoin) |
-| `cancelOrderItem` | `${triex}::multicoin_pool::cancel_order<Quote>(pool, bm, proof, orderId u64, clock)` | implemented (+ `cancel_all_orders`, `modify_order`) |
-| `withdrawCoin` | `${triex}::balance_manager::withdraw<T>(bm, amount)` | partial currency withdraw |
-| `withdrawSettledAmounts` | `${triex}::multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` | claim post-fill proceeds into the BM |
+| `placeLimitOrderItem` | `multicoin_pool::place_limit_order<Quote>(pool, policy, bm, proof, orderType, selfMatch, price, qty, isBid, expireTs, clock)` | `…_with_quote_fees` is an identical alias |
+| `placeMarketOrderItem` | `multicoin_pool::place_market_order<Quote>(pool, policy, bm, proof, selfMatch, qty, isBid, clock)` | IOC at the max/min price |
+| `cancelOrderItem` / `cancelOrdersItem` / `cancelAllOrdersItem` | `multicoin_pool::cancel_order(…, orderId u128, clock)` / `cancel_orders(…, vector<u128>, clock)` / `cancel_all_orders(…, clock)` | all `(pool, policy, bm, proof, …)` |
+| `modifyOrderItem` | `multicoin_pool::modify_order<Quote>(pool, policy, bm, proof, orderId u128, newQty, clock)` | reduce only |
+| `withdrawSettledAmounts` / `…Permissionless` | `multicoin_pool::withdraw_settled_amounts<Quote>(pool, bm, proof)` / `…_permissionless(pool, bm)` | no `FeePolicy` |
+| `swapExact{Base,Quote}For{Quote,Base}Item` | `multicoin_pool::swap_exact_*<Quote>(pool, policy, in, credIn, minOut, clock)` | builder only: account-less swaps (temporary account on-chain) |
+| `swapExact…WithTradingAccountItem` | `multicoin_pool::swap_exact_*_with_trading_account<Quote>(pool, policy, bm, tradeCap, depositCap, withdrawCap, in, minOut, clock)` | builder only |
+| `createPermissionlessPoolItem` | `multicoin_pool::create_permissionless_pool<Quote>(registry, policy, collection, assetId, fee)` | `market.createPool()`; fee = 500 CRED |
+| `claimOperatorShareItem` | `multicoin_pool::claim_operator_share<Quote>(pool, policy, registry, clock)` | `market.claimOperatorShare()` |
+| `updatePoolAllowedVersionsItem` | `multicoin_pool::update_pool_allowed_versions<Quote>(pool, registry)` | builder only (post-upgrade maintenance) |
+
+**Fee reads** (`onchain.ts` `getPoolTradingFees`, facade `orders.fees()`) are one
+simulated transaction (`simulateTransaction` + `commandResults`, nothing executes) of the
+view functions `multicoin_pool::{pool_fee_class, pool_fee_schedule,
+pool_fee_schedule_next, trade_params_for_account, account_fee_tier,
+account_fee_turnover}` and `fee_policy::cancel_retention_bps`.
+
+**Deliberately not wrapped:** `trading_account::new_with_uid_owner_and_caps` (TRIEX-158 —
+takes `&mut UID`, so only a Move module that owns the parent object can call it; Armature
+uses it), every `TriexAdminCap`-gated function (`create_pool_admin`, `set_pool_fee_class`,
+`unregister_pool_admin`, `update_allowed_versions`, `withdraw_pool_fees`, the
+`fee_policy` class / operator-share / adapter setters, the `registry` setters), and
+`fee_policy::register_operator_beneficiary_with_witness` (callable only through the
+admin-registered adapter package's witness).
 
 > `<Quote>` is the CRED coin type (`credCoinType`). Item markets are `multicoin_pool`; the
 > item is identified by `collectionId` + `assetId` (u64), not a Move type parameter.
@@ -332,7 +443,7 @@ covering a deposit deficit from two sources in order:
 
 1. **Wallet multicoin receipts.** Find owned `${multicoin}::multicoin::Balance` objects for the
    `assetId` in the right collection, then for each:
-   `balance_manager::deposit_multicoin(bm, object)`.
+   `trading_account::deposit_multicoin(bm, object)`.
 2. **SSU / character hangar inventory** (only if a deficit remains). For each relevant owner cap
    (SSU owner cap and/or character owner cap):
 
@@ -342,7 +453,7 @@ covering a deposit deficit from two sources in order:
                               ssuObject, character, cap, vaultConfigId,
                               vaultCollectionId, assetId /*u64*/, amount /*u32*/)
    character::return_owner_cap<CapType>(character, cap, borrowReceipt)
-   balance_manager::deposit_multicoin(bm, receipt)
+   trading_account::deposit_multicoin(bm, receipt)
    ```
 
 **RQ-3 resolved (from the app):** the SSU owner-cap type arg is
@@ -372,17 +483,36 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
 ## 7. Money math (`money.ts`)
 
 - **Coin (currency-pair) pools:** `quote = base * price / TRIEX_PRICE_SCALING`
-  where `TRIEX_PRICE_SCALING = 1_000_000_000` (1e9).
+  where `TRIEX_PRICE_SCALING = 1_000_000_000` (1e9). Full cycle-7 model (maker + taker
+  fees, bid deposit bound, minimum size) in DESIGN-COINS.md §3; code in `src/coins/money.ts`.
 - **Multicoin (item) pools:** scaling factor `1` → `quote = price * quantity` (confirmed
   against the production app, which passes the unscaled price straight to
   `place_limit_order`; TRIEX_SYSTEM_DESIGN §7's blanket "all prices ×1e9" describes coin
   pools).
-- **Bid deposit overhead:** v1 pools charge a **quote-denominated fee**; a bid must deposit
-  `quote × (1e9 + feeRateScaled) / 1e9` (floor-of-total — matches the app's
-  `computeBidQuoteDeposit` and the on-chain per-fill floor). `feeRateScaled` is pool
-  metadata's raw `fee` (scaled by 1e9; `20_000_000` = 2%, the default volatile fee) — the
-  endpoint exposes **no bps field**. Only buyers pay fees; asks are fee-free. Market bids
-  require an explicit `quoteBudget` (the app requires `quoteDepositAmount > 0`).
+- **Fee model (cycle 7).** Every fee is quote-denominated and priced by
+  `quote_fee::fee_from_scaled_rate` = `floor(quote × min(rate, 1e9) / 1e9)` (`computeQuoteFee`).
+  Rates live in the shared `FeePolicy`: each pool carries a fee class whose ladder
+  (`fee_schedule::FeeSchedule`, ≤16 tiers, taker and maker rates non-increasing by tier;
+  multicoin launch ladder 2.2%/1.8% → 1.1%/0.9%) is resolved against the account's trailing
+  30-epoch **fee turnover** (taker fees paid + maker fees earned at fill, exchange-wide per
+  quote). Schedule changes are staged for the next epoch. Who pays what
+  (`order_info::calculate_partial_fill_balances`, `state::process_fills`, `fill.move`):
+  - bid taker: `floor(taker × matched quote)` once on the aggregate, on top of the quote;
+  - bid maker: `floor(maker × resting quote)` escrowed at placement; on cancel / modify-down /
+    expiry the class's `cancel_retention_bps` share of the released escrow is kept;
+  - ask taker: `floor(taker × matched quote)` out of the proceeds;
+  - ask maker: `floor(maker × fill quote)` per fill, out of the proceeds.
+- **Bid deposit:** `computeBidQuoteDeposit(price, qty, rate)` = `notional + floor(notional ×
+  rate / 1e9)`. The facade passes `TradingFees.bidEscrowFeeRate` = max(tier-0 taker, tier-0
+  maker) over the active and staged ladders — tier 0 bounds every tier, and floors are
+  subadditive, so the deposit covers any match/rest split at any tier, even across an epoch
+  boundary. Surplus stays in the trading account. Asks deposit only items.
+- **Quotes:** `estimateMarketBuyCost` (asks low-first, fee on the aggregate — exact for an
+  unchanged book, so the old per-fill rounding buffer is gone; `marketBuyRoundingBuffer` is
+  deprecated), `estimateMarketSellProceeds` (bids high-first, net of the taker fee),
+  `computeAskProceeds`. Use the account's own rate from `orders.fees()`. Pool metadata's
+  `fee` is only the entry-tier taker rate (no maker rate, no tiers). Market bids require an
+  explicit `quoteBudget`; a market order fills at most 100 makers (`MAX_FILLS`).
 - **Decimals:** CRED and each item type carry `decimals` (pool metadata's
   `base_asset_decimals` / `quote_asset_decimals`); the SDK exposes both `bigint` base-unit
   and helper `toBase(human, decimals)` / `fromBase(base, decimals)`.
@@ -404,12 +534,13 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
 excluded**. The current stillness trading IDs (for the SDK `testnet` preset):
 
 ```
-triexPackageId            0x291b9da738dffedd18d7c5049e5e6792270202e03f3c9d9db4c7097670bf6eb2
-triexRegistryId           0x14a58f254b8243bf3f74c057d81cc310498b3d0fe3781650ad58405d7e5f17e4   (shared obj — not in /package-ids)
-multicoinPackageId        0x99a4c039477ac7e7affcb5a5609dd23c29ab69e9436e740d94a4e168c2506cfb
-warehouseReceiptsPackageId 0x0c9d4414aa12eaa1ebf9d32437c1e6403fbf941ffcdca5b9ca16d1769313417e
-credCoinType              0xfbcbd9155669e157ce3999e073930b4c4b67255c3cf88d0d80c76342a31e6710::cred::CRED
-worldPackageId            0x8b8a46ed766fa1358ce7c5c51f6a164b13d627a63e45343f69ed0ba0446c1aa1   (= worldOriginalPackageId)
+triexPackageId            0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945   (cycle 7 + TRIEX-158 fresh publish; = original id)
+triexRegistryId           0x2f37ad133427cabf94653be9a67560f87ea7458eaef2b410f6497808cef722c2   (shared obj — not in /package-ids)
+triexFeePolicyId          0xcd63402799fe6b3a3ff2d963f90449e843f178659c349a08a1503db516163748   (shared obj — not in /package-ids)
+multicoinPackageId        0xdbb778cba30e7deccf61169fbfbcd10a867654e1e2822facd789a99bd2c4e2ba
+warehouseReceiptsPackageId 0x134dfa96ad8bc50d4a2055cd78c91e264feb2fe79facf2d030f8bb466a80bb68
+credCoinType              0xfbcbd9155669e157ce3999e073930b4c4b67255c3cf88d0d80c76342a31e6710::cred::CRED   (never republished)
+worldPackageId            0x7be18d6294e533bedd9a5d70a96ce8d9d4b87a7c74188ba65d3fe966bbed9d92   (= worldOriginalPackageId)
 clock                     0x6
 ```
 
@@ -451,7 +582,8 @@ via `packageIds`. Optionally hydrate the *package* IDs at runtime from
   keypair), semantic-release → publish `@trinaryex/sdk@0.x`.
 - **Later (post-MVP):** full sweep-all convenience (multi-hub redeem), tribe/governance
   trading, **gas-station sponsored (gasless) execution** (optional `sponsor` hook), live
-  orderbook streaming, mainnet, coin-pools (currency-pair markets). (Cancel/modify and
+  orderbook streaming, mainnet. Coin-pools (currency-pair markets) landed in cycle 7 —
+  DESIGN-COINS.md. (Cancel/modify and
   claim-settled were pulled INTO the MVP — a trading bot is not viable without them.)
 
 ---
@@ -484,7 +616,9 @@ via `packageIds`. Optionally hydrate the *package* IDs at runtime from
   (borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap → deposit_multicoin);
   see §6.1.
 - **OQ-5 — Ignore coin-pools.** MVP trades **item↔CRED** via `multicoin_pool` ("pools" family
-  only). Coin-pools deferred.
+  only). Coin-pools deferred. **Lifted (cycle 7):** coin pools merged into the main `triex`
+  package and are traded through `client.coins` — fullnode reads (the coin-pool indexer
+  routes are not on the gateway) plus `GET /v1/coins`; see DESIGN-COINS.md.
 - **OQ-6 — Always v1.** SDK supports only the newest contracts; no version branching (§7).
 - **OQ-7 — Gas:** left to the caller's `executor`; sponsored/gasless is a **post-MVP** feature
   (optional `sponsor` hook).
@@ -558,40 +692,88 @@ object IDs. For latency-sensitive bots, note the post-MVP live-stream option.
 
 ---
 
-## 13. Appendix — current `etl-api` gateway route inventory
+## 13. Appendix — published gateway surface → SDK
 
-From `dynamic-config-registry/gateway-routes/etl-api.json` (65 routes), **as of 2026-08-21**
-(DCR `62acb22` + `feat/publish-inventory-balances`). Phase 0 is done: everything the MVP
-reads is live.
-
-**Enabled — MVP reads** (CU costs as published):
+The gateway's published OpenAPI document (`https://api.trinary.exchange/swagger.json`,
+vendored at `test/fixtures/gateway-openapi.json`) — **60 operations, all `GET`**, as of
+2026-10-01. Upstreams per `dynamic-config-registry/gateway-routes/`: etl-api (market
+data), location-api (`/v1/spatial/*`, `/v1/routing/*`) and the public CDN
+(`/v1/world/items`, `/v1/world/recipes*`). `npm run check:gateway [-- --live]` lists any
+operation the SDK does not wrap.
 
 ```
-GET /v1/discovery                                          (150 CU)  # story 6 — repriced 30 → 150 (2 rps sustained on free/standard)
-GET /v1/inventory/balances                                 (50 CU)   # story 2 (items only; hub-scoped)
-GET /v1/hubs/{hub_id}/vault                                (20 CU)   # stories 4,7,9 (vaultConfig/collection)
-GET /v1/hubs/{hub_id}/location                             (20 CU)   # story 7 (location/owner/visibility)
-GET /v1/hubs/{hub_id}/items                                (20 CU)   # story 8
-GET /v1/collections/{collection_id}/hub                    (20 CU)   # story 7 reverse lookup
-GET /v1/pools/resolve                                      (30 CU)   # stories 9,10,11 (collection+asset → poolId)
-GET /v1/pools/{pool_id}/orderbook                          (30 CU)   # story 9
-GET /v1/pools/{pool_id}/metadata                           (20 CU)   # stories 10,11 (1e9-scaled fee)
-GET /v1/balance-managers/{balance_manager_id}/open-orders  (30 CU)   # story 14
-GET /v1/balance-managers/{balance_manager_id}/fills        (30 CU)   # story 14
-GET /v1/balance-managers/{balance_manager_id}/trades       (30 CU)   # story 14
+# Market data (etl-api)
+GET /v1/discovery                                    150 CU  market.discover · iterateDiscovery
+GET /v1/pools/resolve                                 30 CU  market.resolvePool (internal: indexer.resolvePool)
+GET /v1/pools/{pool_id}/orderbook                     30 CU  indexer.orderbook
+GET /v1/pools/{pool_id}/metadata                      20 CU  market.poolMetadata
+GET /v1/pools/{pool_id}/orders/{order_id}             30 CU  orders.get · ro.order
+GET /v1/pools/top-by-fees                             50 CU  market.topPoolsByFees
+GET /v1/hubs/{hub_id}/items/{asset_id}/orderbook      50 CU  market.orderbook
+GET /v1/fills/{event_digest}                          30 CU  orders.fill · ro.fill
+GET /v1/trades/recent                                 50 CU  market.recentTrades · iterateRecentTrades
+GET /v1/display-prices                                50 CU  market.displayPrices
+GET /v1/display-prices/{item_id}                      20 CU  market.displayPrice
+GET /v1/stats                                         50 CU  market.stats
+# Hubs & locations (etl-api)
+GET /v1/hubs/{hub_id}/vault                           20 CU  market.hub (+ write flows)
+GET /v1/hubs/{hub_id}/location                        20 CU  market.hub
+GET /v1/hubs/{hub_id}/items                           20 CU  market.itemsAtHub
+GET /v1/hubs/locations                                50 CU  market.hubLocations · iterateHubLocations
+GET /v1/hubs/enriched                                 50 CU  market.hubsEnriched
+GET /v1/hubs/economics                                50 CU  market.hubEconomics
+GET /v1/hubs/{hub_id}/nearby                          50 CU  market.nearbyHubs
+GET /v1/hubs/nearby-by-system                         50 CU  market.nearbyHubsBySystem
+GET /v1/items/{item_id}/locations                     50 CU  market.itemLocations · iterateItemLocations
+GET /v1/collections/{collection_id}/hub               20 CU  indexer.collectionHub
+GET /v1/assemblies/owners                             50 CU  market.assemblyOwners
+GET /v1/assemblies/enriched                           50 CU  market.assembliesEnriched
+GET /v1/solar-systems/names                           50 CU  market.solarSystemNames
+# Trading accounts (etl-api)
+GET /v1/inventory/balances                            50 CU  balances.atHub
+GET /v1/trading-accounts/{id}/open-orders             30 CU  orders.openOrders · iterateOpenOrders
+GET /v1/trading-accounts/{id}/fills                   30 CU  orders.fills · iterateFills
+GET /v1/trading-accounts/{id}/trades                  30 CU  orders.trades · iterateTrades
+GET /v1/trading-accounts/{id}/sweepable               30 CU  account.sweepable / claimSettled
+GET /v1/trading-accounts/owners                       50 CU  account.owners
+# Characters, tribes & world (etl-api + public CDN)
+GET /v1/characters/{object_id}                        20 CU  characters.get
+GET /v1/characters/address/{address}                  20 CU  characters.byAddress
+GET /v1/characters/name/{name}                        20 CU  characters.byName
+GET /v1/characters/batch                              50 CU  characters.batch
+GET /v1/world/tribes/{tribe_id}                       20 CU  characters.tribe
+GET /v1/tribes/{tribe_id}                             20 CU  — deprecated 2026-08-20 alias of the above; not wrapped
+GET /v1/world/items                                   20 CU  world.items           (CDN)
+GET /v1/world/items/{asset_id}                        20 CU  world.item
+GET /v1/world/items/search                            50 CU  market.searchItems
+GET /v1/world/recipes                                 20 CU  world.recipes         (CDN)
+GET /v1/world/recipes/{recipe_id}                     20 CU  world.recipesFor      (CDN)
+# Star map & routing (location-api)
+GET /v1/spatial/systems/{solar_system}                20 CU  spatial.system
+GET /v1/spatial/systems                               50 CU  spatial.systems
+GET /v1/spatial/systems/{solar_system}/nearby         50 CU  spatial.nearbySystems
+GET /v1/spatial/coordinates/nearby                    50 CU  spatial.systemsNearCoordinates
+GET /v1/spatial/systems/search/autocomplete           20 CU  spatial.autocompleteSystems
+GET /v1/spatial/stats                                 20 CU  spatial.stats
+GET /v1/routing/route                                100 CU  routing.route
+GET /v1/routing/compare                              300 CU  routing.compare
+GET /v1/routing/stats                                 20 CU  routing.stats
+# Organizations (etl-api) — Armature module, DESIGN-ARMATURE.md §13.1
+GET /v1/orgs · /v1/orgs/{org_id} · /v1/orgs/directory · /v1/orgs/{org_id}/proposals
+GET /v1/players/{address}/orgs · /v1/players/{address}/accessible-keyspaces
+GET /v1/hubs/{hub_id}/dao-vaults · /v1/search
+# Coin (currency-pair) markets — coin-pool module
+GET /v1/coins
 ```
 
-(Also enabled beyond MVP need: `/v1/balance-managers/{bm}/sweepable`, `/owners`, the wider
-pools/hubs/assets/activity families, `GET /v1/characters/*`, `GET /v1/orgs*`,
-`GET /v1/search` (100 CU), `GET /v1/stats`, `GET /v1/trades/recent`.)
-
-**Deliberately disabled (D11 — sluice attaches no caller identity):** the remaining
+**Deliberately unpublished (D11 — sluice attaches no caller identity):** the remaining
 `inventory` family, including the seven POST container mutations and two GETs the SDK
 replaces with fullnode reads — `GET /v1/inventory/balance-manager` (story 1: on-chain
 `listOwnedObjects` is authoritative) and `GET /v1/inventory/receipt-objects` (story 4:
-wallet-receipt discovery is PTB input resolution). `coin-pools/*` stays disabled by choice.
+wallet-receipt discovery is PTB input resolution). `coin-pools/*` stays disabled by choice —
+the `coins` group reads coin pools from the fullnode instead and uses only `GET /v1/coins`.
 
 > Remember a merge to `main` does **not** update the running gateway — run
-> `scripts/push-gateway.sh --env <env>` (per CLAUDE.md). The balances route is already
-> published; its branch still needs merging to `main` so a future publish from a clean
-> checkout doesn't revert it.
+> `scripts/push-gateway.sh --env <env>` in dynamic-config-registry. location-api's
+> cycle-7 names change (nullable `solar_system_name`, `known_solar_system_names`) is
+> deployed but not yet reflected in the published spec; the SDK accepts both shapes.

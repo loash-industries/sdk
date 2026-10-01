@@ -24,6 +24,46 @@ const NAMESPACE_CLASSES = {
   MarketApi: 'market',
   OrdersApi: 'orders',
   SpatialApi: 'spatial',
+  OrgsApi: 'orgs',
+}
+
+/**
+ * Classes whose sub-API groups are DISCOVERED rather than listed, as
+ * `<class> → <namespace prefix>`.
+ *
+ * The Armature handle is reached as `client.org(id).<group>.<method>`, and its
+ * groups grow phase by phase. A hardcoded allowlist fails OPEN for exactly that
+ * shape — a new group is silently invisible until someone remembers to add it,
+ * which has now happened twice (`org.treasury` and `org.orders` were both
+ * missed the moment they landed). Reading the handle's own property
+ * declarations instead means adding a group to the handle is all it takes.
+ */
+const HANDLE_ROOTS = { TriexClient: '', OrgHandle: 'org' }
+
+/**
+ * Root properties that are class-typed but are not API groups, with why.
+ * Everything else a root exposes is scanned.
+ */
+const ROOT_PROPERTY_SKIP = {
+  TriexClient: {
+    indexer:
+      'The raw HTTP transport (one method per endpoint); the namespaced groups are its public face.',
+  },
+}
+
+/**
+ * Namespaced API classes declared OUTSIDE `TriexClient.d.ts`, as
+ * `<namespace> → <path relative to the declaration directory>`.
+ *
+ * `NAMESPACE_CLASSES` alone is not enough for these: the scan walks one file's
+ * statements, so a group living in its own module is invisible no matter what
+ * the map says — which is silence in exactly the place this gate exists to
+ * break. A path that does not exist yet is skipped, so the gate keeps working
+ * against an installed SDK predating the module.
+ */
+const EXTERNAL_NAMESPACE_FILES = {
+  orgs: join('armature', 'OrgsApi.d.ts'),
+  org: join('armature', 'OrgClient.d.ts'),
 }
 
 /**
@@ -50,7 +90,58 @@ const KEYSPACE_CLASS = 'ReadOnlyAclClient'
  * Return types that mark a WRITE — one that builds and submits a
  * transaction, and therefore needs a `prepare_*` tool rather than a read tool.
  */
-const WRITE_RETURN_TYPES = new Set(['TxResult', 'EnsureAccountResult'])
+// Return types that mean "this signs and submits a transaction". The gate
+// enforces that a write is wrapped by a `prepare` tool and never by a `read`
+// one, so a governance method missing from this set would be a write a read
+// tool could silently swallow. `RunOutcome` is the Armature form: it resolves a
+// strategy and then EXECUTES it — the `blocked` variant is a refusal to write,
+// not evidence that the method is read-only.
+const WRITE_RETURN_TYPES = new Set([
+  'TxResult',
+  'EnsureAccountResult',
+  'RunOutcome',
+])
+
+/**
+ * Does this return type mean "this signs and submits"?
+ *
+ * Exact-matching the type text is not enough: `sweepAll` returns
+ * `RunOutcome & { skipped: … }`, an intersection that is every bit as much a
+ * write as a bare `RunOutcome`. Classifying it as a read would let a read tool
+ * cover it, which is the silent-drop the kind check exists to prevent.
+ */
+function isWriteReturn(text) {
+  if (WRITE_RETURN_TYPES.has(text)) return true
+  return [...WRITE_RETURN_TYPES].some((name) =>
+    new RegExp(`\\b${name}\\b`).test(text),
+  )
+}
+
+/**
+ * Structural form of {@link isWriteReturn}: a result type that EXTENDS a write
+ * type is a write too. `MintCapResult extends TxResult` adds the minted cap's
+ * id, `CoinSwapResult extends TxResult` the enforced minimum — each still signs
+ * and submits, and a name list would miss the next one to land.
+ */
+function isWriteType(type, checker, seen = new Set()) {
+  if (!type || seen.has(type)) return false
+  seen.add(type)
+  const name = type.getSymbol?.()?.getName() ?? type.aliasSymbol?.getName()
+  if (name && WRITE_RETURN_TYPES.has(name)) return true
+  if (type.isUnionOrIntersection?.()) {
+    return type.types.some((t) => isWriteType(t, checker, seen))
+  }
+  const bases = type.isClassOrInterface?.() ? checker.getBaseTypes(type) : []
+  return bases.some((t) => isWriteType(t, checker, seen))
+}
+
+/** The awaited return type of a method declaration, via the checker. */
+function awaitedReturnType(method, checker) {
+  const signature = checker.getSignatureFromDeclaration(method)
+  if (!signature) return null
+  const returned = checker.getReturnTypeOfSignature(signature)
+  return checker.getAwaitedType?.(returned) ?? returned
+}
 
 /**
  * Absolute path to a declaration file inside an installed package.
@@ -109,8 +200,11 @@ function returnTypeText(method, source) {
 function isPrivate(method) {
   const modifiers = ts.getModifiers?.(method) ?? method.modifiers ?? []
   return (
-    modifiers.some((m) => m.kind === ts.SyntaxKind.PrivateKeyword) ||
-    ts.isPrivateIdentifier(method.name)
+    modifiers.some(
+      (m) =>
+        m.kind === ts.SyntaxKind.PrivateKeyword ||
+        m.kind === ts.SyntaxKind.ProtectedKeyword,
+    ) || ts.isPrivateIdentifier(method.name)
   )
 }
 
@@ -153,7 +247,18 @@ function parametersOf(method, checker) {
     const declaredOptional = Boolean(parameter.questionToken)
     const type = checker.getTypeAtLocation(parameter)
 
-    const expanded = withoutNullish(type).filter(isObjectLike)
+    // An ARRAY parameter is one value, not a bag of named options. Expanding it
+    // would enumerate Array.prototype (`map`, `length`, `sort`, …) as if the
+    // method accepted those names — which reads as forty missing waivers and
+    // hides any real one among them. `addresses: string[]` is the first such
+    // parameter in the SDK; it is named, like a scalar.
+    const isArrayParam = withoutNullish(type).every(
+      (t) => checker.isArrayType?.(t) ?? checker.isArrayLikeType?.(t) ?? false,
+    )
+
+    const expanded = isArrayParam
+      ? []
+      : withoutNullish(type).filter(isObjectLike)
     if (expanded.length === 0) {
       const name = parameter.name.getText()
       accepted.set(name, {
@@ -208,7 +313,10 @@ function flatClassMethods(file, className, checker) {
   const methods = new Map()
   if (!file) return methods
   for (const statement of file.statements) {
-    if (!ts.isClassDeclaration(statement) || statement.name?.text !== className) {
+    if (
+      !ts.isClassDeclaration(statement) ||
+      statement.name?.text !== className
+    ) {
       continue
     }
     for (const member of statement.members) {
@@ -217,6 +325,29 @@ function flatClassMethods(file, className, checker) {
     }
   }
   return methods
+}
+
+/**
+ * Public PROPERTY names of a class declaration — the sub-APIs it exposes as
+ * groups (`ReadOnlyClient.coins`, `.orgs`) rather than flattening into
+ * methods.
+ */
+function classPropertyNames(file, className) {
+  const names = new Set()
+  if (!file) return names
+  for (const statement of file.statements) {
+    if (
+      !ts.isClassDeclaration(statement) ||
+      statement.name?.text !== className
+    ) {
+      continue
+    }
+    for (const member of statement.members) {
+      if (!ts.isPropertyDeclaration(member) || isPrivate(member)) continue
+      names.add(member.name.getText(file))
+    }
+  }
+  return names
 }
 
 /** Absolute path to the keyspace package's AclClient declarations. */
@@ -237,7 +368,9 @@ export function keyspaceDeclarationPath() {
  *            kind: 'read', returns: string,
  *            params: {name: string, optional: boolean}[]}[]} sorted by path
  */
-export function readKeyspaceSurface(declarationPath = keyspaceDeclarationPath()) {
+export function readKeyspaceSurface(
+  declarationPath = keyspaceDeclarationPath(),
+) {
   const program = ts.createProgram([declarationPath], {
     noEmit: true,
     skipLibCheck: true,
@@ -280,13 +413,15 @@ export function readSdkSurface(declarationPath = sdkDeclarationPath()) {
   // TypeChecker can follow them there.
   // ReadOnlyClient is a sibling declaration that TriexClient does not import,
   // so it has to be rooted explicitly or the checker never loads it.
-  const readOnlyPath = join(
-    dirname(declarationPath),
-    `${READ_ONLY_CLASS}.d.ts`,
-  )
-  const roots = existsSync(readOnlyPath)
-    ? [declarationPath, readOnlyPath]
-    : [declarationPath]
+  const readOnlyPath = join(dirname(declarationPath), `${READ_ONLY_CLASS}.d.ts`)
+  const externalFiles = Object.values(EXTERNAL_NAMESPACE_FILES)
+    .map((rel) => join(dirname(declarationPath), rel))
+    .filter((path) => existsSync(path))
+  const roots = [
+    declarationPath,
+    ...(existsSync(readOnlyPath) ? [readOnlyPath] : []),
+    ...externalFiles,
+  ]
 
   const program = ts.createProgram(roots, {
     noEmit: true,
@@ -305,25 +440,88 @@ export function readSdkSurface(declarationPath = sdkDeclarationPath()) {
     READ_ONLY_CLASS,
     checker,
   )
+  // Namespaces ReadOnlyClient exposes as a whole sub-API (`coins`, `orgs`) are
+  // the SAME class on both clients, not flattened into its methods. Aliasing
+  // them would be a false match: `coins.orderbook` would borrow the item-book
+  // `orderbook(storageUnitId, assetId)` and demand inputs it never takes, and
+  // `coins.openOrders` would accept history paging it silently drops.
+  const readOnlyGroups = classPropertyNames(
+    program.getSourceFile(readOnlyPath),
+    READ_ONLY_CLASS,
+  )
 
   const surface = []
-  for (const statement of file.statements) {
-    if (!ts.isClassDeclaration(statement) || !statement.name) continue
-    const namespace = NAMESPACE_CLASSES[statement.name.text]
-    if (!namespace) continue
+  const declarationFiles = [
+    file,
+    ...externalFiles.map((path) => program.getSourceFile(path)),
+  ].filter(Boolean)
 
-    for (const member of statement.members) {
+  // Namespace → class declarations. Seeded from the fixed map, then
+  // DISCOVERED from each root's public properties through the type checker,
+  // so a group declared in any module — `coins` lives in coins/CoinsApi.d.ts —
+  // is found without a list to keep, along with the base classes it inherits
+  // methods from (`CoinsApi extends CoinsReadApi`).
+  const groups = new Map() // ClassDeclaration → namespace
+  for (const source of declarationFiles) {
+    for (const statement of source.statements) {
+      if (!ts.isClassDeclaration(statement) || !statement.name) continue
+      const namespace = NAMESPACE_CLASSES[statement.name.text]
+      if (namespace) groups.set(statement, namespace)
+    }
+  }
+  const addClassType = (type, namespace, seen = new Set()) => {
+    if (!type || seen.has(type)) return
+    seen.add(type)
+    const decl = type
+      .getSymbol?.()
+      ?.declarations?.find((d) => ts.isClassDeclaration(d))
+    if (!decl) return
+    if (!groups.has(decl)) groups.set(decl, namespace)
+    for (const base of checker.getBaseTypes(type) ?? []) {
+      addClassType(base, namespace, seen)
+    }
+  }
+  for (const source of declarationFiles) {
+    for (const statement of source.statements) {
+      if (!ts.isClassDeclaration(statement) || !statement.name) continue
+      const prefix = HANDLE_ROOTS[statement.name.text]
+      if (prefix === undefined) continue
+      const skip = ROOT_PROPERTY_SKIP[statement.name.text] ?? {}
+      for (const member of statement.members) {
+        if (!ts.isPropertyDeclaration(member) || isPrivate(member)) continue
+        const name = member.name.getText(source)
+        if (name in skip) continue
+        addClassType(
+          checker.getTypeAtLocation(member),
+          prefix ? `${prefix}.${name}` : name,
+        )
+      }
+    }
+  }
+
+  const seenPaths = new Set()
+  for (const [decl, namespace] of groups) {
+    const source = decl.getSourceFile()
+    for (const member of decl.members) {
       if (!ts.isMethodDeclaration(member) || isPrivate(member)) continue
-      const method = member.name.getText(file)
-      const returns = returnTypeText(member, file)
-      const alias = readOnlyAliases(namespace, method).find((n) =>
-        readOnly.has(n),
-      )
+      const method = member.name.getText(source)
+      const path = `${namespace}.${method}`
+      // A subclass override and its base declaration are one method.
+      if (seenPaths.has(path)) continue
+      seenPaths.add(path)
+      const returns = returnTypeText(member, source)
+      const alias = readOnlyGroups.has(namespace)
+        ? undefined
+        : readOnlyAliases(namespace, method).find((n) => readOnly.has(n))
       surface.push({
-        path: `${namespace}.${method}`,
+        path,
         namespace,
         method,
-        kind: WRITE_RETURN_TYPES.has(returns) ? 'write' : 'read',
+        kind:
+          isWriteReturn(returns) ||
+          isWriteType(awaitedReturnType(member, checker), checker)
+            ? 'write'
+            : 'read',
         returns,
         params: mergeParams(
           parametersOf(member, checker),
@@ -368,7 +566,12 @@ export function diffSurface(surface, tools, excluded) {
     // covering a write with a read tool would silently drop the write.
     const expected = method.kind === 'write' ? 'prepare' : 'read'
     if (tool.kind !== expected) {
-      miscovered.push({ ...method, tool: tool.name, expected, actual: tool.kind })
+      miscovered.push({
+        ...method,
+        tool: tool.name,
+        expected,
+        actual: tool.kind,
+      })
     } else {
       covered.push({ ...method, tool: tool.name })
     }

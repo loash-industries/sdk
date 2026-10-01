@@ -64,7 +64,7 @@ async function retry(times, delayMs, fn) {
 // ── 0. starting state ────────────────────────────────────────────────────────
 let cred = await client.balances.currency()
 console.log(
-  `wallet ${fromBase(cred.wallet, 6)} CRED · BM ${fromBase(cred.balanceManager, 6)} CRED · bm=${cred.balanceManagerId}`,
+  `wallet ${fromBase(cred.wallet, 6)} CRED · BM ${fromBase(cred.tradingAccount, 6)} CRED · bm=${cred.tradingAccountId}`,
 )
 if (cred.wallet === 0n) {
   console.error('signer has no CRED — fund it first')
@@ -79,16 +79,16 @@ await step(`depositCurrency ${fromBase(DEPOSIT, 6)} CRED`, async () => {
 })
 await step('BM balance reflects the deposit (fullnode, head-current)', async () => {
   const c = await client.balances.currency()
-  if (c.balanceManager < DEPOSIT) {
-    throw new Error(`BM holds ${c.balanceManager}, expected ≥ ${DEPOSIT}`)
+  if (c.tradingAccount < DEPOSIT) {
+    throw new Error(`BM holds ${c.tradingAccount}, expected ≥ ${DEPOSIT}`)
   }
-  return `BM=${fromBase(c.balanceManager, 6)} CRED`
+  return `BM=${fromBase(c.tradingAccount, 6)} CRED`
 })
 await step('withdrawCurrency (all) returns it to the wallet', async () => {
   const before = (await client.balances.currency()).wallet
   await client.account.withdrawCurrency()
   const after = await client.balances.currency()
-  if (after.balanceManager !== 0n) throw new Error('BM not emptied')
+  if (after.tradingAccount !== 0n) throw new Error('BM not emptied')
   return `wallet ${fromBase(before, 6)} → ${fromBase(after.wallet, 6)} CRED`
 })
 
@@ -157,7 +157,7 @@ await step('recover the cancel refund (sweepable/claim or already in BM)', async
     return `claimed from ${claimable.length} pool(s): ${r.digest}`
   }
   const c = await client.balances.currency()
-  return `refund already in BM (${fromBase(c.balanceManager, 6)} CRED) — nothing settled`
+  return `refund already in BM (${fromBase(c.tradingAccount, 6)} CRED) — nothing settled`
 })
 
 // ── 3. REAL market buy against the cheapest ask ──────────────────────────────
@@ -205,7 +205,7 @@ if (bought) {
     const inv = await client.balances.atHub({ storageUnitId: bought.hub })
     const mine = inv.marketplace.find((b) => b.assetId === bought.assetId)
     const c = await client.balances.currency()
-    return `BM item ${bought.assetId}=${mine?.amount ?? '0 (indexer lag)'} · BM ${fromBase(c.balanceManager, 6)} CRED · wallet ${fromBase(c.wallet, 6)} CRED`
+    return `BM item ${bought.assetId}=${mine?.amount ?? '0 (indexer lag)'} · BM ${fromBase(c.tradingAccount, 6)} CRED · wallet ${fromBase(c.wallet, 6)} CRED`
   })
 }
 
@@ -213,7 +213,7 @@ if (bought) {
 await step('withdrawCurrency (all) — leave the BM currency-empty', async () => {
   const r = await client.account.withdrawCurrency()
   const c = await client.balances.currency()
-  return `wallet ${fromBase(c.wallet, 6)} CRED, BM ${fromBase(c.balanceManager, 6)} — ${r.digest}`
+  return `wallet ${fromBase(c.wallet, 6)} CRED, BM ${fromBase(c.tradingAccount, 6)} — ${r.digest}`
 })
 
 console.log(failures ? `\n${failures} step(s) FAILED` : '\nFull lifecycle passed.')
