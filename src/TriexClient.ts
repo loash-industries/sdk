@@ -257,7 +257,7 @@ export class TriexClient {
   async resolveTradingAccountId(address: string): Promise<string | null> {
     const cached = this.cachedTradingAccountIds.get(address)
     if (cached) return cached
-    const structType = `${this.ids.triex}::trading_account::TradingAccount`
+    const structType = `${this.ids.triexOriginal}::trading_account::TradingAccount`
     const core = (this.suiClient as any).core
     const page = await core.listOwnedObjects({
       owner: address,

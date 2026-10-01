@@ -87,6 +87,28 @@ describe('trading account balance reads', () => {
     )
   })
 
+  it('keys by the ORIGINAL triex id once the package has been upgraded', async () => {
+    const upgraded = {
+      ...IDS,
+      triex: '0x' + '0b'.repeat(32),
+      triexOriginal: '0x' + '0a'.repeat(32),
+    }
+    const seen: any[] = []
+    const sui = asyncCore({
+      getObject: () => ({ object: { json: { balances: { id: '0x5' } } } }),
+      getDynamicField: (args) => {
+        seen.push(args)
+        return {
+          dynamicField: { value: { bcs: bcs.u64().serialize(1n).toBytes() } },
+        }
+      },
+    })
+    await getTradingAccountCurrencyBalance(sui as any, upgraded, '0x1')
+    expect(seen[0].name.type).toBe(
+      `${upgraded.triexOriginal}::trading_account::BalanceKey<${IDS.credCoinType}>`,
+    )
+  })
+
   it('reads items under trading_account::MultiCoinBalanceKey on the account', async () => {
     const seen: any[] = []
     const sui = asyncCore({

@@ -19,6 +19,8 @@ export const CLOCK_ID = '0x6'
  */
 export const STILLNESS_PACKAGE_IDS: PackageIds = {
   triex: '0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945',
+  triexOriginal:
+    '0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945',
   triexRegistry:
     '0x2f37ad133427cabf94653be9a67560f87ea7458eaef2b410f6497808cef722c2',
   triexFeePolicy:

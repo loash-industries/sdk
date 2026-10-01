@@ -274,7 +274,7 @@ export async function getTradingAccountCoinBalance(
     .getDynamicField({
       parentId: bagId,
       name: {
-        type: `${ids.triex}::trading_account::BalanceKey<${normalizeStructTag(coinType)}>`,
+        type: `${ids.triexOriginal}::trading_account::BalanceKey<${normalizeStructTag(coinType)}>`,
         bcs: serializeBalanceKey(),
       },
     })

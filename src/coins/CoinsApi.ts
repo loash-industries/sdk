@@ -392,7 +392,7 @@ export class CoinsReadApi {
     }
     const page = await (this.requireSui() as any).core.listOwnedObjects({
       owner: address,
-      type: `${this.ids.triex}::trading_account::TradingAccount`,
+      type: `${this.ids.triexOriginal}::trading_account::TradingAccount`,
       limit: 1,
     })
     return page?.objects?.[0]?.objectId ?? null

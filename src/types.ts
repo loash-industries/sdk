@@ -95,6 +95,13 @@ export interface PackageIds {
    * contracts at https://github.com/loash-industries/trinary-exchange.
    */
   triex: string
+  /**
+   * The triex package's ORIGINAL id. Struct types (`TradingAccount`, cap and
+   * balance-key types) keep the id of the version that defined them, so type
+   * filters and dynamic-field key types use this; `moveCall` targets use
+   * {@link PackageIds.triex}. Equal to `triex` until the first upgrade.
+   */
+  triexOriginal: string
   /** Triex CLOB registry (shared object). */
   triexRegistry: string
   /**

@@ -170,7 +170,7 @@ export async function getTradingAccountCurrencyBalance(
   const balancesBagId = tryIdToString(balancesBag?.id)
   if (!balancesBagId) return 0n
 
-  const keyType = `${ids.triex}::trading_account::BalanceKey<${ids.credCoinType}>`
+  const keyType = `${ids.triexOriginal}::trading_account::BalanceKey<${ids.credCoinType}>`
   const df = await core(suiClient)
     .getDynamicField({
       parentId: balancesBagId,
@@ -196,7 +196,7 @@ export async function getTradingAccountItemBalance(
   collectionId: string,
   assetId: bigint,
 ): Promise<{ hasKey: boolean; balance: bigint }> {
-  const keyType = `${ids.triex}::trading_account::MultiCoinBalanceKey`
+  const keyType = `${ids.triexOriginal}::trading_account::MultiCoinBalanceKey`
   const resp = await core(suiClient)
     .getDynamicObjectField({
       parentId: tradingAccountId,
@@ -427,7 +427,7 @@ export function tradingAccountCapType(
   ids: PackageIds,
   kind: TradingAccountCapKind,
 ): string {
-  return `${ids.triex}::trading_account::${CAP_STRUCTS[kind]}`
+  return `${ids.triexOriginal}::trading_account::${CAP_STRUCTS[kind]}`
 }
 
 /**
