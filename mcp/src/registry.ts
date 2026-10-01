@@ -1,3 +1,5 @@
+import { coinTools } from './tools/coins.js'
+import { coinPrepareTools } from './tools/coinsPrepare.js'
 import { keyspaceTools } from './tools/keyspace.js'
 import { orgTools } from './tools/org.js'
 import { orgPrepareTools } from './tools/orgPrepare.js'
@@ -9,9 +11,11 @@ import type { ServerMode } from './env.js'
 /** Every tool this server can expose, in a stable order. */
 export const ALL_TOOLS: ToolDef[] = [
   ...readTools,
+  ...coinTools,
   ...keyspaceTools,
   ...orgTools,
   ...prepareTools,
+  ...coinPrepareTools,
   ...orgPrepareTools,
 ]
 
@@ -39,6 +43,8 @@ export const GLOBAL_SYNTHETIC_PARAMS: Record<string, string> = {
 export const EXCLUDED_SDK_PATHS: Record<string, string> = {
   'market.resolvePool':
     'Internal plumbing — pool ids are resolved inside the tools that need them.',
+  'coins.resolvePool':
+    'Internal plumbing — every coins_* and prepare_coin_* tool takes the pool selector and resolves it itself; coins_list (market.poolId and coin types) and coins_orderbook already answer "which pool trades this pair".',
   'keyspace.hasAccess':
     'A membership check callable from the readPrincipals that keyspace_get_acl already returns; add a tool if callers want it server-side.',
   'keyspace.getStaleEntries':
@@ -83,6 +89,6 @@ export const EXCLUDED_SDK_PATHS: Record<string, string> = {
  */
 export function toolsForMode(mode: ServerMode): ToolDef[] {
   return mode === 'read'
-    ? [...readTools, ...keyspaceTools, ...orgTools]
+    ? [...readTools, ...coinTools, ...keyspaceTools, ...orgTools]
     : ALL_TOOLS
 }

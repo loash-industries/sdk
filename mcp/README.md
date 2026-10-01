@@ -54,13 +54,20 @@ All configuration is **non-secret** — note the absence of any key, address, or
 
 ## Tools
 
-**Read** — `market_discover`, `market_search_items`, `market_hub`, `market_items_at_hub`, `market_orderbook`, `market_pool_metadata`, `account_resolve`, `account_balances_at_hub`, `account_currency_balances`, `account_sweepable`, `orders_open`, `orders_fills`, `orders_trades`.
+**Read** — `market_discover`, `market_search_items`, `market_hub`, `market_items_at_hub`, `market_orderbook`, `market_pool_metadata`, `account_resolve`, `account_balances_at_hub`, `account_currency_balances`, `account_sweepable`, `account_caps`, `orders_fees`, `orders_open`, `orders_fills`, `orders_trades`. `orders_fees` and `account_caps` are head-current fullnode reads: the live fee ladder of an item pool (and, with an address, that account's tier), and the capabilities around a trading account.
 
 **Locations** — `market_hub_locations`, `market_item_locations`, `market_nearby_hubs`, `market_nearby_hubs_by_system`, `market_hubs_enriched`, `market_assembly_owners`, `market_assemblies_enriched`, `market_solar_system_names`, `account_owners`. These answer *where is it* and *who owns it*: start from `market_hub_locations` or `market_item_locations` when you hold no hub id, then `market_nearby_hubs` to widen the search. All are read tools.
 
 **Spatial (star map)** — `spatial_system`, `spatial_systems`, `spatial_nearby_systems`, `spatial_systems_near_coordinates`, `spatial_autocomplete_systems`, `spatial_stats`. Where solar systems are and what is near what — no account, hub or signer needed. Coordinates are metres and distances light years, both as decimal strings: the values exceed 2^53.
 
-**Prepare** — `prepare_create_account`, `prepare_deposit_currency`, `prepare_deposit_items`, `prepare_withdraw_currency`, `prepare_withdraw_items`, `prepare_claim_settled`, `prepare_limit_order`, `prepare_market_order`, `prepare_cancel_order`, `prepare_cancel_all_orders`, `prepare_modify_order`.
+**Prepare** — `prepare_create_account`, `prepare_register_account`, `prepare_mint_account_cap`, `prepare_revoke_account_cap`, `prepare_deposit_currency`, `prepare_deposit_items`, `prepare_withdraw_currency`, `prepare_withdraw_items`, `prepare_claim_settled`, `prepare_limit_order`, `prepare_market_order`, `prepare_cancel_order`, `prepare_cancel_many_orders`, `prepare_cancel_all_orders`, `prepare_modify_order`, `prepare_create_pool`, `prepare_claim_operator_share`.
+
+**Coin markets** — currency-pair pools (`triex::pool::Pool<Base, Quote>`), the coin counterpart of the item markets above. A pool is named by `poolId`, or by `baseCoinType` (+ `quoteCoinType`, default CRED); start from `coins_list`, which turns a symbol into both.
+
+- *Read* — `coins_list`, `coins_orderbook`, `coins_trade_params`, `coins_quote`, `coins_estimate_market`, `coins_open_orders`, `coins_account`, `coins_balances`. Everything but `coins_list` is a fullnode simulation, so these need no indexer route and reflect the chain head.
+- *Prepare* — `prepare_coin_deposit`, `prepare_coin_withdraw`, `prepare_coin_limit_order`, `prepare_coin_market_order`, `prepare_coin_swap`, `prepare_coin_cancel_order`, `prepare_coin_cancel_many_orders`, `prepare_coin_cancel_all_orders`, `prepare_coin_modify_order`, `prepare_coin_claim_settled`, `prepare_coin_create_pool`.
+
+Coin units differ from item units: every amount is **raw base units of its coin**, and prices are **1e9-scaled raw** (`quote = floor(base × price / 1e9)`), not CRED per item. `worstCaseSpend.asset` on a coin tool is the full normalized coin type, since a pool need not be quoted in CRED. Where the SDK would size a figure from a live read — a bid's deposit, a market buy's budget, a swap's `minOut` — the tool runs that read first and passes the result in, so the amount `intent` declares is the amount the bytes commit to.
 
 **Organizations (Armature)** — an organization is a *tree* of DAOs, and almost every question about one is really a question about a specific unit: which board votes, whose treasury, whose shared storage. Any unit id resolves the whole tree, so `orgId` is forgiving, but the answers are per-unit.
 
@@ -178,18 +185,19 @@ Two escape hatches exist, and each demands a written reason:
 
 The waivers are themselves checked: one naming a real SDK parameter, or one the tool no longer declares, fails as a stale claim.
 
-Read tools resolve against `ReadOnlyClient` as well as the namespaced APIs, since that is the client they actually call.
+Read tools resolve against `ReadOnlyClient` as well as the namespaced APIs, since that is the client they actually call. A group `ReadOnlyClient` exposes whole (`coins`, `orgs`) is the same class on both clients and is not aliased onto its flat methods — otherwise `coins.orderbook` would borrow the item book's `storageUnitId`/`assetId`.
 
 `npm run check:parity` prints the full report:
 
 ```
-SDK surface: 25 methods (14 read, 11 write)
-MCP tools:   23  ·  explicitly excluded: 2
-Parameters:  74 across the surface  ·  waivers: 1 global + 0 per-tool
+SDK surface: 136 methods (69 read, 67 write)
+MCP tools:   115  ·  explicitly excluded: 14
+Parameters:  406 across the surface  ·  waivers: 1 global + 124 per-tool
 
   ✓ write orders.limit               prepare_limit_order
   ✓ read  market.orderbook           market_orderbook
   – read  market.resolvePool         (excluded)
+  ✓ write coins.swap                 prepare_coin_swap
   …
 MCP covers the SDK surface in lock-step.
 ```

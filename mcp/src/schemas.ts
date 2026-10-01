@@ -57,6 +57,38 @@ export const hubAssetShape = {
   assetId: z.string().describe('EVE Frontier item asset id, e.g. "70810".'),
 }
 
+/**
+ * A fully-qualified Move coin type, `0x…::module::NAME` — the identity of a
+ * coin on the coin-pool surface, where an item's numeric asset id would be on
+ * the item surface. The SDK normalizes it, so short addresses (`0x2::sui::SUI`)
+ * are fine.
+ */
+export const coinType = z
+  .string()
+  .regex(
+    /^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$/,
+    'expected a fully-qualified coin type, 0x…::module::NAME',
+  )
+
+/**
+ * Which coin pool a call targets: `poolId`, or `baseCoinType` (+
+ * `quoteCoinType`, default CRED). Give all three to skip every lookup — the
+ * SDK then trusts the pairing as given.
+ */
+export const coinPoolSelectorShape = {
+  poolId: objectId
+    .optional()
+    .describe('Coin pool object id. Give this or baseCoinType.'),
+  baseCoinType: coinType
+    .optional()
+    .describe(
+      'Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.',
+    ),
+  quoteCoinType: coinType
+    .optional()
+    .describe('Quote coin type; defaults to CRED, the permissionless quote.'),
+}
+
 const limitShape = {
   limit: z.number().int().positive().max(200).optional(),
 }

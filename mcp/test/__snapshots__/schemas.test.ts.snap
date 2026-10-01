@@ -21,6 +21,21 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "account_caps": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "Sui address whose caps to read.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "address",
+    ],
+    "type": "object",
+  },
   "account_currency_balances": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -82,6 +97,252 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "required": [
       "tradingAccountId",
     ],
+    "type": "object",
+  },
+  "coins_account": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "tradingAccountId": {
+        "description": "TradingAccount object id — from account_resolve.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "tradingAccountId",
+    ],
+    "type": "object",
+  },
+  "coins_balances": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "Sui address whose balances to read.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "coinType": {
+        "description": "Coin type to read, e.g. "0x2::sui::SUI".",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "coinType",
+      "address",
+    ],
+    "type": "object",
+  },
+  "coins_estimate_market": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "depth": {
+        "description": "Book depth to walk (default 100, the matching limit).",
+        "exclusiveMinimum": 0,
+        "maximum": 1000,
+        "type": "integer",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quantity": {
+        "description": "Base quantity of the market order, raw units.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "side": {
+        "enum": [
+          "buy",
+          "sell",
+        ],
+        "type": "string",
+      },
+      "takerFeeRateScaled": {
+        "description": "Taker rate to price at, 1e9-scaled. Defaults to the conservative entry-rung rate.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "side",
+      "quantity",
+    ],
+    "type": "object",
+  },
+  "coins_list": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "coinTypes": {
+        "description": "Restrict to these coin types (max 200). Omit for all.",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+          "type": "string",
+        },
+        "maxItems": 200,
+        "minItems": 1,
+        "type": "array",
+      },
+    },
+    "type": "object",
+  },
+  "coins_open_orders": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "tradingAccountId": {
+        "description": "TradingAccount object id — from account_resolve.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "tradingAccountId",
+    ],
+    "type": "object",
+  },
+  "coins_orderbook": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "depth": {
+        "description": "Orders to read per side (default 100).",
+        "exclusiveMinimum": 0,
+        "maximum": 1000,
+        "type": "integer",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+    },
+    "type": "object",
+  },
+  "coins_quote": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amountIn": {
+        "description": "Raw amount of the coin being spent: quote for buys, base for sells.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "side": {
+        "description": ""buy" spends quote for base; "sell" the reverse.",
+        "enum": [
+          "buy",
+          "sell",
+        ],
+        "type": "string",
+      },
+      "tradingAccountId": {
+        "description": "Price at this account’s fee tier instead of the entry rung.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "side",
+      "amountIn",
+    ],
+    "type": "object",
+  },
+  "coins_trade_params": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "tradingAccountId": {
+        "description": "Also resolve this trading account’s own tier and rates.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
     "type": "object",
   },
   "keyspace_get_acl": {
@@ -412,6 +673,32 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "required": [
       "solarSystemIds",
     ],
+    "type": "object",
+  },
+  "orders_fees": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "Also resolve this address’s fee tier and rates.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "assetId": {
+        "description": "EVE Frontier item asset id; pair with storageUnitId.",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Item pool id; use instead of storageUnitId + assetId.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "description": "Trade hub / storage unit object id; pair with assetId.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
     "type": "object",
   },
   "orders_fills": {
@@ -984,6 +1271,43 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "prepare_cancel_many_orders": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "EVE Frontier item asset id, e.g. "70810".",
+        "type": "string",
+      },
+      "orderIds": {
+        "description": "Order ids (u128 decimal strings), all on this pool.",
+        "items": {
+          "description": "Order id (Move u128) as a decimal string, from open orders or discovery.",
+          "pattern": "^\\d+$",
+          "type": "string",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "description": "Trade hub / storage unit object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "storageUnitId",
+      "assetId",
+      "orderIds",
+    ],
+    "type": "object",
+  },
   "prepare_cancel_order": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -1016,6 +1340,31 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "prepare_claim_operator_share": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "poolIds": {
+        "description": "Item pool ids to settle, batched into one transaction.",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "poolIds",
+    ],
+    "type": "object",
+  },
   "prepare_claim_settled": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -1038,6 +1387,467 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "prepare_coin_cancel_all_orders": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_cancel_many_orders": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "orderIds": {
+        "description": "Order ids (u128 decimal strings), all in this pool.",
+        "items": {
+          "description": "Order id (Move u128) as a decimal string, from open orders or discovery.",
+          "pattern": "^\\d+$",
+          "type": "string",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "orderIds",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_cancel_order": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "orderId": {
+        "description": "Order id (Move u128) as a decimal string, from open orders or discovery.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "orderId",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_claim_settled": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "pools": {
+        "description": "Pools to settle from, each by poolId or baseCoinType (+ quoteCoinType).",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "baseCoinType": {
+              "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+              "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+              "type": "string",
+            },
+            "poolId": {
+              "description": "Coin pool object id. Give this or baseCoinType.",
+              "pattern": "^0x[0-9a-fA-F]{1,64}$",
+              "type": "string",
+            },
+            "quoteCoinType": {
+              "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+              "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+              "type": "string",
+            },
+          },
+          "type": "object",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "withdrawCoinTypes": {
+        "description": "Also withdraw these coin types’ whole account balance to the wallet.",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+          "type": "string",
+        },
+        "type": "array",
+      },
+    },
+    "required": [
+      "sender",
+      "pools",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_create_pool": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Coin type the new pool trades.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "baseCoinType",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_deposit": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "description": "Raw base units of that coin.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "coinType": {
+        "description": "Coin type to deposit.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "coinType",
+      "amount",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_limit_order": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "expireAt": {
+        "description": "Unix ms; omit for good-til-cancelled.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "orderType": {
+        "description": "0=LIMIT (default), 1=IOC, 2=FOK, 3=POST_ONLY.",
+        "maximum": 3,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "price": {
+        "description": "Raw 1e9-scaled price, in [1, 2^63−1].",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quantity": {
+        "description": "Base quantity, raw units.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "quoteDeposit": {
+        "description": "Override the quote held for a buy. Defaults to the never-under-funded deposit.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "selfMatchingOption": {
+        "description": "0=allowed (default), 1=cancel taker, 2=cancel maker.",
+        "maximum": 2,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "side": {
+        "enum": [
+          "buy",
+          "sell",
+        ],
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "side",
+      "price",
+      "quantity",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_market_order": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quantity": {
+        "description": "Base quantity, raw units.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quoteBudget": {
+        "description": "Buys only: quote to hold, including the taker fee. Defaults to the live estimate.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "selfMatchingOption": {
+        "description": "0=allowed (default), 1=cancel taker, 2=cancel maker.",
+        "maximum": 2,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "side": {
+        "enum": [
+          "buy",
+          "sell",
+        ],
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "side",
+      "quantity",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_modify_order": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "newQuantity": {
+        "description": "New total base quantity, raw units.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "orderId": {
+        "description": "Order id (Move u128) as a decimal string, from open orders or discovery.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "orderId",
+      "newQuantity",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_swap": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amountIn": {
+        "description": "Raw amount of the coin being spent, taken from the wallet.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "baseCoinType": {
+        "description": "Base coin type, e.g. "0x…::wbtc::WBTC". Give this or poolId; resolved via the on-chain pool registry.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "minOut": {
+        "description": "Minimum output or the swap aborts. Defaults from a dry-run.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "poolId": {
+        "description": "Coin pool object id. Give this or baseCoinType.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteCoinType": {
+        "description": "Quote coin type; defaults to CRED, the permissionless quote.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "side": {
+        "description": ""buy" spends quote for base; "sell" the reverse.",
+        "enum": [
+          "buy",
+          "sell",
+        ],
+        "type": "string",
+      },
+      "slippageBps": {
+        "description": "Tolerance off the dry-run when minOut is omitted (default 50 = 0.5%).",
+        "maximum": 10000,
+        "minimum": 0,
+        "type": "integer",
+      },
+    },
+    "required": [
+      "sender",
+      "side",
+      "amountIn",
+    ],
+    "type": "object",
+  },
+  "prepare_coin_withdraw": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "description": "Raw base units; omit for the full balance.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "coinType": {
+        "description": "Coin type to withdraw.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "coinType",
+    ],
+    "type": "object",
+  },
   "prepare_create_account": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -1050,6 +1860,32 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     },
     "required": [
       "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_create_pool": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "EVE Frontier item asset id, e.g. "70810".",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "description": "Trade hub / storage unit object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "storageUnitId",
+      "assetId",
     ],
     "type": "object",
   },
@@ -1230,6 +2066,36 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "assetId",
       "side",
       "quantity",
+    ],
+    "type": "object",
+  },
+  "prepare_mint_account_cap": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "kind": {
+        "description": "Which capability to mint.",
+        "enum": [
+          "trade",
+          "deposit",
+          "withdraw",
+        ],
+        "type": "string",
+      },
+      "recipient": {
+        "description": "Who receives the cap; defaults to the sender.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "kind",
     ],
     "type": "object",
   },
@@ -2600,6 +3466,42 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "sender",
       "proposalId",
       "approve",
+    ],
+    "type": "object",
+  },
+  "prepare_register_account": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_revoke_account_cap": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "capId": {
+        "description": "Cap object id on the account’s allow-list.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "capId",
     ],
     "type": "object",
   },

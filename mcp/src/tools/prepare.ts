@@ -1,3 +1,4 @@
+import { POOL_CREATION_FEE } from '@trinaryex/sdk'
 import { z } from 'zod'
 import { NothingToPrepare, captureTransaction } from '../capture.js'
 import { toPrepared } from '../prepare.js'
@@ -12,12 +13,13 @@ import {
   objectId,
   orderSide,
   senderShape,
+  suiAddress,
   u128,
   u64,
 } from '../schemas.js'
 import type { ToolDef } from './types.js'
 
-const orderIdSchema = u128.describe(
+export const orderIdSchema = u128.describe(
   'Order id (Move u128) as a decimal string, from open orders or discovery.',
 )
 
@@ -25,7 +27,7 @@ const orderIdSchema = u128.describe(
  * Run an SDK write call with the capture executor and serialize the built
  * transaction. Nothing is signed and nothing is submitted.
  */
-async function prepared(
+export async function prepared(
   ctx: RequestContext,
   sender: string,
   intent: Omit<PreparedIntent, 'targets'>,
@@ -47,13 +49,13 @@ async function prepared(
   }
 }
 
-const spend = (
+export const spend = (
   asset: string,
   amount: string,
   kind: WorstCaseSpend['kind'] = 'currency',
 ): WorstCaseSpend => ({ asset, amount, kind })
 
-const PREPARE_SUFFIX =
+export const PREPARE_SUFFIX =
   ' Returns unsigned transaction bytes — this server never signs or submits. Verify the returned intent against the bytes, then sponsor, sign and submit with your own key.'
 
 export const prepareTools: ToolDef[] = [
@@ -72,6 +74,76 @@ export const prepareTools: ToolDef[] = [
         args.sender,
         { action: 'create_account', params: { sender: args.sender } },
         () => ctx.writeClient(args.sender).account.ensure(),
+      ),
+  },
+  {
+    name: 'prepare_register_account',
+    title: 'Prepare: register trading account',
+    description:
+      'Build the transaction that files the sender’s existing trading account under its owner in the on-chain registry, so registry lookups can list it. Optional bookkeeping — trading works without it. Owner-only, at most 100 accounts per owner; fails with TradingAccountNotFound when the sender has none (run prepare_create_account first).' +
+      PREPARE_SUFFIX,
+    kind: 'prepare',
+    sdkPath: 'account.register',
+    inputShape: { ...senderShape },
+    handler: (ctx, args) =>
+      prepared(
+        ctx,
+        args.sender,
+        { action: 'register_account', params: {} },
+        () => ctx.writeClient(args.sender).account.register(),
+      ),
+  },
+  {
+    name: 'prepare_mint_account_cap',
+    title: 'Prepare: mint trading account capability',
+    description:
+      'Build a mint of a capability on the sender’s trading account, transferred to recipient (default: the sender). "trade" yields trade proofs, "deposit" / "withdraw" move funds in / out. Caps matter for accounts owned by an object or shared; a wallet-owned account can only be used in transactions its owner signs, so a cap does NOT let another wallet trade it. Revoke with prepare_revoke_account_cap; list with account_caps.' +
+      PREPARE_SUFFIX,
+    kind: 'prepare',
+    sdkPath: 'account.mintCap',
+    inputShape: {
+      ...senderShape,
+      kind: z
+        .enum(['trade', 'deposit', 'withdraw'])
+        .describe('Which capability to mint.'),
+      recipient: suiAddress
+        .optional()
+        .describe('Who receives the cap; defaults to the sender.'),
+    },
+    handler: (ctx, args) =>
+      prepared(
+        ctx,
+        args.sender,
+        {
+          action: 'mint_account_cap',
+          params: { kind: args.kind, recipient: args.recipient ?? args.sender },
+        },
+        () =>
+          ctx.writeClient(args.sender).account.mintCap({
+            kind: args.kind,
+            ...(args.recipient ? { recipient: args.recipient } : {}),
+          }),
+      ),
+  },
+  {
+    name: 'prepare_revoke_account_cap',
+    title: 'Prepare: revoke trading account capability',
+    description:
+      'Build a revocation of a Trade/Deposit/WithdrawCap from the sender’s trading account allow-list, by cap id (from account_caps.allowListed). Owner-only; the revoked cap object still exists but no longer works. Aborts on-chain when the id is not listed.' +
+      PREPARE_SUFFIX,
+    kind: 'prepare',
+    sdkPath: 'account.revokeCap',
+    inputShape: {
+      ...senderShape,
+      capId: objectId.describe('Cap object id on the account’s allow-list.'),
+    },
+    handler: (ctx, args) =>
+      prepared(
+        ctx,
+        args.sender,
+        { action: 'revoke_account_cap', params: { capId: args.capId } },
+        () =>
+          ctx.writeClient(args.sender).account.revokeCap({ capId: args.capId }),
       ),
   },
   {
@@ -360,6 +432,42 @@ export const prepareTools: ToolDef[] = [
       ),
   },
   {
+    name: 'prepare_cancel_many_orders',
+    title: 'Prepare: cancel several orders',
+    description:
+      'Build a cancellation of several resting orders on one item pool in one call. All or nothing: if any id is unknown or already gone, none cancel — re-read orders_open first. Cancelled bids refund their escrowed maker fee minus the pool’s cancel retention (see orders_fees).' +
+      PREPARE_SUFFIX,
+    kind: 'prepare',
+    sdkPath: 'orders.cancelMany',
+    inputShape: {
+      ...senderShape,
+      ...hubAssetShape,
+      orderIds: z
+        .array(orderIdSchema)
+        .min(1)
+        .describe('Order ids (u128 decimal strings), all on this pool.'),
+    },
+    handler: (ctx, args) =>
+      prepared(
+        ctx,
+        args.sender,
+        {
+          action: 'cancel_many_orders',
+          params: {
+            storageUnitId: args.storageUnitId,
+            assetId: args.assetId,
+            orderIds: args.orderIds,
+          },
+        },
+        () =>
+          ctx.writeClient(args.sender).orders.cancelMany({
+            storageUnitId: args.storageUnitId,
+            assetId: args.assetId,
+            orderIds: args.orderIds,
+          }),
+      ),
+  },
+  {
     name: 'prepare_cancel_all_orders',
     title: 'Prepare: cancel all orders',
     description:
@@ -415,6 +523,57 @@ export const prepareTools: ToolDef[] = [
             orderId: args.orderId,
             newQuantity: big(args.newQuantity),
           }),
+      ),
+  },
+  {
+    name: 'prepare_create_pool',
+    title: 'Prepare: open an item market',
+    description:
+      'Build the permissionless creation of a new item pool for assetId in the hub’s vault collection, quoted in CRED. Costs the 500 CRED creation fee (500000000 base units), paid from the sender’s wallet. Aborts on-chain when the market already exists — check market_items_at_hub or market_orderbook first.' +
+      PREPARE_SUFFIX,
+    kind: 'prepare',
+    sdkPath: 'market.createPool',
+    inputShape: { ...senderShape, ...hubAssetShape },
+    handler: (ctx, args) =>
+      prepared(
+        ctx,
+        args.sender,
+        {
+          action: 'create_pool',
+          params: { storageUnitId: args.storageUnitId, assetId: args.assetId },
+          worstCaseSpend: spend('CRED', POOL_CREATION_FEE.toString()),
+        },
+        () =>
+          ctx.writeClient(args.sender).market.createPool({
+            storageUnitId: args.storageUnitId,
+            assetId: args.assetId,
+          }),
+      ),
+  },
+  {
+    name: 'prepare_claim_operator_share',
+    title: 'Prepare: pay out hub operator fees',
+    description:
+      'Build a payout of accrued hub-operator fee shares for one or more item pools, one call per pool: the operator’s share goes to the collection’s registered beneficiary and the remainder to the treasury. Permissionless — the destinations come from on-chain configuration, so the sender pays only gas and receives nothing directly. Aborts when a share is owed but no beneficiary is registered.' +
+      PREPARE_SUFFIX,
+    kind: 'prepare',
+    sdkPath: 'market.claimOperatorShare',
+    inputShape: {
+      ...senderShape,
+      poolIds: z
+        .array(objectId)
+        .min(1)
+        .describe('Item pool ids to settle, batched into one transaction.'),
+    },
+    handler: (ctx, args) =>
+      prepared(
+        ctx,
+        args.sender,
+        { action: 'claim_operator_share', params: { poolIds: args.poolIds } },
+        () =>
+          ctx
+            .writeClient(args.sender)
+            .market.claimOperatorShare({ poolIds: args.poolIds }),
       ),
   },
 ]
