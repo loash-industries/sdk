@@ -6,12 +6,12 @@ import {
 } from '../src/errors'
 import { MOVE_ABORT_CATALOG } from '../src/moveAbortCatalog.generated'
 
-const PKG = '0xa9ec4afe4757ad2b90102e02b133fcd0cb7cc526722524ce20fcdf53be4ec309'
+const PKG = '0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945'
 
 // The shapes Sui errors actually reach the SDK in.
 const MODERN = `Move Runtime Abort. Location: ${PKG}::order_info::place_order (function index 3) at offset 45, Abort Code: 5 in command 0`
-const LEGACY = `MoveAbort(MoveLocation { module: ModuleId { address: a9ec4afe, name: Identifier("order_info") }, function: 3, instruction: 45, function_name: Some("place_order") }, 5) in command 0`
-const JSON_ESCAPED = `{"error":"MoveAbort(MoveLocation { module: ModuleId { address: a9ec4afe, name: Identifier(\\"order_info\\") }, function: 3, instruction: 45 }, 5) in command 0"}`
+const LEGACY = `MoveAbort(MoveLocation { module: ModuleId { address: dbf259ed, name: Identifier("order_info") }, function: 3, instruction: 45, function_name: Some("place_order") }, 5) in command 0`
+const JSON_ESCAPED = `{"error":"MoveAbort(MoveLocation { module: ModuleId { address: dbf259ed, name: Identifier(\\"order_info\\") }, function: 3, instruction: 45 }, 5) in command 0"}`
 const PRE_SUBMIT = `MoveAbort in 1st command, abort code: 5, in '${PKG}::order_info::place_order'`
 
 describe('parseMoveAbort', () => {

@@ -76,7 +76,7 @@ describe('normalizeExecuteResult', () => {
             success: false,
             error: {
               message:
-                'MoveAbort(MoveLocation { module: ModuleId { address: 0xa9df, name: Identifier("trading_account") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3)',
+                'MoveAbort(MoveLocation { module: ModuleId { address: 0xdbf2, name: Identifier("trading_account") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3)',
             },
           },
         },
@@ -127,7 +127,7 @@ describe('executeAndNormalize', () => {
     const executor = async () => {
       // Exact format the v2 client throws during transaction resolution.
       throw new Error(
-        "Transaction resolution failed: MoveAbort in 2nd command, abort code: 5, in '0xa9dfa639b89afcec3a206398510f2a3dee80478a765d238a2d33b58d14bdc8b4::big_vector::remove' (instruction 102)",
+        "Transaction resolution failed: MoveAbort in 2nd command, abort code: 5, in '0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945::big_vector::remove' (instruction 102)",
       )
     }
     try {

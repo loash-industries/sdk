@@ -1301,19 +1301,19 @@ describe('marketBuyRoundingBuffer', () => {
 describe('explainMoveAbort', () => {
   it('translates known module::code aborts', () => {
     const raw =
-      'MoveAbort(MoveLocation { module: ModuleId { address: 0xa9df, name: Identifier("trading_account") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3) in command 2'
+      'MoveAbort(MoveLocation { module: ModuleId { address: 0xdbf2, name: Identifier("trading_account") }, function: 12, instruction: 38, function_name: Some("withdraw") }, 3) in command 2'
     expect(explainMoveAbort(raw)).toContain('insufficient currency')
     expect(explainMoveAbort(new Error(raw))).toContain('deposit more')
   })
   it('maps the cycle-7 order-not-found and multicoin slippage aborts', () => {
     expect(
       explainMoveAbort(
-        "MoveAbort in 2nd command, abort code: 5, in '0xa9df::big_vector::remove' (instruction 3)",
+        "MoveAbort in 2nd command, abort code: 5, in '0xdbf2::big_vector::remove' (instruction 3)",
       ),
     ).toContain('Order not found')
     expect(
       explainMoveAbort(
-        'MoveAbort(MoveLocation { module: ModuleId { address: 0xa9df, name: Identifier("multicoin_pool") }, function: 1, instruction: 1, function_name: Some("swap") }, 13)',
+        'MoveAbort(MoveLocation { module: ModuleId { address: 0xdbf2, name: Identifier("multicoin_pool") }, function: 1, instruction: 1, function_name: Some("swap") }, 13)',
       ),
     ).toContain('Slippage')
   })

@@ -1,9 +1,10 @@
 import { STILLNESS_PACKAGE_IDS, resolvePackageIds } from '../src/config'
 
 /**
- * Pins the testnet preset to the cycle-7 deployment (triex published at
- * 0xa9df…, `testnet_stillness`). A wrong id here fails every write, so a
- * redeploy has to update this test on purpose.
+ * Pins the testnet preset to the cycle-7 deployment (`testnet_stillness`),
+ * every id taken from the published deployment table and each package's
+ * `Published.toml`. A wrong id here fails every write, so a redeploy has to
+ * update this test on purpose.
  */
 describe('testnet preset (cycle 7)', () => {
   it('points at the cycle-7 triex package and shared objects', () => {
@@ -24,6 +25,31 @@ describe('testnet preset (cycle 7)', () => {
         '0x7be18d6294e533bedd9a5d70a96ce8d9d4b87a7c74188ba65d3fe966bbed9d92',
       clock: '0x6',
     })
+  })
+
+  it('points at the cycle-7 Armature packages and vault registry', () => {
+    expect(STILLNESS_PACKAGE_IDS).toMatchObject({
+      armature:
+        '0x0a9eee47251a9f8a264a18804b1d5e553514720c4f4f765a481d1f12b492624c',
+      armatureProposals:
+        '0x19ccd64e194ed97a07c929459be44a06357f2eeef774d2800626f51d7ed0b599',
+      armatureVault:
+        '0xf447556abd7a92cc8690d626e1dd85dd40510c4a4dd75dcb5671f88ddfaec87e',
+      armatureTrading:
+        '0xe7060901772310333cfe7ca055ce5bb06a067e4209b5db3fe684ac3e6b2a0fce',
+      ouReceiptVaultRegistry:
+        '0x1013b7921bae7623ec066ae9d328cad2e72c47b3325239e93b20c45156794ddf',
+    })
+  })
+
+  it('keeps every *Original equal to its id after the fresh cycle-7 publish', () => {
+    const ids = STILLNESS_PACKAGE_IDS
+    expect(ids.triexOriginal).toBe(ids.triex)
+    expect(ids.worldOriginal).toBe(ids.world)
+    expect(ids.armatureOriginal).toBe(ids.armature)
+    expect(ids.armatureProposalsOriginal).toBe(ids.armatureProposals)
+    expect(ids.armatureVaultOriginal).toBe(ids.armatureVault)
+    expect(ids.armatureTradingOriginal).toBe(ids.armatureTrading)
   })
 
   it('keeps the CRED coin type, which is never republished', () => {
