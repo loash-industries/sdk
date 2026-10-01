@@ -167,6 +167,11 @@ export interface ReadOnlyClientConfig {
   indexerUrl?: string
   network?: TriexNetwork
   packageIds?: Partial<PackageIds>
+  /**
+   * Optional fullnode client. Only `coins.*` reads use it (coin-pool books,
+   * orders and fees are on-chain reads); everything else stays indexer-only.
+   */
+  suiClient?: ClientWithCoreApi
 }
 
 // ─── Domain types (inferred from the pinned wire schemas — see schemas.ts) ───
