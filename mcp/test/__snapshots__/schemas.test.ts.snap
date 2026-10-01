@@ -6,17 +6,37 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "address": {
+        "description": "Fills \`warehouse\`: this wallet’s item receipts held at the hub.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "inventoryKey": {
+        "description": "Fills \`hangar\`: the hub or character owner_cap_id selecting the hangar.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
       "storageUnitId": {
+        "description": "Trade hub / storage unit object id; scopes the whole read.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
       "tradingAccountId": {
+        "description": "Fills \`marketplace\`: items deposited in this trading account (from account_resolve).",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
+      "vaultIds": {
+        "description": "Fills \`orgVaults\`: organization receipt vault ids, keyed by id in the answer.",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
     },
     "required": [
-      "tradingAccountId",
       "storageUnitId",
     ],
     "type": "object",

@@ -400,19 +400,56 @@ export const readTools: ToolDef[] = [
     name: 'account_balances_at_hub',
     title: 'Check balances at a hub',
     description:
-      'Item and currency balances for a trading account at one hub, across wallet, trading account, and hangar.',
+      'Item balances at one hub, in up to four sections: `marketplace` (deposited in a trading account), `warehouse` (receipts in a wallet), `hangar` (an owner_cap_id’s hangar) and `orgVaults` (organization receipt vaults). Each section is filled only when its selector is given — name at least one. Items only: CRED lives on the fullnode, so use account_currency_balances for it. Amounts are base units as decimal strings. Costs 50 CU.',
     kind: 'read',
     sdkPath: 'balances.atHub',
     inputShape: {
-      tradingAccountId: objectId,
-      storageUnitId: objectId,
-    },
-    handler: async (ctx, args) =>
-      ok(
-        await ctx
-          .readClient()
-          .balancesAtHub(args.tradingAccountId, args.storageUnitId),
+      storageUnitId: objectId.describe(
+        'Trade hub / storage unit object id; scopes the whole read.',
       ),
+      tradingAccountId: objectId
+        .optional()
+        .describe(
+          'Fills `marketplace`: items deposited in this trading account (from account_resolve).',
+        ),
+      address: suiAddress
+        .optional()
+        .describe(
+          'Fills `warehouse`: this wallet’s item receipts held at the hub.',
+        ),
+      inventoryKey: objectId
+        .optional()
+        .describe(
+          'Fills `hangar`: the hub or character owner_cap_id selecting the hangar.',
+        ),
+      vaultIds: z
+        .array(objectId)
+        .min(1)
+        .optional()
+        .describe(
+          'Fills `orgVaults`: organization receipt vault ids, keyed by id in the answer.',
+        ),
+    },
+    handler: async (ctx, args) => {
+      const { storageUnitId, tradingAccountId, address, inventoryKey } = args
+      const vaultIds: string[] | undefined = args.vaultIds
+      // Every section comes back empty unless its selector is given, so a call
+      // naming none would spend 50 CU to learn nothing.
+      if (!tradingAccountId && !address && !inventoryKey && !vaultIds) {
+        throw new Error(
+          'Name at least one section to read: tradingAccountId, address, inventoryKey or vaultIds.',
+        )
+      }
+      return ok(
+        await ctx.readClient().balancesAtHub({
+          storageUnitId,
+          ...(tradingAccountId ? { tradingAccountId } : {}),
+          ...(address ? { address } : {}),
+          ...(inventoryKey ? { inventoryKey } : {}),
+          ...(vaultIds ? { vaultIds } : {}),
+        }),
+      )
+    },
   },
   {
     name: 'account_currency_balances',
