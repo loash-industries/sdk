@@ -459,7 +459,7 @@ describe('orders.limit (bid)', () => {
       quantity: 10n,
     })
     expect(pureU64s(captured.tx!)).toContainEqual(10_500n) // 10_000 + 5%
-    expect(simulated.include).toEqual({ commandResults: true })
+    expect(simulated.include).toEqual({ commandResults: true, effects: true })
     expect(simulated.transaction.getData().sender).toBe(OWNER)
   })
 
