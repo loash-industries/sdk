@@ -303,34 +303,56 @@ export {
 export type { TreasuryCoinBalance } from './armature/treasury'
 export {
   appendClaimSettled,
+  appendClaimSettledCoin,
   cancelOrderAction,
+  cancelOrderCoinAction,
+  coinPairProposalTypes,
+  createMulticoinPoolAction,
+  createMulticoinPoolProposalType,
   depositCoinToBookAction,
-  depositFromDaoVaultToBookAction,
+  depositFromOuVaultToBookAction,
+  extractCreatedTradingCustody,
+  fetchTradingCustody,
+  normalizeMoveType,
   placeLimitOrderAction,
+  placeLimitOrderCoinAction,
+  placeMarketOrderAction,
   setupTradingAccountAction,
   sweepCoinToTreasuryAction,
-  sweepMulticoinToDaoVaultAction,
+  sweepMulticoinToOuVaultAction,
+  tradingProposalTypes,
+  withEnabledTypeKey,
 } from './armature/trading'
-export type { OrderFlags, TradingContext } from './armature/trading'
-export type { OrgLimitOrderParams } from './armature/OrgClient'
+export type {
+  OrderFlags,
+  TradingContext,
+  TradingCustodyInfo,
+  TradingProposalType,
+} from './armature/trading'
+export type {
+  OrgCoinLimitOrderParams,
+  OrgLimitOrderParams,
+  OrgTradingAccountCreated,
+} from './armature/OrgClient'
 
-// ─── Armature: shared storage (DaoReceiptVault) ──────────────────────────────
+// ─── Armature: shared storage (OuReceiptVault) ───────────────────────────────
 export {
-  deinitializeDaoVaultTx,
+  deinitializeOuVaultTx,
   depositReceiptTx,
-  fetchDaoVaultInfo,
+  fetchOuVaultInfo,
   fetchVaultBalance,
   grantEditOuTx,
   grantTx,
-  initializeDaoVaultTx,
+  initializeOuVaultTx,
   principalVec,
-  resolveDaoVaultId,
+  resolveOuVaultId,
   revokeTx,
   roleVec,
   sourceWalletReceipts,
   toStorageUnitId,
+  updateRegistryKeyTx,
   VaultKeyBcs,
   withdrawReceiptTx,
 } from './armature/vault'
-export type { DaoVaultInfo } from './armature/vault'
+export type { OuVaultInfo } from './armature/vault'
 export type { OrgSweepSkip } from './armature/OrgClient'

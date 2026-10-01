@@ -29,10 +29,14 @@ export type HubDaoVault = z.output<typeof HubDaoVaultSchema>
 export type VaultAclEntry = z.output<typeof VaultAclEntrySchema>
 export type VaultRole = VaultAclEntry['role']
 
-/** A vault ACL subject: an individual wallet, or an organization unit. */
+/**
+ * A vault ACL subject: an individual wallet (`player`), a service or bot key
+ * (`machine` — checked exactly like `player`, but a distinct on-chain value),
+ * or any board member of an organization unit (`ou`).
+ */
 export interface VaultPrincipal {
-  kind: 'player' | 'ou'
-  /** Wallet address (`player`) or organization id (`ou`). */
+  kind: 'player' | 'machine' | 'ou'
+  /** Wallet / machine address, or organization id (`ou`). */
   value: string
 }
 

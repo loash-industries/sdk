@@ -2,19 +2,25 @@ import { jest } from '@jest/globals'
 import { bcs } from '@mysten/sui/bcs'
 import { Transaction } from '@mysten/sui/transactions'
 
+import type { DaoGovernance } from '../src/armature/governance'
 import { OrgHandle } from '../src/armature/OrgClient'
+import { tradingProposalTypes } from '../src/armature/trading'
 import type { Org } from '../src/armature/types'
 import {
-  deinitializeDaoVaultTx,
-  fetchDaoVaultInfo,
+  deinitializeOuVaultTx,
+  depositReceiptTx,
+  fetchOuVaultInfo,
   fetchVaultBalance,
+  grantEditOuTx,
   grantTx,
-  initializeDaoVaultTx,
+  initializeOuVaultTx,
   principalVec,
-  resolveDaoVaultId,
+  resolveOuVaultId,
   revokeTx,
+  roleVec,
   sourceWalletReceipts,
   toStorageUnitId,
+  updateRegistryKeyTx,
   VaultKeyBcs,
   withdrawReceiptTx,
 } from '../src/armature/vault'
@@ -23,27 +29,68 @@ import { TriexError } from '../src/errors'
 
 const hex = (pair: string) => `0x${pair.repeat(32)}`
 const ids = resolvePackageIds('testnet')
+const VAULT_PKG = ids.armatureVault
 
 const ROOT = hex('c1')
 const OFFICERS = hex('c2')
 const ALICE = hex('11')
+const BOT = hex('1b')
 const SSU = hex('55')
 const VAULT = hex('47')
 const TABLE = hex('56')
 const COLLECTION = hex('51')
-const CAPS = hex('e5')
 const TREASURY = hex('44')
-const BM = hex('b0')
+const ACCOUNT = hex('b0')
+const CUSTODY = hex('b1')
+const CONFIG = hex('53')
 
-function commandNames(tx: Transaction): string[] {
-  return tx
-    .getData()
-    .commands.map((c: any) =>
-      c.$kind === 'MoveCall'
-        ? `${c.MoveCall.module}::${c.MoveCall.function}`
-        : c.$kind,
-    )
+// ─── PTB inspection ─────────────────────────────────────────────────────────
+
+interface Call {
+  fn: string
+  target: string
+  typeArgs: string[]
+  args: (string | { pure: string } | { result: number })[]
 }
+
+function calls(tx: Transaction): Call[] {
+  const data = tx.getData()
+  const inputs = data.inputs as any[]
+  const arg = (a: any) => {
+    if (a?.$kind === 'Input') {
+      const input = inputs[a.Input]
+      const objectId =
+        input?.UnresolvedObject?.objectId ??
+        input?.Object?.ImmOrOwnedObject?.objectId ??
+        input?.Object?.SharedObject?.objectId
+      if (objectId) return objectId as string
+      return { pure: input?.Pure?.bytes as string }
+    }
+    if (a?.$kind === 'Result') return { result: a.Result as number }
+    if (a?.$kind === 'NestedResult')
+      return { result: a.NestedResult[0] as number }
+    return { pure: '?' }
+  }
+  return data.commands.map((c: any) =>
+    c.$kind === 'MoveCall'
+      ? {
+          fn: `${c.MoveCall.module}::${c.MoveCall.function}`,
+          target: `${c.MoveCall.package}::${c.MoveCall.module}::${c.MoveCall.function}`,
+          typeArgs: c.MoveCall.typeArguments,
+          args: c.MoveCall.arguments.map(arg),
+        }
+      : {
+          fn: c.$kind,
+          target: c.$kind,
+          typeArgs: [],
+          args: c.$kind === 'MakeMoveVec' ? [c.MakeMoveVec.type] : [],
+        },
+  )
+}
+const commandNames = (tx: Transaction) => calls(tx).map((c) => c.fn)
+const last = (tx: Transaction) => calls(tx).at(-1)!
+const pureId = (v: string) => ({ pure: bcs.Address.serialize(v).toBase64() })
+const pureU64 = (v: bigint) => ({ pure: bcs.u64().serialize(v).toBase64() })
 
 const MultiCoin = bcs.struct('MultiCoinBalance', {
   id: bcs.Address,
@@ -60,7 +107,7 @@ describe('toStorageUnitId', () => {
   })
 })
 
-describe('resolveDaoVaultId', () => {
+describe('resolveOuVaultId', () => {
   function sui(over: { table?: unknown; entry?: unknown } = {}) {
     return {
       core: {
@@ -82,9 +129,9 @@ describe('resolveDaoVaultId', () => {
     } as never
   }
 
-  it('keys by BOTH storage unit and registrant, using the ORIGINAL package id', async () => {
+  it('keys by BOTH storage unit and registrant OU', async () => {
     const client = sui()
-    const id = await resolveDaoVaultId(client, ids, {
+    const id = await resolveOuVaultId(client, ids, {
       storageUnitId: SSU,
       registrantOrgId: OFFICERS,
     })
@@ -92,18 +139,29 @@ describe('resolveDaoVaultId', () => {
 
     const call = (client as any).core.getDynamicField.mock.calls[0][0]
     expect(call.parentId).toBe(TABLE)
-    // Objects keep the type tag of the package that created them; on stillness
-    // the vault package's current and original ids differ.
-    expect(call.name.type).toBe(
-      `${ids.armatureVaultOriginal}::dao_receipt_vault::VaultKey`,
-    )
-    expect(ids.armatureVaultOriginal).not.toBe(ids.armatureVault)
     expect(call.name.bcs).toEqual(
       VaultKeyBcs.serialize({
         storage_unit_id: SSU,
-        registrant_dao_id: OFFICERS,
+        registrant_ou_id: OFFICERS,
       }).toBytes(),
     )
+  })
+
+  it('types the key with the ORIGINAL package id, never the current one', async () => {
+    // The cycle-7 preset is a fresh publish (original === current), so prove
+    // the choice with an upgraded package: objects keep the type tag of the
+    // version that created them.
+    const upgraded = resolvePackageIds('testnet', {
+      armatureVault: hex('9a'),
+      armatureVaultOriginal: hex('9b'),
+    })
+    const client = sui()
+    await resolveOuVaultId(client, upgraded, {
+      storageUnitId: SSU,
+      registrantOrgId: OFFICERS,
+    })
+    const call = (client as any).core.getDynamicField.mock.calls[0][0]
+    expect(call.name.type).toBe(`${hex('9b')}::ou_receipt_vault::VaultKey`)
   })
 
   it('unwraps the table UID through both transport shapes', async () => {
@@ -111,7 +169,7 @@ describe('resolveDaoVaultId', () => {
       { vaults: { id: { id: TABLE } } },
       { vaults: { fields: { id: { id: TABLE } } } },
     ]) {
-      const id = await resolveDaoVaultId(sui({ table }), ids, {
+      const id = await resolveOuVaultId(sui({ table }), ids, {
         storageUnitId: SSU,
         registrantOrgId: OFFICERS,
       })
@@ -131,7 +189,7 @@ describe('resolveDaoVaultId', () => {
       },
     } as never
     expect(
-      await resolveDaoVaultId(client, ids, {
+      await resolveOuVaultId(client, ids, {
         storageUnitId: SSU,
         registrantOrgId: OFFICERS,
       }),
@@ -139,210 +197,341 @@ describe('resolveDaoVaultId', () => {
   })
 })
 
-describe('fetchDaoVaultInfo', () => {
-  const aclContents = [
-    { key: 'Deposit', value: [{ kind: 1, id: OFFICERS, data: [] }] },
-    { key: 'Edit', value: [{ kind: 0, id: ALICE, data: [] }] },
+describe('fetchOuVaultInfo', () => {
+  function client(json: unknown) {
+    return {
+      core: { getObject: async () => ({ object: { json } }) },
+    } as never
+  }
+  const base = {
+    storage_unit_id: SSU,
+    collection_id: COLLECTION,
+    registrant_ou_id: OFFICERS,
+    non_empty_assets: 2,
+  }
+  const expected = [
+    { role: 'deposit', principal: { kind: 'ou', value: OFFICERS } },
+    { role: 'edit', principal: { kind: 'player', value: ALICE } },
+    { role: 'edit', principal: { kind: 'machine', value: BOT } },
   ]
 
-  it('parses roles and principals, both transports', async () => {
-    for (const acl of [
-      { contents: aclContents },
-      {
-        fields: {
-          contents: aclContents.map((e) => ({
-            fields: { key: e.key, value: e.value.map((p) => ({ fields: p })) },
-          })),
-        },
-      },
-    ]) {
-      const client = {
-        core: {
-          getObject: async () => ({
-            object: {
-              json: {
-                storage_unit_id: SSU,
-                collection_id: COLLECTION,
-                registrant_dao_id: OFFICERS,
-                non_empty_assets: 2,
-                acl,
-              },
+  it('parses gRPC JSON enums (`@variant`), including Machine', async () => {
+    const info = await fetchOuVaultInfo(
+      client({
+        ...base,
+        acl: {
+          contents: [
+            {
+              key: { '@variant': 'Deposit' },
+              value: [{ '@variant': 'Ou', ou_id: OFFICERS }],
             },
-          }),
+            {
+              key: { '@variant': 'Edit' },
+              value: [
+                { '@variant': 'Player', addr: ALICE },
+                { '@variant': 'Machine', addr: BOT },
+              ],
+            },
+          ],
         },
-      } as never
-      const info = await fetchDaoVaultInfo(client, VAULT)
-      expect(info).toMatchObject({
-        vaultId: VAULT,
-        storageUnitId: SSU,
-        collectionId: COLLECTION,
-        nonEmptyAssets: 2,
-      })
-      expect(info!.acl).toEqual([
-        { role: 'deposit', principal: { kind: 'ou', value: OFFICERS } },
-        { role: 'edit', principal: { kind: 'player', value: ALICE } },
-      ])
-    }
+      }),
+      VAULT,
+    )
+    expect(info).toMatchObject({
+      vaultId: VAULT,
+      storageUnitId: SSU,
+      collectionId: COLLECTION,
+      registrantOrgId: OFFICERS,
+      nonEmptyAssets: 2,
+    })
+    expect(info!.acl).toEqual(expected)
   })
 
-  it('reads a Move enum role given as a variant tag', async () => {
-    const client = {
-      core: {
-        getObject: async () => ({
-          object: {
-            json: {
-              acl: {
-                contents: [
-                  { key: { Withdraw: {} }, value: [{ kind: 0, id: ALICE }] },
-                ],
-              },
+  it('parses JSON-RPC enums (`variant` + `fields`)', async () => {
+    const info = await fetchOuVaultInfo(
+      client({
+        fields: {
+          ...base,
+          acl: {
+            fields: {
+              contents: [
+                {
+                  fields: {
+                    key: { variant: 'Deposit', fields: {} },
+                    value: [{ variant: 'Ou', fields: { ou_id: OFFICERS } }],
+                  },
+                },
+                {
+                  fields: {
+                    key: { variant: 'Edit', fields: {} },
+                    value: [
+                      { variant: 'Player', fields: { addr: ALICE } },
+                      { variant: 'Machine', fields: { addr: BOT } },
+                    ],
+                  },
+                },
+              ],
             },
           },
-        }),
-      },
-    } as never
-    const info = await fetchDaoVaultInfo(client, VAULT)
-    expect(info!.acl[0].role).toBe('withdraw')
+        },
+      }),
+      VAULT,
+    )
+    expect(info!.acl).toEqual(expected)
+  })
+
+  it('parses externally tagged enums and bare variant names', async () => {
+    const info = await fetchOuVaultInfo(
+      client({
+        acl: {
+          contents: [
+            { key: { Withdraw: {} }, value: [{ Player: { addr: ALICE } }] },
+            { key: 'Edit', value: [{ Ou: { ou_id: ROOT } }] },
+          ],
+        },
+      }),
+      VAULT,
+    )
+    expect(info!.acl).toEqual([
+      { role: 'withdraw', principal: { kind: 'player', value: ALICE } },
+      { role: 'edit', principal: { kind: 'ou', value: ROOT } },
+    ])
   })
 
   it('is null for a vault that cannot be read', async () => {
-    const client = {
+    const c = {
       core: {
         getObject: async () => {
           throw new Error('gone')
         },
       },
     } as never
-    expect(await fetchDaoVaultInfo(client, VAULT)).toBeNull()
+    expect(await fetchOuVaultInfo(c, VAULT)).toBeNull()
   })
 })
 
 describe('fetchVaultBalance', () => {
-  it('reads the u64-keyed dynamic object field', async () => {
-    const getDynamicField = jest.fn(async (_a: unknown) => ({
-      dynamicField: {
-        value: {
-          bcs: MultiCoin.serialize({
-            id: VAULT,
-            collection: COLLECTION,
-            asset_id: 70810n,
-            amount: 9n,
-          }).toBytes(),
-        },
+  it('reads the u64-keyed dynamic OBJECT field and decodes the child', async () => {
+    const getDynamicObjectField = jest.fn(async (_a: unknown) => ({
+      object: {
+        content: MultiCoin.serialize({
+          id: hex('77'),
+          collection: COLLECTION,
+          asset_id: 70810n,
+          amount: 9n,
+        }).toBytes(),
       },
     }))
-    const client = { core: { getDynamicField } } as never
-    expect(await fetchVaultBalance(client, VAULT, 70810n)).toBe(9n)
-    expect((getDynamicField.mock.calls[0][0] as any).name.type).toBe('u64')
+    const c = { core: { getDynamicObjectField } } as never
+    expect(await fetchVaultBalance(c, VAULT, 70810n)).toBe(9n)
+    const args = getDynamicObjectField.mock.calls[0][0] as any
+    expect(args.parentId).toBe(VAULT)
+    expect(args.name.type).toBe('u64')
+    expect(args.name.bcs).toEqual(bcs.u64().serialize(70810n).toBytes())
   })
 
   it('is 0n for an asset the vault has never held', async () => {
-    const client = {
+    const c = {
       core: {
-        getDynamicField: async () => {
+        getDynamicObjectField: async () => {
           throw new Error('nope')
         },
       },
     } as never
-    expect(await fetchVaultBalance(client, VAULT, 1n)).toBe(0n)
+    expect(await fetchVaultBalance(c, VAULT, 1n)).toBe(0n)
   })
 })
 
 describe('principal + role vectors', () => {
-  it('builds Principal via moveCall — it cannot cross as tx.pure', () => {
+  it('builds each Principal with its acl:: constructor — it cannot cross as tx.pure', () => {
     const tx = new Transaction()
-    principalVec(tx, ids.armatureVault, [
+    principalVec(tx, VAULT_PKG, [
       { kind: 'ou', value: OFFICERS },
       { kind: 'player', value: ALICE },
+      { kind: 'machine', value: BOT },
     ])
-    expect(commandNames(tx)).toEqual(['acl::ou', 'acl::player', 'MakeMoveVec'])
+    const cs = calls(tx)
+    expect(cs.map((c) => c.fn)).toEqual([
+      'acl::ou',
+      'acl::player',
+      'acl::machine',
+      'MakeMoveVec',
+    ])
+    expect(cs[0].args).toEqual([pureId(OFFICERS)])
+    expect(cs[1].args).toEqual([pureId(ALICE)])
+    expect(cs[2].args).toEqual([pureId(BOT)])
+    expect(cs[2].target).toBe(`${VAULT_PKG}::acl::machine`)
+  })
+
+  it('builds Role via ou_receipt_vault constructors', () => {
+    const tx = new Transaction()
+    roleVec(tx, VAULT_PKG, ['deposit', 'withdraw', 'edit'])
+    expect(commandNames(tx)).toEqual([
+      'ou_receipt_vault::role_deposit',
+      'ou_receipt_vault::role_withdraw',
+      'ou_receipt_vault::role_edit',
+      'MakeMoveVec',
+    ])
   })
 })
 
 describe('vault write PTBs', () => {
-  it('initialize passes three principal vectors', () => {
+  it('initialize_ou_vault: registry, SSU, registrant OU, config, three vectors', () => {
     const tx = new Transaction()
-    initializeDaoVaultTx(tx, {
-      armatureVault: ids.armatureVault,
+    initializeOuVaultTx(tx, {
+      armatureVault: VAULT_PKG,
       registryId: ids.ouReceiptVaultRegistry,
-      storageUnitId: SSU,
+      storageUnitId: '0x55',
       registrantOrgId: OFFICERS,
-      vaultConfigId: hex('53'),
+      vaultConfigId: CONFIG,
       depositPrincipals: [{ kind: 'ou', value: OFFICERS }],
-      withdrawPrincipals: [{ kind: 'ou', value: OFFICERS }],
-      editPrincipals: [{ kind: 'ou', value: ROOT }],
+      withdrawPrincipals: [{ kind: 'machine', value: BOT }],
+      editPrincipals: [{ kind: 'player', value: ALICE }],
     })
     expect(commandNames(tx)).toEqual([
       'acl::ou',
       'MakeMoveVec',
-      'acl::ou',
-      'MakeMoveVec',
-      'acl::ou',
-      'MakeMoveVec',
-      'dao_receipt_vault::initialize_dao_vault_v2',
-    ])
-  })
-
-  it('grant builds parallel role + principal vectors', () => {
-    const tx = new Transaction()
-    grantTx(tx, {
-      armatureVault: ids.armatureVault,
-      vaultId: VAULT,
-      editorDaoId: ROOT,
-      grants: [
-        { role: 'deposit', principal: { kind: 'player', value: ALICE } },
-        { role: 'withdraw', principal: { kind: 'ou', value: OFFICERS } },
-      ],
-    })
-    expect(commandNames(tx)).toEqual([
-      'dao_receipt_vault::role_deposit',
-      'dao_receipt_vault::role_withdraw',
+      'acl::machine',
       'MakeMoveVec',
       'acl::player',
-      'acl::ou',
       'MakeMoveVec',
-      'dao_receipt_vault::grant',
+      'ou_receipt_vault::initialize_ou_vault',
+    ])
+    const init = last(tx)
+    expect(init.target).toBe(
+      `${VAULT_PKG}::ou_receipt_vault::initialize_ou_vault`,
+    )
+    expect(init.args).toEqual([
+      ids.ouReceiptVaultRegistry,
+      toStorageUnitId('0x55'),
+      OFFICERS,
+      CONFIG,
+      { result: 1 },
+      { result: 3 },
+      { result: 5 },
     ])
   })
 
-  it('revoke and deinit are single calls', () => {
+  it('deposit_receipt: (vault, ou, balance)', () => {
     const tx = new Transaction()
-    revokeTx(tx, {
-      armatureVault: ids.armatureVault,
+    const [bal] = tx.moveCall({ target: '0x2::m::make', arguments: [] })
+    depositReceiptTx(tx, {
+      armatureVault: VAULT_PKG,
       vaultId: VAULT,
-      editorDaoId: ROOT,
-      revocations: [
-        { role: 'deposit', principal: { kind: 'player', value: ALICE } },
-      ],
+      ouId: OFFICERS,
+      balance: bal,
     })
-    expect(commandNames(tx).at(-1)).toBe('dao_receipt_vault::revoke')
-
-    const tx2 = new Transaction()
-    deinitializeDaoVaultTx(tx2, {
-      armatureVault: ids.armatureVault,
-      registryId: ids.ouReceiptVaultRegistry,
-      vaultId: VAULT,
-      editorDaoId: ROOT,
-    })
-    expect(commandNames(tx2)).toEqual([
-      'dao_receipt_vault::deinitialize_dao_vault',
-    ])
+    expect(last(tx).fn).toBe('ou_receipt_vault::deposit_receipt')
+    expect(last(tx).args).toEqual([VAULT, OFFICERS, { result: 0 }])
   })
 
-  it('withdraw returns a balance the caller routes', () => {
+  it('withdraw_receipt: (vault, ou, asset, amount) → a balance the caller routes', () => {
     const tx = new Transaction()
     const balance = withdrawReceiptTx(tx, {
-      armatureVault: ids.armatureVault,
+      armatureVault: VAULT_PKG,
       vaultId: VAULT,
-      daoId: OFFICERS,
+      ouId: OFFICERS,
       assetId: 70810n,
       amount: 3n,
     })
     tx.transferObjects([balance], ALICE)
     expect(commandNames(tx)).toEqual([
-      'dao_receipt_vault::withdraw_receipt',
+      'ou_receipt_vault::withdraw_receipt',
       'TransferObjects',
     ])
+    expect(calls(tx)[0].args).toEqual([
+      VAULT,
+      OFFICERS,
+      pureU64(70810n),
+      pureU64(3n),
+    ])
+  })
+
+  it('grant builds parallel role + principal vectors, edit to any principal', () => {
+    const tx = new Transaction()
+    grantTx(tx, {
+      armatureVault: VAULT_PKG,
+      vaultId: VAULT,
+      editorOuId: ROOT,
+      grants: [
+        { role: 'deposit', principal: { kind: 'player', value: ALICE } },
+        { role: 'edit', principal: { kind: 'machine', value: BOT } },
+      ],
+    })
+    expect(commandNames(tx)).toEqual([
+      'ou_receipt_vault::role_deposit',
+      'ou_receipt_vault::role_edit',
+      'MakeMoveVec',
+      'acl::player',
+      'acl::machine',
+      'MakeMoveVec',
+      'ou_receipt_vault::grant',
+    ])
+    expect(last(tx).args).toEqual([VAULT, ROOT, { result: 2 }, { result: 5 }])
+  })
+
+  it('grant_edit_ou: (vault, editor OU, target OU) — target as a live object', () => {
+    const tx = new Transaction()
+    grantEditOuTx(tx, {
+      armatureVault: VAULT_PKG,
+      vaultId: VAULT,
+      editorOuId: ROOT,
+      targetOuId: OFFICERS,
+    })
+    expect(last(tx).fn).toBe('ou_receipt_vault::grant_edit_ou')
+    expect(last(tx).args).toEqual([VAULT, ROOT, OFFICERS])
+  })
+
+  it('revoke mirrors grant', () => {
+    const tx = new Transaction()
+    revokeTx(tx, {
+      armatureVault: VAULT_PKG,
+      vaultId: VAULT,
+      editorOuId: ROOT,
+      revocations: [
+        { role: 'deposit', principal: { kind: 'player', value: ALICE } },
+      ],
+    })
+    expect(commandNames(tx)).toEqual([
+      'ou_receipt_vault::role_deposit',
+      'MakeMoveVec',
+      'acl::player',
+      'MakeMoveVec',
+      'ou_receipt_vault::revoke',
+    ])
+    expect(last(tx).args).toEqual([VAULT, ROOT, { result: 1 }, { result: 3 }])
+  })
+
+  it('update_registry_key: (registry, vault, editor OU, new registrant OU)', () => {
+    const tx = new Transaction()
+    updateRegistryKeyTx(tx, {
+      armatureVault: VAULT_PKG,
+      registryId: ids.ouReceiptVaultRegistry,
+      vaultId: VAULT,
+      editorOuId: ROOT,
+      newRegistrantOrgId: OFFICERS,
+    })
+    expect(commandNames(tx)).toEqual(['ou_receipt_vault::update_registry_key'])
+    expect(last(tx).args).toEqual([
+      ids.ouReceiptVaultRegistry,
+      VAULT,
+      ROOT,
+      OFFICERS,
+    ])
+  })
+
+  it('deinitialize_ou_vault: (registry, vault, editor OU)', () => {
+    const tx = new Transaction()
+    deinitializeOuVaultTx(tx, {
+      armatureVault: VAULT_PKG,
+      registryId: ids.ouReceiptVaultRegistry,
+      vaultId: VAULT,
+      editorOuId: ROOT,
+    })
+    expect(commandNames(tx)).toEqual([
+      'ou_receipt_vault::deinitialize_ou_vault',
+    ])
+    expect(last(tx).args).toEqual([ids.ouReceiptVaultRegistry, VAULT, ROOT])
   })
 })
 
@@ -440,30 +629,22 @@ function unit(orgId: string, over: Partial<Org> = {}): Org {
   }
 }
 
-const TRADING_KEYS = [
-  'sweep_multicoin_to_dao_vault::SweepMulticoinToDaoVault',
-  'sweep_coin_to_treasury::SweepCoinToTreasury',
-].map((t) => `${ids.armatureTrading}::${t}`)
-
-function daoJson() {
-  return {
-    enabled_proposal_types: { contents: TRADING_KEYS },
-    proposal_configs: {
-      contents: TRADING_KEYS.map((key) => ({
-        key,
-        value: {
-          quorum: 1,
-          approval_threshold: 5000,
-          propose_threshold: '0',
-          expiry_ms: '3600000',
-          execution_delay_ms: '0',
-          cooldown_ms: '0',
-          composable_allowed: false,
-        },
-      })),
-    },
-    type_bindings: { contents: [] },
+function governance(): DaoGovernance {
+  const keys = tradingProposalTypes(ids.armatureTrading, ids.credCoinType)
+  const config = {
+    quorum: 1,
+    approvalThreshold: 8000,
+    proposeThreshold: 0,
+    expiryMs: 3_600_000,
+    executionDelayMs: 0,
+    cooldownMs: 0,
+    composableAllowed: false,
   }
+  return {
+    enabledTypes: new Set(keys.map((k) => k.typeKey)),
+    configs: new Map(keys.map((k) => [k.typeKey, config])),
+    typeBindings: new Map(keys.map((k) => [k.typeKey, k.moveType])),
+  } as unknown as DaoGovernance
 }
 
 /** `vaultFor` maps `"<storageUnitId>|<registrantOrgId>"` → vault id. */
@@ -475,11 +656,35 @@ function harness(
     captured.txs.push(tx as Transaction)
     return { digest: 'D1', objectChanges: [] }
   })
+  const accountContent = new Uint8Array(80)
+  accountContent.set(bcs.Address.serialize(CUSTODY).toBytes(), 32)
   const getObject = jest.fn(async ({ objectId }: any) => {
     if (objectId === ids.ouReceiptVaultRegistry) {
       return { object: { json: { vaults: { id: { id: TABLE } } } } }
     }
-    return { object: { json: daoJson() } }
+    if (objectId === ACCOUNT) return { object: { content: accountContent } }
+    if (objectId === CUSTODY) {
+      return {
+        object: {
+          type: `${ids.armatureTrading}::trading_custody::TradingCustody`,
+          json: { ou_id: OFFICERS, trading_account_id: ACCOUNT },
+        },
+      }
+    }
+    if (objectId === VAULT) {
+      return {
+        object: {
+          json: {
+            storage_unit_id: SSU,
+            collection_id: COLLECTION,
+            registrant_ou_id: OFFICERS,
+            non_empty_assets: 0,
+            acl: { contents: [] },
+          },
+        },
+      }
+    }
+    throw new Error(`unexpected getObject ${objectId}`)
   })
   const getDynamicField = jest.fn(async ({ name }: any) => {
     // Decode the real VaultKey so the mock is keyed by BOTH halves — which is
@@ -491,7 +696,7 @@ function harness(
       const [ssu, org] = k.split('|')
       return (
         norm(ssu) === norm(key.storage_unit_id) &&
-        norm(org) === norm(key.registrant_dao_id)
+        norm(org) === norm(key.registrant_ou_id)
       )
     })
     if (!hit) throw new Error('no vault')
@@ -499,6 +704,9 @@ function harness(
       dynamicField: { value: { bcs: bcs.Address.serialize(hit[1]).toBytes() } },
     }
   })
+  jest
+    .spyOn(OrgHandle.prototype, 'gov')
+    .mockImplementation(async () => governance())
   const handle = new OrgHandle(
     {
       suiClient: {
@@ -506,15 +714,32 @@ function harness(
           getObject,
           getDynamicField,
           getCoins: async () => ({ objects: [] }),
+          getDynamicObjectField: async () => {
+            throw new Error('none')
+          },
+          listOwnedObjects: async () => ({
+            objects: [
+              {
+                objectId: hex('01'),
+                content: MultiCoin.serialize({
+                  id: hex('01'),
+                  collection: COLLECTION,
+                  asset_id: 70810n,
+                  amount: 5n,
+                }).toBytes(),
+              },
+            ],
+            hasNextPage: false,
+          }),
         },
       } as never,
       indexer: {
         hubVault: async () => ({
           collectionId: COLLECTION,
-          vaultConfigId: hex('53'),
+          vaultConfigId: CONFIG,
         }),
         sweepable: async () =>
-          opts.sweepable ?? { tradingAccountId: BM, pools: [], items: [] },
+          opts.sweepable ?? { tradingAccountId: ACCOUNT, pools: [], items: [] },
         orgs: {},
       } as never,
       ids,
@@ -527,11 +752,10 @@ function harness(
       ous: [
         unit(OFFICERS, {
           emergencyFreezeId: hex('e4'),
-          capabilityVaultId: CAPS,
           treasuryId: TREASURY,
           members: [ALICE],
           subdaoControlCapId: hex('e7'),
-          tradingAccountId: BM,
+          tradingAccountId: ACCOUNT,
         }),
       ],
     }),
@@ -539,6 +763,8 @@ function harness(
   )
   return { handle, executor, captured }
 }
+
+afterEach(() => jest.restoreAllMocks())
 
 describe('org.vault through the handle', () => {
   it('resolve walks the tree when the acting seat has no vault', async () => {
@@ -562,34 +788,86 @@ describe('org.vault through the handle', () => {
     })
   })
 
-  it('init defaults edit to the PARENT unit, not the acting one', async () => {
+  it('init registers on the acting unit, with EDIT on the PARENT', async () => {
     const { handle, captured } = harness()
     await handle.vault.init({ storageUnitId: SSU })
     const tx = captured.txs[0]
-    expect(commandNames(tx).at(-1)).toBe(
-      'dao_receipt_vault::initialize_dao_vault_v2',
-    )
-    // Three acl::ou calls: deposit + withdraw on OFFICERS, edit on ROOT.
-    const ouArgs = (tx.getData().inputs as any[])
-      .map((i) => i?.UnresolvedObject?.objectId ?? i?.Pure?.bytes)
-      .filter(Boolean)
-    expect(commandNames(tx).filter((n) => n === 'acl::ou')).toHaveLength(3)
-    expect(ouArgs.length).toBeGreaterThan(0)
+    expect(commandNames(tx)).toEqual([
+      'acl::ou',
+      'MakeMoveVec',
+      'acl::ou',
+      'MakeMoveVec',
+      'acl::ou',
+      'MakeMoveVec',
+      'ou_receipt_vault::initialize_ou_vault',
+    ])
+    const cs = calls(tx)
+    // deposit + withdraw → OFFICERS; edit → ROOT.
+    expect([cs[0].args, cs[2].args, cs[4].args]).toEqual([
+      [pureId(OFFICERS)],
+      [pureId(OFFICERS)],
+      [pureId(ROOT)],
+    ])
+    expect(last(tx).args.slice(0, 4)).toEqual([
+      ids.ouReceiptVaultRegistry,
+      SSU,
+      OFFICERS,
+      CONFIG,
+    ])
   })
 
-  it('routes an edit+ou grant through the witnessed path', async () => {
+  it('init refuses an explicitly empty editor set', async () => {
+    const { handle, executor } = harness()
+    await expect(
+      handle.vault.init({ storageUnitId: SSU, editPrincipals: [] }),
+    ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
+    expect(executor).not.toHaveBeenCalled()
+  })
+
+  it('deposits wallet receipts with the acting OU as context', async () => {
+    const { handle, captured } = harness({
+      vaultFor: { [`${SSU}|${OFFICERS}`]: VAULT },
+    })
+    await handle.vault.deposit({
+      storageUnitId: SSU,
+      items: [{ assetId: 70810n, amount: 5n }],
+    })
+    const tx = captured.txs[0]
+    expect(last(tx).fn).toBe('ou_receipt_vault::deposit_receipt')
+    expect(last(tx).args.slice(0, 2)).toEqual([VAULT, OFFICERS])
+  })
+
+  it('withdraws to the wallet by default', async () => {
+    const { handle, captured } = harness()
+    await handle.vault.withdraw({
+      storageUnitId: SSU,
+      vaultId: VAULT,
+      items: [{ assetId: 70810n, amount: 2n }],
+    })
+    expect(commandNames(captured.txs[0])).toEqual([
+      'ou_receipt_vault::withdraw_receipt',
+      'TransferObjects',
+    ])
+  })
+
+  it('routes an edit+ou grant through the witnessed path, the rest through grant', async () => {
     const { handle, captured } = harness()
     await handle.vault.grant({
       vaultId: VAULT,
       grants: [
         { role: 'edit', principal: { kind: 'ou', value: ROOT } },
         { role: 'deposit', principal: { kind: 'player', value: ALICE } },
+        { role: 'edit', principal: { kind: 'machine', value: BOT } },
       ],
     })
-    const names = commandNames(captured.txs[0])
-    // grant_edit_ou for the ou editor; plain grant for the rest.
-    expect(names).toContain('dao_receipt_vault::grant_edit_ou')
-    expect(names).toContain('dao_receipt_vault::grant')
+    const tx = captured.txs[0]
+    const witnessed = calls(tx).find(
+      (c) => c.fn === 'ou_receipt_vault::grant_edit_ou',
+    )!
+    expect(witnessed.args).toEqual([VAULT, OFFICERS, ROOT])
+    // A machine editor is an ordinary grant since cycle 7.
+    expect(commandNames(tx)).toContain('acl::machine')
+    expect(last(tx).fn).toBe('ou_receipt_vault::grant')
   })
 
   it('rejects empty grant / revoke batches', async () => {
@@ -600,6 +878,27 @@ describe('org.vault through the handle', () => {
     await expect(
       handle.vault.revoke({ vaultId: VAULT, revocations: [] }),
     ).rejects.toMatchObject({ code: TriexError.ValidationFailed })
+  })
+
+  it('revoke, rekey and deinit default the editor to the acting seat', async () => {
+    const { handle, captured } = harness()
+    await handle.vault.revoke({
+      vaultId: VAULT,
+      revocations: [
+        { role: 'withdraw', principal: { kind: 'machine', value: BOT } },
+      ],
+    })
+    await handle.vault.rekey({ vaultId: VAULT, newRegistrantOrgId: ROOT })
+    await handle.vault.deinit({ vaultId: VAULT, editorOuId: ROOT })
+    expect(last(captured.txs[0]).args.slice(0, 2)).toEqual([VAULT, OFFICERS])
+    expect(last(captured.txs[1])).toMatchObject({
+      fn: 'ou_receipt_vault::update_registry_key',
+      args: [ids.ouReceiptVaultRegistry, VAULT, OFFICERS, ROOT],
+    })
+    expect(last(captured.txs[2])).toMatchObject({
+      fn: 'ou_receipt_vault::deinitialize_ou_vault',
+      args: [ids.ouReceiptVaultRegistry, VAULT, ROOT],
+    })
   })
 
   it('withdraw to the hangar demands a character', async () => {
@@ -626,7 +925,7 @@ describe('sweepAll', () => {
     const { handle, captured } = harness({
       vaultFor: { [`${SSU}|${OFFICERS}`]: VAULT },
       sweepable: {
-        tradingAccountId: BM,
+        tradingAccountId: ACCOUNT,
         pools: [
           {
             poolId: hex('60'),
@@ -645,7 +944,7 @@ describe('sweepAll', () => {
     expect(names[0]).toBe(
       'multicoin_pool::withdraw_settled_amounts_permissionless',
     )
-    expect(names).toContain('sweep_multicoin_to_dao_vault::new')
+    expect(names).toContain('sweep_multicoin_to_ou_vault::new')
     expect(names).toContain('sweep_coin_to_treasury::new')
   })
 
@@ -655,7 +954,7 @@ describe('sweepAll', () => {
       // A vault at SSU only — the stack at OTHER_SSU has nowhere to go.
       vaultFor: { [`${SSU}|${OFFICERS}`]: VAULT },
       sweepable: {
-        tradingAccountId: BM,
+        tradingAccountId: ACCOUNT,
         pools: [],
         items: [item(SSU, '70810', 4n), item(OTHER_SSU, '999', 2n)],
       },
@@ -665,7 +964,7 @@ describe('sweepAll', () => {
     // The resolvable stack still moves…
     expect(res.status).toBe('executed')
     expect(commandNames(captured.txs[0])).toContain(
-      'sweep_multicoin_to_dao_vault::new',
+      'sweep_multicoin_to_ou_vault::new',
     )
     // …and the other is named, not silently dropped.
     expect(res.skipped).toEqual([
@@ -680,7 +979,7 @@ describe('sweepAll', () => {
 
   it('refuses when there is nothing to sweep at all', async () => {
     const { handle } = harness({
-      sweepable: { tradingAccountId: BM, pools: [], items: [] },
+      sweepable: { tradingAccountId: ACCOUNT, pools: [], items: [] },
     })
     await expect(handle.orders.sweepAll()).rejects.toMatchObject({
       code: TriexError.ValidationFailed,
@@ -691,7 +990,7 @@ describe('sweepAll', () => {
   it('explains when every stack was skipped for want of a vault', async () => {
     const { handle } = harness({
       sweepable: {
-        tradingAccountId: BM,
+        tradingAccountId: ACCOUNT,
         pools: [],
         items: [item(SSU, '70810', 4n)],
       },

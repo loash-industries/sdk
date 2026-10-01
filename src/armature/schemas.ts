@@ -279,12 +279,12 @@ export const AccessibleKeyspaceListSchema = z.array(AccessibleKeyspaceSchema)
 export const VaultAclEntrySchema = z
   .object({
     role: z.enum(['deposit', 'withdraw', 'edit']),
-    principal_kind: z.enum(['player', 'ou']),
+    principal_kind: z.enum(['player', 'machine', 'ou']),
     principal_value: z.string(),
   })
   .transform((v) => ({
     role: v.role,
-    /** Wallet address (`player`) or organization id (`ou`). */
+    /** Wallet / machine address, or organization id (`ou`). */
     principal: { kind: v.principal_kind, value: v.principal_value },
   }))
 
