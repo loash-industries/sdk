@@ -54,9 +54,15 @@ All configuration is **non-secret** — note the absence of any key, address, or
 
 ## Tools
 
-**Read** — `market_discover`, `market_search_items`, `market_hub`, `market_items_at_hub`, `market_orderbook`, `market_pool_metadata`, `account_resolve`, `account_balances_at_hub`, `account_currency_balances`, `account_sweepable`, `account_caps`, `orders_fees`, `orders_open`, `orders_fills`, `orders_trades`. `orders_fees` and `account_caps` are head-current fullnode reads: the live fee ladder of an item pool (and, with an address, that account's tier), and the capabilities around a trading account.
+**Read** — `market_discover`, `market_search_items`, `market_hub`, `market_items_at_hub`, `market_orderbook`, `market_pool_metadata`, `account_resolve`, `account_balances_at_hub`, `account_currency_balances`, `account_sweepable`, `account_caps`, `orders_fees`, `orders_open`, `orders_fills`, `orders_trades`, `orders_get`, `orders_fill`. `orders_fees` and `account_caps` are head-current fullnode reads: the live fee ladder of an item pool (and, with an address, that account's tier), and the capabilities around a trading account. `orders_get` follows up any order on any pool — open, filled or cancelled, with its fills — and `orders_fill` reads one fill by `eventDigest` with both sides' accounts and fees. `account_balances_at_hub` returns item sections only for the selectors you pass (`tradingAccountId`, `address`, `inventoryKey`, `vaultIds`); name at least one.
 
 **Locations** — `market_hub_locations`, `market_item_locations`, `market_nearby_hubs`, `market_nearby_hubs_by_system`, `market_hubs_enriched`, `market_assembly_owners`, `market_assemblies_enriched`, `market_solar_system_names`, `account_owners`. These answer *where is it* and *who owns it*: start from `market_hub_locations` or `market_item_locations` when you hold no hub id, then `market_nearby_hubs` to widen the search. All are read tools.
+
+**Market feeds & prices** — `market_recent_trades`, `market_display_prices`, `market_display_price`, `market_hub_economics`, `market_top_pools_by_fees`, `market_stats`. Market-wide answers rather than one hub's book: the public tape, plain display prices, hub liquidity and platform aggregates. Two unit traps: the tape's `price`/`quantity`/`feeAmount` are **human-readable decimals**, unlike every other trade read; and display prices carry **no trading fee** — cost a real trade with `orders_fees` and `market_orderbook`.
+
+**Players, world & routing** — `characters_get`, `characters_by_address`, `characters_by_name`, `characters_batch`, `characters_tribe`, `world_items`, `world_item`, `world_recipes`, `world_recipes_for`, `routing_route`, `routing_compare`, `routing_stats`. Who is behind an address (`characters_batch` names up to 500 wallets in one call), the static item catalogue and crafting recipes (fetch once and cache), and routes between systems. Routing takes solar system **names only**, and since cycle 7 names are player-reported: a system nobody has named yet fails with `RouteNotFound` even though it exists, so a numeric id is refused at the schema. Find routable names with `spatial_autocomplete_systems`; key results on `solarSystemId`, since `solarSystemName` is null until reported.
+
+These reads state their compute-unit cost in their descriptions — from 20 CU for a single lookup up to 300 CU for `routing_compare`, which runs three route searches.
 
 **Spatial (star map)** — `spatial_system`, `spatial_systems`, `spatial_nearby_systems`, `spatial_systems_near_coordinates`, `spatial_autocomplete_systems`, `spatial_stats`. Where solar systems are and what is near what — no account, hub or signer needed. Coordinates are metres and distances light years, both as decimal strings: the values exceed 2^53.
 
@@ -208,9 +214,9 @@ Read tools resolve against `ReadOnlyClient` as well as the namespaced APIs, sinc
 `npm run check:parity` prints the full report:
 
 ```
-SDK surface: 136 methods (69 read, 67 write)
-MCP tools:   115  ·  explicitly excluded: 14
-Parameters:  406 across the surface  ·  waivers: 1 global + 124 per-tool
+SDK surface: 199 methods (93 read, 106 write)
+MCP tools:   135  ·  explicitly excluded: 14
+Parameters:  645 across the surface  ·  waivers: 1 global + 124 per-tool
 
   ✓ write orders.limit               prepare_limit_order
   ✓ read  market.orderbook           market_orderbook

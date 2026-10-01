@@ -147,3 +147,89 @@ describe('account_currency_balances', () => {
     )
   })
 })
+
+/**
+ * `account_balances_at_hub`, observed at the wire.
+ *
+ * `ReadOnlyClient.balancesAtHub` takes ONE params object. The tool used to
+ * pass two positional strings, so the SDK read `storageUnitId` off a string
+ * and every call went out with no hub at all. Nothing type-checks that here —
+ * the SDK's re-exports resolve to `any` under NodeNext — so only an inspected
+ * request can.
+ */
+describe('account_balances_at_hub', () => {
+  const inventory = {
+    storage_unit_id: BM_ID,
+    collection_id: BAG_ID,
+    warehouse: [],
+    marketplace: [{ asset_id: '77800', amount: '9007199254740993' }],
+    hangar: [],
+    org_vaults: {},
+  }
+
+  function captureFetch(payload: unknown): jest.Mock {
+    const fn = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: { get: () => null },
+      json: async () => payload,
+    }))
+    ;(global as any).fetch = fn
+    return fn
+  }
+
+  const ctx = () => createContext('tenant-key', config, {} as any)
+  const urlOf = (fetchMock: jest.Mock) => fetchMock.mock.calls[0]![0] as URL
+
+  it('sends the hub and the trading account as the gateway names them', async () => {
+    const fetchMock = captureFetch(inventory)
+    const res = await tool('account_balances_at_hub').handler(ctx(), {
+      storageUnitId: BM_ID,
+      tradingAccountId: ADDR,
+    })
+    expect(res.isError).toBeFalsy()
+
+    const url = urlOf(fetchMock)
+    expect(url.pathname).toBe('/v1/inventory/balances')
+    // Exactly these two keys: no undefined selector leaks onto the wire.
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      storage_unit_id: BM_ID,
+      trading_account_id: ADDR,
+    })
+    expect(res.content[0]!.text).toContain('"amount": "9007199254740993"')
+  })
+
+  it('maps every section selector onto its query key', async () => {
+    const fetchMock = captureFetch(inventory)
+    await tool('account_balances_at_hub').handler(ctx(), {
+      storageUnitId: BM_ID,
+      address: ADDR,
+      inventoryKey: '0xcap',
+      vaultIds: ['0xv1', '0xv2'],
+    })
+    expect(Object.fromEntries(urlOf(fetchMock).searchParams)).toEqual({
+      storage_unit_id: BM_ID,
+      owner_address: ADDR,
+      inventory_key: '0xcap',
+      vault_ids: '0xv1,0xv2',
+    })
+  })
+
+  it('refuses a call naming no section before spending a request', async () => {
+    const fetchMock = captureFetch(inventory)
+    await expect(
+      tool('account_balances_at_hub').handler(ctx(), { storageUnitId: BM_ID }),
+    ).rejects.toThrow(/at least one section/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('requires the hub and keeps every selector optional', () => {
+    const shape = tool('account_balances_at_hub').inputShape as any
+    expect(shape.storageUnitId.safeParse(undefined).success).toBe(false)
+    for (const key of ['tradingAccountId', 'address', 'inventoryKey']) {
+      expect(shape[key].safeParse(undefined).success).toBe(true)
+    }
+    expect(shape.vaultIds.safeParse([]).success).toBe(false)
+  })
+})
