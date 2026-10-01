@@ -30,6 +30,7 @@ import type { Org, OuExecContext } from '../src/armature/types'
 import { resolvePackageIds } from '../src/config'
 import { TriexError } from '../src/errors'
 import { computeBidQuoteDeposit, GTC_EXPIRE } from '../src/money'
+import { FeeScheduleBcs } from '../src/onchain'
 
 const hex = (pair: string) => `0x${pair.repeat(32)}`
 const ids = resolvePackageIds('testnet')
@@ -729,6 +730,7 @@ function harness(
           getDynamicField: async () => {
             throw new Error('none')
           },
+          simulateTransaction: async () => feeSimulation(),
         },
       } as never,
       indexer: {
@@ -762,6 +764,30 @@ function harness(
     opts.seat ?? OFFICERS,
   )
   return { handle, executor, captured, getObject }
+}
+
+/**
+ * `getPoolTradingFees`' simulate result for a pool on the launch ladder —
+ * tier 0 is 2.2% taker / 1.8% maker, so a bid escrows at the TAKER rate.
+ */
+const ENTRY_TAKER = 22_000_000n
+function feeSimulation() {
+  const ladder = FeeScheduleBcs.serialize({
+    tiers: [
+      { min_turnover: 0n, taker_fee: ENTRY_TAKER, maker_fee: 18_000_000n },
+    ],
+  }).toBytes()
+  const u64 = (n: bigint) => bcs.u64().serialize(n).toBytes()
+  return {
+    $kind: 'Transaction',
+    Transaction: { digest: 'sim', epoch: '901' },
+    commandResults: [
+      { returnValues: [{ bcs: bcs.u16().serialize(1).toBytes() }] },
+      { returnValues: [{ bcs: ladder }] },
+      { returnValues: [{ bcs: ladder }, { bcs: u64(900n) }] },
+      { returnValues: [{ bcs: u64(2_000n) }] },
+    ],
+  }
 }
 
 afterEach(() => jest.restoreAllMocks())
@@ -901,7 +927,7 @@ describe('orders through the handle', () => {
     ).toBe(TREASURY)
   })
 
-  it('sizes the default bid deposit from the fee-rate seam, or from bidFeeRate', async () => {
+  it('sizes the default bid deposit from the on-chain escrow rate, or from bidFeeRate', async () => {
     const { handle, captured } = harness()
     const p = {
       storageUnitId: HUB,
@@ -914,9 +940,10 @@ describe('orders through the handle', () => {
     await handle.orders.buyFromTreasury({ ...p, bidFeeRate: 50_000_000n })
     const deposited = (i: number) =>
       puresOf(call(captured.txs[i], 'deposit_coin_to_book::new'))[1]
-    // Indexer rate (2%) by default; the explicit 5% when passed.
+    // The on-chain escrow rate (tier-0 max: 2.2%) by default — not the
+    // indexer's pool fee, which the harness still serves as 2%.
     expect(deposited(0)).toBe(
-      pure.u64(computeBidQuoteDeposit(1000n, 2n, 20_000_000n)),
+      pure.u64(computeBidQuoteDeposit(1000n, 2n, ENTRY_TAKER)),
     )
     expect(deposited(1)).toBe(
       pure.u64(computeBidQuoteDeposit(1000n, 2n, 50_000_000n)),

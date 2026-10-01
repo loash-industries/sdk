@@ -96,7 +96,10 @@ import {
   type TreasuryCoinBalance,
 } from './treasury'
 import { computeBidQuoteDeposit, GTC_EXPIRE } from '../money'
-import { getTradingAccountCurrencyBalance } from '../onchain'
+import {
+  getPoolTradingFees,
+  getTradingAccountCurrencyBalance,
+} from '../onchain'
 import type { OrderSide } from '../types'
 import { execContextFor, flattenOrg, resolveSeat, seatsFor } from './tree'
 import type {
@@ -1182,7 +1185,7 @@ class OrgOrdersApi {
       depositAmount = computeBidQuoteDeposit(
         params.price,
         params.quantity,
-        params.bidFeeRate ?? (await orgBidFeeRate(this.h, poolId)),
+        params.bidFeeRate ?? (await orgBidFeeRate(this.h, poolId, quoteType)),
       )
     }
     const t = await this.target()
@@ -1676,18 +1679,26 @@ async function runAtomic(
 }
 
 /**
- * @internal — INTEGRATION SEAM: the 1e9-scaled fee rate an org bid's treasury
- * deposit is sized with when the caller passes neither `depositAmount` nor
- * `bidFeeRate`.
+ * @internal — the 1e9-scaled fee rate an org bid's treasury deposit is sized
+ * with when the caller passes neither `depositAmount` nor `bidFeeRate`.
  *
- * Today this is the indexer's pool `feeRateScaled`, which does NOT reflect
- * cycle-7 fee classes (fees on both sides, maker fee escrowed on a resting
- * bid, laddered by turnover). It is meant to be swapped for the fullnode
- * `getPoolTradingFees(...).bidEscrowFeeRate` read once that lands alongside
- * this module — one call site, nothing else changes.
+ * Read on-chain, not from the indexer: cycle-7 triex escrows the maker fee on
+ * a resting bid and ladders both rates by turnover, so the safe rate is the
+ * highest tier-0 taker/maker rate across the current and staged ladders
+ * (`TradingFees.bidEscrowFeeRate`). The indexer's pool `fee` is the tier-0
+ * TAKER rate only, and null when unindexed.
  */
-async function orgBidFeeRate(h: OrgHandle, poolId: string): Promise<bigint> {
-  return (await h.deps.indexer.poolMetadata(poolId)).feeRateScaled
+async function orgBidFeeRate(
+  h: OrgHandle,
+  poolId: string,
+  quoteType: string,
+): Promise<bigint> {
+  const fees = await getPoolTradingFees(h.deps.suiClient, h.deps.ids, {
+    poolId,
+    sender: h.deps.address,
+    quoteType,
+  })
+  return fees.bidEscrowFeeRate
 }
 
 /** @internal */

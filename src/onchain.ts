@@ -590,11 +590,17 @@ function maxRate(...rates: bigint[]): bigint {
 export async function getPoolTradingFees(
   suiClient: ClientWithCoreApi,
   ids: PackageIds,
-  params: { poolId: string; sender: string; tradingAccountId?: string | null },
+  params: {
+    poolId: string
+    sender: string
+    tradingAccountId?: string | null
+    /** The pool's quote coin type. Defaults to CRED. */
+    quoteType?: string
+  },
 ): Promise<TradingFees> {
   const tx = new Transaction()
   tx.setSender(params.sender)
-  const q = [ids.credCoinType]
+  const q = [params.quoteType ?? ids.credCoinType]
   const pool = tx.object(params.poolId)
   const policy = tx.object(ids.triexFeePolicy)
   const view = (fn: string, args: any[]) =>
