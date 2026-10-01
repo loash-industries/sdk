@@ -45,6 +45,7 @@ export enum TriexError {
   /** No trading account found for the player (and one was expected). */
   TradingAccountNotFound = 'TRIEX_TRADING_ACCOUNT_NOT_FOUND',
   /** @deprecated Renamed to {@link TriexError.TradingAccountNotFound}; same value. */
+  // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values -- deliberate alias
   BalanceManagerNotFound = 'TRIEX_TRADING_ACCOUNT_NOT_FOUND',
   /** No pool exists for the requested item + storage unit. */
   PoolNotFound = 'TRIEX_POOL_NOT_FOUND',

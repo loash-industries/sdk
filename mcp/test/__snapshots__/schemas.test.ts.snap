@@ -6,17 +6,17 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "balanceManagerId": {
+      "storageUnitId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
-      "storageUnitId": {
+      "tradingAccountId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
     },
     "required": [
-      "balanceManagerId",
+      "tradingAccountId",
       "storageUnitId",
     ],
     "type": "object",
@@ -40,7 +40,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "balanceManagerIds": {
+      "tradingAccountIds": {
         "description": "TradingAccount object ids (max 200).",
         "items": {
           "pattern": "^0x[0-9a-fA-F]{1,64}$",
@@ -52,7 +52,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       },
     },
     "required": [
-      "balanceManagerIds",
+      "tradingAccountIds",
     ],
     "type": "object",
   },
@@ -74,13 +74,13 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "balanceManagerId": {
+      "tradingAccountId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
     },
     "required": [
-      "balanceManagerId",
+      "tradingAccountId",
     ],
     "type": "object",
   },
@@ -424,10 +424,6 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 9007199254740991,
         "type": "integer",
       },
-      "balanceManagerId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
       "before": {
         "description": "Unix ms upper bound, exclusive.",
         "exclusiveMinimum": 0,
@@ -439,9 +435,13 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 200,
         "type": "integer",
       },
+      "tradingAccountId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
     },
     "required": [
-      "balanceManagerId",
+      "tradingAccountId",
     ],
     "type": "object",
   },
@@ -455,10 +455,6 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 9007199254740991,
         "type": "integer",
       },
-      "balanceManagerId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
       "before": {
         "description": "Unix ms upper bound, exclusive.",
         "exclusiveMinimum": 0,
@@ -470,9 +466,13 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 200,
         "type": "integer",
       },
+      "tradingAccountId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
     },
     "required": [
-      "balanceManagerId",
+      "tradingAccountId",
     ],
     "type": "object",
   },
@@ -486,10 +486,6 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 9007199254740991,
         "type": "integer",
       },
-      "balanceManagerId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
       "before": {
         "description": "Unix ms upper bound, exclusive.",
         "exclusiveMinimum": 0,
@@ -501,9 +497,13 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 200,
         "type": "integer",
       },
+      "tradingAccountId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
     },
     "required": [
-      "balanceManagerId",
+      "tradingAccountId",
     ],
     "type": "object",
   },
