@@ -10,7 +10,20 @@ export type {
 export { ReadOnlyClient } from './ReadOnlyClient'
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
-export { TriexError, TriexClientError, explainMoveAbort } from './errors'
+export {
+  TriexError,
+  TriexClientError,
+  explainMoveAbort,
+  explainMoveAbortDetailed,
+  parseMoveAbort,
+  unpackAbortCode,
+} from './errors'
+export type { MoveAbortExplanation, AbortCodeBits } from './errors'
+export { MOVE_ABORT_CATALOG } from './moveAbortCatalog.generated'
+export type {
+  MoveAbortEntry,
+  MoveAbortName,
+} from './moveAbortCatalog.generated'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 export {
