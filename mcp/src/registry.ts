@@ -2,6 +2,7 @@ import { coinTools } from './tools/coins.js'
 import { coinPrepareTools } from './tools/coinsPrepare.js'
 import { keyspaceTools } from './tools/keyspace.js'
 import { orgTools } from './tools/org.js'
+import { orgLifecycleTools } from './tools/orgLifecycle.js'
 import { orgPrepareTools } from './tools/orgPrepare.js'
 import { prepareTools } from './tools/prepare.js'
 import { readTools } from './tools/read.js'
@@ -17,6 +18,7 @@ export const ALL_TOOLS: ToolDef[] = [
   ...prepareTools,
   ...coinPrepareTools,
   ...orgPrepareTools,
+  ...orgLifecycleTools,
 ]
 
 /**
@@ -63,7 +65,7 @@ export const EXCLUDED_SDK_PATHS: Record<string, string> = {
   'org.governance.run':
     'Takes an OuProposalAction (closure-bearing); the typed prepare_org_* tools are its JSON-expressible surface.',
   'org.governance.runBatch':
-    'Takes OuProposalAction[]; its only real caller is types.enableTrading, which has its own tool.',
+    'Takes OuProposalAction[]; its real callers (types.enableTrading, currency.enable, orders.enableCoinPair) each have their own tool.',
   'org.governance.runComposite':
     'Takes OuProposalAction[] to bundle into one proposal; no JSON encoding for the actions. Revisit if a caller needs agent-driven composites.',
   'org.governance.resolve':
