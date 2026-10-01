@@ -71,10 +71,26 @@ Coin units differ from item units: every amount is **raw base units of its coin*
 
 **Organizations (Armature)** — an organization is a *tree* of DAOs, and almost every question about one is really a question about a specific unit: which board votes, whose treasury, whose shared storage. Any unit id resolves the whole tree, so `orgId` is forgiving, but the answers are per-unit.
 
+97 tools — 22 read, 75 prepare — covering every cycle-7 `orgs.*` and `org.*` method except the closure-taking governance generics (see `EXCLUDED_SDK_PATHS`).
+
 - *Identity & discovery* — `org_get`, `org_batch`, `org_directory`, `org_for_player`, `org_search`, `org_seats`, `org_trading_account`, `org_proposals`, `org_accessible_keyspaces`.
-- *Governance & treasury reads* — `org_governance`, `org_treasury_balances`, `org_treasury_balance`, `org_treasury_item_balance`.
-- *Shared storage reads* — `org_vaults_at_hub`, `org_vault_resolve`, `org_vault_info`, `org_vault_balance`.
-- *Prepare* — `prepare_org_add_members`, `prepare_org_remove_members`, `prepare_org_set_board`, `prepare_org_update_metadata`, `prepare_org_enable_type`, `prepare_org_update_type_config`, `prepare_org_enable_composite`, `prepare_org_enable_send_coin`, `prepare_org_enable_trading`, `prepare_org_vote`, `prepare_org_execute_proposal`, `prepare_org_expire_proposal`, `prepare_org_treasury_deposit`, `prepare_org_treasury_send`, `prepare_org_treasury_send_to_org`, `prepare_org_setup_trading`, `prepare_org_limit_order`, `prepare_org_cancel_order`, `prepare_org_buy_from_treasury`, `prepare_org_sell_from_vault`, `prepare_org_sweep_coin`, `prepare_org_sweep_items`, `prepare_org_sweep_all`, `prepare_org_vault_init`, `prepare_org_vault_deposit`, `prepare_org_vault_withdraw`, `prepare_org_vault_grant`, `prepare_org_vault_revoke`, `prepare_org_vault_deinit`.
+- *Governance reads* — `org_governance` (slots, configs, permission bits, the unit's pause/migration flags and freeze state), `org_proposal` (one proposal's live tally and deadlines; `null` once executed or deleted), `org_expired_proposals`, `org_freeze`, `org_capabilities`, `org_entries`.
+- *Treasury reads* — `org_treasury_balances`, `org_treasury_balance`.
+- *Shared storage reads* — `org_vaults_at_hub`, `org_vaults_at_hub_for_org`, `org_vault_resolve`, `org_vault_info`, `org_vault_balance`.
+- *Create* — `prepare_org_create` (root + officers + members in one transaction), `prepare_org_create_standalone`.
+- *Membership & metadata* — `prepare_org_add_members`, `prepare_org_remove_members`, `prepare_org_set_board` (a `{ add, remove }` diff), `prepare_org_update_metadata`.
+- *Proposal types* — `prepare_org_enable_type`, `prepare_org_disable_type`, `prepare_org_update_type_config`, `prepare_org_enable_composite`, `prepare_org_enable_send_coin`, `prepare_org_enable_send_coin_to_org`, `prepare_org_enable_send_small_payment`, `prepare_org_enable_trading`, `prepare_org_enable_bypass`, `prepare_org_disable_bypass`.
+- *Voting & execution* — `prepare_org_vote`, `prepare_org_execute_proposal`, `prepare_org_delete_expired_proposals`, `prepare_org_delete_exhausted_frame`.
+- *Treasury* — `prepare_org_treasury_deposit`, `prepare_org_treasury_claim`, `prepare_org_treasury_send`, `prepare_org_treasury_send_small`, `prepare_org_treasury_send_to_org`.
+- *Trading as the organization* — `prepare_org_setup_trading`, `prepare_org_limit_order`, `prepare_org_market_order`, `prepare_org_cancel_order`, `prepare_org_buy_from_treasury`, `prepare_org_sell_from_vault`, `prepare_org_deposit_to_trading`, `prepare_org_enable_coin_pair`, `prepare_org_coin_limit_order`, `prepare_org_coin_cancel_order`, `prepare_org_create_pool`, `prepare_org_sweep_coin`, `prepare_org_sweep_items`, `prepare_org_sweep_all`.
+- *Shared storage* — `prepare_org_vault_init`, `prepare_org_vault_deposit`, `prepare_org_vault_withdraw`, `prepare_org_vault_grant`, `prepare_org_vault_revoke`, `prepare_org_vault_rekey`, `prepare_org_vault_deinit`.
+- *Currency* — `prepare_org_currency_enable`, `prepare_org_currency_adopt`, `prepare_org_currency_mint`, `prepare_org_currency_mint_allowance`, `prepare_org_currency_configure_allowance`, `prepare_org_currency_mint_with_allowance`, `prepare_org_currency_burn`, `prepare_org_currency_return_cap`.
+- *Sub-units & lifecycle* — `prepare_org_unit_create`, `prepare_org_unit_pause`, `prepare_org_unit_unpause`, `prepare_org_unit_transfer_cap`, `prepare_org_unit_reclaim_cap`, `prepare_org_unit_spin_out`, `prepare_org_spawn_successor`, `prepare_org_transfer_assets`, `prepare_org_unit_destroy`.
+- *Emergency freeze* — `prepare_org_freeze_type`, `prepare_org_unfreeze_type` (FreezeAdminCap holder, no vote), `prepare_org_unfreeze`, `prepare_org_freeze_set_max_duration`, `prepare_org_freeze_update_exempt`, `prepare_org_freeze_transfer_admin`.
+- *Encrypted entries* (member-gated, no vote) — `prepare_org_entry_publish`, `prepare_org_entry_update`, `prepare_org_entry_edit`, `prepare_org_entries_rotate_epoch`, `prepare_org_entry_remove`. These index ciphertext that is already uploaded; encrypting and decrypting need a wallet-signed Seal session and live in `@trinaryex/keyspace`.
+- *Upgrades* — `prepare_org_upgrade_propose`.
+
+`seat` and `unitId` are different things. `seat` is the unit you act *through*, meaning whose board votes. `unitId` is the unit you act *on*. A parent's board can target a child it does not sit on, and the action then routes through the parent's `SubOUControl`. Every governance write also takes `metadataIpfs`, which is recorded on the proposal.
 
 ### Governance actions have three outcomes, not one
 
@@ -82,7 +98,7 @@ This is the one way the org prepare tools differ from every other prepare tool, 
 
 The **same call** resolves differently per caller. For an officer whose lone vote clears quorum it executes now; for someone whose does not it creates a **proposal** the board still has to vote on; for a third caller it is refused outright. So:
 
-- `intent.outcome` is `"executed"` or `"proposed"`. **A `proposed` result has not done the thing yet.**
+- `intent.outcome` is `"executed"` or `"proposed"`. **A `proposed` result has not done the thing yet.** The outcome is read off the built bytes: a transaction that calls `board_voting::submit_proposal` or `composite::submit_composite` creates a proposal. Anything else executes. Permissionless, cap-holder and member-gated writes always report `executed`.
 - A refusal returns `prepared: false` with the resolver's `reason` and `code` — an answer, not an error, and there are no bytes to sign.
 - Trading tools never degrade into proposals. A limit order deferred by a week is priced against a book that no longer exists, and a funded buy split into two proposals loses its atomic deposit-then-place guarantee, so they return `prepared: false` instead.
 
@@ -92,7 +108,9 @@ The **same call** resolves differently per caller. For an officer whose lone vot
 
 **Shared storage is keyed by (storage unit, organization).** There is no "the vault at this hub" — anyone can register one at any SSU, so `org_vaults_at_hub` may well list a stranger's. `org_vault_resolve` answers for *your* organization.
 
-**`prepare_org_enable_trading`'s `bindToBaseType` is irreversible.** It binds the coin-pool order types to one base coin permanently. Leave it unset unless you know why you are setting it.
+**Some lifecycle steps cannot be undone.** `prepare_org_unit_spin_out` releases a child from its parent for good. `prepare_org_spawn_successor` puts a unit into `Migrating`, after which only `prepare_org_transfer_assets` runs on it.
+
+**Proposals are deleted on-chain once they finish.** Cycle 7 deletes a proposal when it executes and when it is cleaned up after expiry. After that, `org_proposal` returns `null` and only `org_proposals` (the indexer) remembers the outcome. A lapsed proposal shows as `pending` until someone runs `prepare_org_delete_expired_proposals`, which is permissionless and pays the storage rebate to the gas payer.
 
 u64-ish values (prices, quantities, amounts) cross the MCP boundary as **decimal strings**, never JSON numbers.
 

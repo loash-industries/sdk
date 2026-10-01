@@ -837,6 +837,37 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "org_capabilities": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The acting address. Seats are per-caller and this server holds no identity, so it must be named.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or ANY unit in its tree; the whole tree is returned either way.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "Unit to read; defaults to the acting seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "address",
+    ],
+    "type": "object",
+  },
   "org_directory": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -859,6 +890,63 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     },
     "type": "object",
   },
+  "org_entries": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The acting address. Seats are per-caller and this server holds no identity, so it must be named.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or ANY unit in its tree; the whole tree is returned either way.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "Unit to read; defaults to the acting seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "address",
+    ],
+    "type": "object",
+  },
+  "org_expired_proposals": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The acting address. Seats are per-caller and this server holds no identity, so it must be named.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or ANY unit in its tree; the whole tree is returned either way.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "address",
+    ],
+    "type": "object",
+  },
   "org_for_player": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -870,6 +958,37 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       },
     },
     "required": [
+      "address",
+    ],
+    "type": "object",
+  },
+  "org_freeze": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The acting address. Seats are per-caller and this server holds no identity, so it must be named.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or ANY unit in its tree; the whole tree is returned either way.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "Unit to read; defaults to the acting seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
       "address",
     ],
     "type": "object",
@@ -912,6 +1031,37 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "required": [
       "orgId",
       "address",
+    ],
+    "type": "object",
+  },
+  "org_proposal": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The acting address. Seats are per-caller and this server holds no identity, so it must be named.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or ANY unit in its tree; the whole tree is returned either way.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "proposalId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "address",
+      "proposalId",
     ],
     "type": "object",
   },
@@ -1051,47 +1201,6 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "required": [
       "orgId",
       "address",
-    ],
-    "type": "object",
-  },
-  "org_treasury_item_balance": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "address": {
-        "description": "The acting address. Seats are per-caller and this server holds no identity, so it must be named.",
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
-      "assetId": {
-        "description": "Item asset id as a decimal string.",
-        "pattern": "^\\d+$",
-        "type": "string",
-      },
-      "collectionId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
-      "orgId": {
-        "description": "Organization object id — the root or ANY unit in its tree; the whole tree is returned either way.",
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
-      "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
-      "treasuryVaultId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
-    },
-    "required": [
-      "orgId",
-      "address",
-      "collectionId",
-      "assetId",
     ],
     "type": "object",
   },
@@ -2148,18 +2257,28 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "minItems": 1,
         "type": "array",
       },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
       "sender": {
         "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2178,6 +2297,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "assetId": {
         "type": "string",
       },
+      "bidFeeRate": {
+        "description": "1e9-scaled fee rate the default deposit is sized with.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
       "depositAmount": {
         "pattern": "^\\d+$",
         "type": "string",
@@ -2185,6 +2309,12 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "expireAt": {
         "pattern": "^\\d+$",
         "type": "string",
+      },
+      "orderType": {
+        "description": "TriexBook order type; 0 (the default) = no restriction.",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
       },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
@@ -2203,9 +2333,15 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
+      },
+      "selfMatchingOption": {
+        "description": "Self-matching option; 0 (the default) = allow.",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
       },
       "sender": {
         "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
@@ -2239,6 +2375,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "orderId": {
+        "description": "Order id (u128) as a decimal string.",
         "pattern": "^\\d+$",
         "type": "string",
       },
@@ -2251,7 +2388,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2274,47 +2411,35 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
-  "prepare_org_enable_composite": {
+  "prepare_org_coin_cancel_order": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "baseType": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "orderId": {
+        "description": "Order id (u128) as a decimal string.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
-      "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+      "poolId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
-      "sender": {
-        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
-    },
-    "required": [
-      "orgId",
-      "sender",
-    ],
-    "type": "object",
-  },
-  "prepare_org_enable_send_coin": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "coinType": {
+      "quoteType": {
         "description": "Defaults to CRED.",
-        "type": "string",
-      },
-      "orgId": {
-        "description": "Organization object id — the root or any unit in its tree.",
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2327,15 +2452,441 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "required": [
       "orgId",
       "sender",
+      "poolId",
+      "baseType",
+      "orderId",
     ],
     "type": "object",
   },
-  "prepare_org_enable_trading": {
+  "prepare_org_coin_limit_order": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "bindToBaseType": {
-        "description": "IRREVERSIBLE — binds coin-order types to this one base coin.",
+      "baseType": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "depositAmount": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "expireAt": {
+        "description": "Epoch ms; defaults to good-til-cancelled.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "orderType": {
+        "description": "TriexBook order type; 0 (the default) = no restriction.",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "poolId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "price": {
+        "description": "1e9-scaled price.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quantity": {
+        "description": "Raw base units.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quoteType": {
+        "description": "Defaults to CRED.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "selfMatchingOption": {
+        "description": "Self-matching option; 0 (the default) = allow.",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "side": {
+        "enum": [
+          "buy",
+          "sell",
+        ],
+        "type": "string",
+      },
+      "treasuryVaultId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "poolId",
+      "baseType",
+      "side",
+      "price",
+      "quantity",
+    ],
+    "type": "object",
+  },
+  "prepare_org_create": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "board": {
+        "description": "Root board; defaults to [sender].",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "enableTrading": {
+        "description": "Default true.",
+        "type": "boolean",
+      },
+      "freezeAdmin": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "memberMetadataUri": {
+        "type": "string",
+      },
+      "memberName": {
+        "type": "string",
+      },
+      "members": {
+        "description": "Line members (the sender is always added).",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "metadataUri": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "name": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "officerMetadataUri": {
+        "type": "string",
+      },
+      "officerName": {
+        "type": "string",
+      },
+      "officers": {
+        "description": "Officers (the sender is always added).",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "overrides": {
+        "additionalProperties": false,
+        "description": "Extra ou::ProposalTypeInit entries per tier.",
+        "properties": {
+          "members": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "config": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "approvalThreshold": {
+                      "description": "Share of CAST votes that must approve.",
+                      "maximum": 10000,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "borrowScope": {
+                      "description": "Capability Move types a VAULT_BORROW type may borrow.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "composableAllowed": {
+                      "type": "boolean",
+                    },
+                    "cooldownMs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "executionDelayMs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "expiryMs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "permissions": {
+                      "description": "armature::permissions bits the type’s requests carry. Any high-impact bit needs approvalThreshold ≥ 8000.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "proposeThreshold": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "quorum": {
+                      "description": "Share of the WHOLE board that must vote, in bps.",
+                      "maximum": 10000,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                  },
+                  "required": [
+                    "quorum",
+                    "approvalThreshold",
+                    "proposeThreshold",
+                    "expiryMs",
+                    "executionDelayMs",
+                    "cooldownMs",
+                  ],
+                  "type": "object",
+                },
+                "displayKey": {
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "moveType": {
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "moveType",
+                "displayKey",
+                "config",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "officers": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "config": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "approvalThreshold": {
+                      "description": "Share of CAST votes that must approve.",
+                      "maximum": 10000,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "borrowScope": {
+                      "description": "Capability Move types a VAULT_BORROW type may borrow.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "composableAllowed": {
+                      "type": "boolean",
+                    },
+                    "cooldownMs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "executionDelayMs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "expiryMs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "permissions": {
+                      "description": "armature::permissions bits the type’s requests carry. Any high-impact bit needs approvalThreshold ≥ 8000.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "proposeThreshold": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "quorum": {
+                      "description": "Share of the WHOLE board that must vote, in bps.",
+                      "maximum": 10000,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                  },
+                  "required": [
+                    "quorum",
+                    "approvalThreshold",
+                    "proposeThreshold",
+                    "expiryMs",
+                    "executionDelayMs",
+                    "cooldownMs",
+                  ],
+                  "type": "object",
+                },
+                "displayKey": {
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "moveType": {
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "moveType",
+                "displayKey",
+                "config",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "org": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "config": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "approvalThreshold": {
+                      "description": "Share of CAST votes that must approve.",
+                      "maximum": 10000,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "borrowScope": {
+                      "description": "Capability Move types a VAULT_BORROW type may borrow.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "composableAllowed": {
+                      "type": "boolean",
+                    },
+                    "cooldownMs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "executionDelayMs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "expiryMs": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "permissions": {
+                      "description": "armature::permissions bits the type’s requests carry. Any high-impact bit needs approvalThreshold ≥ 8000.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "proposeThreshold": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "quorum": {
+                      "description": "Share of the WHOLE board that must vote, in bps.",
+                      "maximum": 10000,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                  },
+                  "required": [
+                    "quorum",
+                    "approvalThreshold",
+                    "proposeThreshold",
+                    "expiryMs",
+                    "executionDelayMs",
+                    "cooldownMs",
+                  ],
+                  "type": "object",
+                },
+                "displayKey": {
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "moveType": {
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "moveType",
+                "displayKey",
+                "config",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+        },
+        "type": "object",
+      },
+      "quoteType": {
+        "description": "Quote coin the trading types are instantiated at; CRED.",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "name",
+      "metadataUri",
+    ],
+    "type": "object",
+  },
+  "prepare_org_create_pool": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "description": "Item asset id as a decimal string.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "collectionId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
       "orgId": {
@@ -2348,7 +2899,571 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "storageUnitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryVaultId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "assetId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_create_standalone": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "board": {
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "metadataUri": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "name": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "name",
+      "metadataUri",
+    ],
+    "type": "object",
+  },
+  "prepare_org_currency_adopt": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "coinType": {
+        "description": "Fully-qualified Move coin type of the organization’s currency.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryCapId": {
+        "description": "The TreasuryCap<T> you own.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "coinType",
+      "treasuryCapId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_currency_burn": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "coinType": {
+        "description": "Fully-qualified Move coin type of the organization’s currency.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryCapId": {
+        "description": "The TreasuryCap<T> object id (held in the unit’s capability vault).",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "coinType",
+      "treasuryCapId",
+      "amount",
+    ],
+    "type": "object",
+  },
+  "prepare_org_currency_configure_allowance": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "addMinters": {
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "coinType": {
+        "description": "Fully-qualified Move coin type of the organization’s currency.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "enabled": {
+        "type": "boolean",
+      },
+      "maxPerCall": {
+        "description": "Upper bound on one bypass mint.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "removeMinters": {
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "coinType",
+    ],
+    "type": "object",
+  },
+  "prepare_org_currency_enable": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "coinType": {
+        "description": "Fully-qualified Move coin type of the organization’s currency.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "config": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalThreshold": {
+            "description": "Share of CAST votes that must approve.",
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "borrowScope": {
+            "description": "Capability Move types a VAULT_BORROW type may borrow.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "composableAllowed": {
+            "type": "boolean",
+          },
+          "cooldownMs": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "executionDelayMs": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "expiryMs": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "permissions": {
+            "description": "armature::permissions bits the type’s requests carry. Any high-impact bit needs approvalThreshold ≥ 8000.",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "proposeThreshold": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "quorum": {
+            "description": "Share of the WHOLE board that must vote, in bps.",
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "quorum",
+          "approvalThreshold",
+          "proposeThreshold",
+          "expiryMs",
+          "executionDelayMs",
+          "cooldownMs",
+        ],
+        "type": "object",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "coinType",
+    ],
+    "type": "object",
+  },
+  "prepare_org_currency_mint": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "coinType": {
+        "description": "Fully-qualified Move coin type of the organization’s currency.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "recipient": {
+        "description": "Mint to this address instead of the treasury.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryCapId": {
+        "description": "The TreasuryCap<T> object id (held in the unit’s capability vault).",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "coinType",
+      "treasuryCapId",
+      "amount",
+    ],
+    "type": "object",
+  },
+  "prepare_org_currency_mint_allowance": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "coinType": {
+        "description": "Fully-qualified Move coin type of the organization’s currency.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "recipient": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryCapId": {
+        "description": "The TreasuryCap<T> object id (held in the unit’s capability vault).",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "coinType",
+      "treasuryCapId",
+      "amount",
+    ],
+    "type": "object",
+  },
+  "prepare_org_currency_mint_with_allowance": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "bypassCapId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "coinType": {
+        "description": "Fully-qualified Move coin type of the organization’s currency.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "recipient": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryCapId": {
+        "description": "The TreasuryCap<T> object id (held in the unit’s capability vault).",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit that holds the TreasuryCap; default the seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "coinType",
+      "treasuryCapId",
+      "amount",
+    ],
+    "type": "object",
+  },
+  "prepare_org_currency_return_cap": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "coinType": {
+        "description": "Fully-qualified Move coin type of the organization’s currency.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "recipient": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryCapId": {
+        "description": "The TreasuryCap<T> object id (held in the unit’s capability vault).",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "coinType",
+      "treasuryCapId",
+      "recipient",
+    ],
+    "type": "object",
+  },
+  "prepare_org_delete_exhausted_frame": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "frameId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2361,10 +3476,185 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "required": [
       "orgId",
       "sender",
+      "frameId",
     ],
     "type": "object",
   },
-  "prepare_org_enable_type": {
+  "prepare_org_delete_expired_proposals": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "payloadTypes": {
+        "additionalProperties": {
+          "type": "string",
+        },
+        "description": "Payload Move type by proposal id; read from the live objects when omitted.",
+        "propertyNames": {
+          "type": "string",
+        },
+        "type": "object",
+      },
+      "proposalIds": {
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "proposalIds",
+    ],
+    "type": "object",
+  },
+  "prepare_org_deposit_to_trading": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "coinType": {
+        "description": "Defaults to CRED.",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryVaultId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "amount",
+    ],
+    "type": "object",
+  },
+  "prepare_org_disable_bypass": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "capId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "moveType": {
+        "description": "Fully-qualified payload Move type, e.g. "0x…::send_coin::SendCoin<0x…::cred::CRED>".",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "typeKey": {
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "moveType",
+    ],
+    "type": "object",
+  },
+  "prepare_org_disable_type": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "typeKey": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "typeKey",
+    ],
+    "type": "object",
+  },
+  "prepare_org_enable_bypass": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
@@ -2372,6 +3662,13 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 10000,
         "minimum": 0,
         "type": "integer",
+      },
+      "borrowScope": {
+        "description": "Capability Move types a VAULT_BORROW type may borrow.",
+        "items": {
+          "type": "string",
+        },
+        "type": "array",
       },
       "composableAllowed": {
         "type": "boolean",
@@ -2393,8 +3690,13 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "minimum": 0,
         "type": "integer",
       },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
       "moveType": {
-        "description": "Fully-qualified Move payload type.",
+        "description": "Fully-qualified payload Move type, e.g. "0x…::send_coin::SendCoin<0x…::cred::CRED>".",
         "minLength": 1,
         "type": "string",
       },
@@ -2402,6 +3704,12 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
+      },
+      "permissions": {
+        "description": "armature::permissions bits (any high-impact bit needs approvalThreshold ≥ 8000).",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
       },
       "proposeThreshold": {
         "default": 0,
@@ -2415,7 +3723,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "integer",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2425,8 +3733,12 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "typeKey": {
-        "description": "Bare on-chain type key, e.g. "SetBoard".",
         "minLength": 1,
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
     },
@@ -2444,10 +3756,602 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "prepare_org_enable_coin_pair": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "baseType": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteType": {
+        "description": "Defaults to CRED.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "baseType",
+    ],
+    "type": "object",
+  },
+  "prepare_org_enable_composite": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_org_enable_send_coin": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "coinType": {
+        "description": "Defaults to CRED.",
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_org_enable_send_coin_to_org": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "coinType": {
+        "description": "Defaults to CRED.",
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_org_enable_send_small_payment": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "coinType": {
+        "description": "Defaults to CRED.",
+        "type": "string",
+      },
+      "config": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalThreshold": {
+            "description": "Share of CAST votes that must approve.",
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "borrowScope": {
+            "description": "Capability Move types a VAULT_BORROW type may borrow.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "composableAllowed": {
+            "type": "boolean",
+          },
+          "cooldownMs": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "executionDelayMs": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "expiryMs": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "permissions": {
+            "description": "armature::permissions bits the type’s requests carry. Any high-impact bit needs approvalThreshold ≥ 8000.",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "proposeThreshold": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer",
+          },
+          "quorum": {
+            "description": "Share of the WHOLE board that must vote, in bps.",
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer",
+          },
+        },
+        "required": [
+          "quorum",
+          "approvalThreshold",
+          "proposeThreshold",
+          "expiryMs",
+          "executionDelayMs",
+          "cooldownMs",
+        ],
+        "type": "object",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_org_enable_trading": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quoteType": {
+        "description": "Defaults to CRED.",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_org_enable_type": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "approvalThreshold": {
+        "maximum": 10000,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "borrowScope": {
+        "description": "Capability Move types a VAULT_BORROW type may borrow.",
+        "items": {
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "composableAllowed": {
+        "type": "boolean",
+      },
+      "cooldownMs": {
+        "default": 0,
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "executionDelayMs": {
+        "default": 0,
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "expiryMs": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "moveType": {
+        "description": "Fully-qualified Move payload type.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "permissions": {
+        "description": "armature::permissions bits (any high-impact bit needs approvalThreshold ≥ 8000).",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "proposeThreshold": {
+        "default": 0,
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "quorum": {
+        "maximum": 10000,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "typeKey": {
+        "description": "Display key for the slot, e.g. "SetBoard".",
+        "minLength": 1,
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "typeKey",
+      "moveType",
+      "quorum",
+      "approvalThreshold",
+      "proposeThreshold",
+      "expiryMs",
+      "executionDelayMs",
+      "cooldownMs",
+    ],
+    "type": "object",
+  },
+  "prepare_org_entries_rotate_epoch": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_org_entry_edit": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "entryId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "location": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "entryId",
+      "location",
+    ],
+    "type": "object",
+  },
+  "prepare_org_entry_publish": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "description": {
+        "type": "string",
+      },
+      "location": {
+        "description": "Where the ciphertext lives, e.g. a Walrus blob id.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "Default: the acting seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "location",
+      "description",
+    ],
+    "type": "object",
+  },
+  "prepare_org_entry_remove": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "entryId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "entryId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_entry_update": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "entryId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "location": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "entryId",
+      "location",
+    ],
+    "type": "object",
+  },
   "prepare_org_execute_proposal": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "deleteFrame": {
+        "description": "Composites: also delete the exhausted frame (storage rebate to the gas payer).",
+        "type": "boolean",
+      },
+      "freezeAdminCapId": {
+        "description": "TransferFreezeAdmin: the unit’s FreezeAdminCap you own.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
@@ -2458,7 +4362,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2466,6 +4370,37 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
+      },
+      "treasuryCapId": {
+        "description": "AdoptCurrency<T>: the TreasuryCap<T> you own.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "upgrade": {
+        "additionalProperties": false,
+        "description": "ProposeUpgrade: the compiled package, as \`sui move build --dump-bytecode-as-base64\` prints it.",
+        "properties": {
+          "dependencies": {
+            "items": {
+              "pattern": "^0x[0-9a-fA-F]{1,64}$",
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "modules": {
+            "description": "Base64 module bytecode.",
+            "items": {
+              "type": "string",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+        },
+        "required": [
+          "modules",
+          "dependencies",
+        ],
+        "type": "object",
       },
     },
     "required": [
@@ -2475,24 +4410,27 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
-  "prepare_org_expire_proposal": {
+  "prepare_org_freeze_set_max_duration": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "maxFreezeDurationMs": {
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991,
+        "type": "integer",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
-      "payloadType": {
-        "type": "string",
-      },
-      "proposalId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2501,11 +4439,152 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
     },
     "required": [
       "orgId",
       "sender",
-      "proposalId",
+      "maxFreezeDurationMs",
+    ],
+    "type": "object",
+  },
+  "prepare_org_freeze_transfer_admin": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "freezeAdminCapId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "newAdmin": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "newAdmin",
+      "freezeAdminCapId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_freeze_type": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "freezeAdminCapId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "moveType": {
+        "description": "Fully-qualified payload Move type, e.g. "0x…::send_coin::SendCoin<0x…::cred::CRED>".",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "Default: the acting seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "moveType",
+      "freezeAdminCapId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_freeze_update_exempt": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "add": {
+        "items": {
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "remove": {
+        "items": {
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
     ],
     "type": "object",
   },
@@ -2520,6 +4599,12 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "description": "Epoch ms; defaults to good-til-cancelled.",
         "pattern": "^\\d+$",
         "type": "string",
+      },
+      "orderType": {
+        "description": "TriexBook order type; 0 (the default) = no restriction.",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
       },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
@@ -2538,9 +4623,15 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
+      },
+      "selfMatchingOption": {
+        "description": "Self-matching option; 0 (the default) = allow.",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
       },
       "sender": {
         "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
@@ -2570,6 +4661,63 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "prepare_org_market_order": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "assetId": {
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "quantity": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "quoteType": {
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "selfMatchingOption": {
+        "description": "Self-matching option; 0 (the default) = allow.",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "side": {
+        "enum": [
+          "buy",
+          "sell",
+        ],
+        "type": "string",
+      },
+      "storageUnitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "storageUnitId",
+      "assetId",
+      "side",
+      "quantity",
+    ],
+    "type": "object",
+  },
   "prepare_org_remove_members": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
@@ -2582,18 +4730,28 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "minItems": 1,
         "type": "array",
       },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
       "sender": {
         "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2612,13 +4770,15 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "assetId": {
         "type": "string",
       },
-      "daoVaultId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
       "expireAt": {
         "pattern": "^\\d+$",
         "type": "string",
+      },
+      "orderType": {
+        "description": "TriexBook order type; 0 (the default) = no restriction.",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
       },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
@@ -2636,10 +4796,21 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "quoteType": {
         "type": "string",
       },
-      "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+      "registrantOrgId": {
+        "description": "Pin the unit that registered the vault.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "selfMatchingOption": {
+        "description": "Self-matching option; 0 (the default) = allow.",
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
       },
       "sender": {
         "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
@@ -2647,6 +4818,10 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "storageUnitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "vaultId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2669,21 +4844,34 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "addresses": {
+      "add": {
+        "description": "Addresses to seat.",
         "items": {
           "pattern": "^0x[0-9a-fA-F]{1,64}$",
           "type": "string",
         },
-        "minItems": 1,
         "type": "array",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
       },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
+      "remove": {
+        "description": "Addresses to unseat.",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "type": "array",
+      },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2692,11 +4880,15 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
     },
     "required": [
       "orgId",
       "sender",
-      "addresses",
     ],
     "type": "object",
   },
@@ -2710,7 +4902,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2723,6 +4915,61 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "required": [
       "orgId",
       "sender",
+    ],
+    "type": "object",
+  },
+  "prepare_org_spawn_successor": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "board": {
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "metadataUri": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "name": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "name",
+      "board",
+      "metadataUri",
     ],
     "type": "object",
   },
@@ -2742,7 +4989,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2770,8 +5017,36 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^\\d+$",
         "type": "string",
       },
+      "claimFromCoinPool": {
+        "additionalProperties": false,
+        "description": "A coin pool to claim from.",
+        "properties": {
+          "baseType": {
+            "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+            "type": "string",
+          },
+          "poolId": {
+            "pattern": "^0x[0-9a-fA-F]{1,64}$",
+            "type": "string",
+          },
+          "quoteType": {
+            "pattern": "^0x[0-9a-fA-F]{1,64}::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(<.+>)?$",
+            "type": "string",
+          },
+        },
+        "required": [
+          "poolId",
+          "baseType",
+        ],
+        "type": "object",
+      },
       "claimFromPool": {
+        "description": "An item market (MultiCoinPool<coinType>) to claim from.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "coinType": {
+        "description": "Defaults to CRED.",
         "type": "string",
       },
       "orgId": {
@@ -2779,11 +5054,8 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
-      "quoteType": {
-        "type": "string",
-      },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2824,10 +5096,6 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
-      "daoVaultId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
@@ -2836,8 +5104,12 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "quoteType": {
         "type": "string",
       },
+      "registrantOrgId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2850,6 +5122,10 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
+      "vaultId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
     },
     "required": [
       "orgId",
@@ -2857,6 +5133,105 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "storageUnitId",
       "assetId",
       "amount",
+    ],
+    "type": "object",
+  },
+  "prepare_org_transfer_assets": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "capIds": {
+        "description": "Default: every capability in the vault.",
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "coinTypes": {
+        "description": "Default: every coin in the treasury.",
+        "items": {
+          "type": "string",
+        },
+        "type": "array",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "targetOuId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "targetOuId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_treasury_claim": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "coinObjectIds": {
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "coinType": {
+        "description": "Defaults to CRED.",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryVaultId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "coinObjectIds",
     ],
     "type": "object",
   },
@@ -2878,7 +5253,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2910,6 +5285,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "coinType": {
         "type": "string",
       },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
@@ -2920,7 +5300,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2930,6 +5310,64 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "treasuryVaultId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "recipient",
+      "amount",
+    ],
+    "type": "object",
+  },
+  "prepare_org_treasury_send_small": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "coinType": {
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "recipient": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "treasuryVaultId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2953,6 +5391,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "coinType": {
         "type": "string",
       },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
@@ -2963,7 +5406,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -2976,6 +5419,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
     },
     "required": [
       "orgId",
@@ -2985,12 +5433,583 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "prepare_org_unfreeze": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "moveType": {
+        "description": "Fully-qualified payload Move type, e.g. "0x…::send_coin::SendCoin<0x…::cred::CRED>".",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "moveType",
+    ],
+    "type": "object",
+  },
+  "prepare_org_unfreeze_type": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "freezeAdminCapId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "moveType": {
+        "description": "Fully-qualified payload Move type, e.g. "0x…::send_coin::SendCoin<0x…::cred::CRED>".",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "moveType",
+      "freezeAdminCapId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_unit_create": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "board": {
+        "items": {
+          "pattern": "^0x[0-9a-fA-F]{1,64}$",
+          "type": "string",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "metadataUri": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "name": {
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "name",
+      "board",
+      "metadataUri",
+    ],
+    "type": "object",
+  },
+  "prepare_org_unit_destroy": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "unitId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_unit_pause": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The CHILD unit to act on; its parent’s board decides.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "unitId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_unit_reclaim_cap": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "capId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "capType": {
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The CHILD unit to act on; its parent’s board decides.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "unitId",
+      "capId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_unit_spin_out": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "configs": {
+        "additionalProperties": false,
+        "properties": {
+          "createSubOu": {
+            "additionalProperties": false,
+            "properties": {
+              "approvalThreshold": {
+                "description": "Share of CAST votes that must approve.",
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "borrowScope": {
+                "description": "Capability Move types a VAULT_BORROW type may borrow.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "composableAllowed": {
+                "type": "boolean",
+              },
+              "cooldownMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "executionDelayMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "expiryMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "permissions": {
+                "description": "armature::permissions bits the type’s requests carry. Any high-impact bit needs approvalThreshold ≥ 8000.",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "proposeThreshold": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "quorum": {
+                "description": "Share of the WHOLE board that must vote, in bps.",
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "quorum",
+              "approvalThreshold",
+              "proposeThreshold",
+              "expiryMs",
+              "executionDelayMs",
+              "cooldownMs",
+            ],
+            "type": "object",
+          },
+          "spawnOu": {
+            "additionalProperties": false,
+            "properties": {
+              "approvalThreshold": {
+                "description": "Share of CAST votes that must approve.",
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "borrowScope": {
+                "description": "Capability Move types a VAULT_BORROW type may borrow.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "composableAllowed": {
+                "type": "boolean",
+              },
+              "cooldownMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "executionDelayMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "expiryMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "permissions": {
+                "description": "armature::permissions bits the type’s requests carry. Any high-impact bit needs approvalThreshold ≥ 8000.",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "proposeThreshold": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "quorum": {
+                "description": "Share of the WHOLE board that must vote, in bps.",
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "quorum",
+              "approvalThreshold",
+              "proposeThreshold",
+              "expiryMs",
+              "executionDelayMs",
+              "cooldownMs",
+            ],
+            "type": "object",
+          },
+          "spinOutSubOu": {
+            "additionalProperties": false,
+            "properties": {
+              "approvalThreshold": {
+                "description": "Share of CAST votes that must approve.",
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "borrowScope": {
+                "description": "Capability Move types a VAULT_BORROW type may borrow.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "composableAllowed": {
+                "type": "boolean",
+              },
+              "cooldownMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "executionDelayMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "expiryMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "permissions": {
+                "description": "armature::permissions bits the type’s requests carry. Any high-impact bit needs approvalThreshold ≥ 8000.",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "proposeThreshold": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer",
+              },
+              "quorum": {
+                "description": "Share of the WHOLE board that must vote, in bps.",
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer",
+              },
+            },
+            "required": [
+              "quorum",
+              "approvalThreshold",
+              "proposeThreshold",
+              "expiryMs",
+              "executionDelayMs",
+              "cooldownMs",
+            ],
+            "type": "object",
+          },
+        },
+        "type": "object",
+      },
+      "freezeAdminCapId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The CHILD unit to act on; its parent’s board decides.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "unitId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_unit_transfer_cap": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "capId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "capType": {
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The CHILD unit to act on; its parent’s board decides.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "unitId",
+      "capId",
+    ],
+    "type": "object",
+  },
+  "prepare_org_unit_unpause": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The CHILD unit to act on; its parent’s board decides.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "unitId",
+    ],
+    "type": "object",
+  },
   "prepare_org_update_metadata": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
       "charterId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
         "type": "string",
       },
       "metadataUri": {
@@ -3003,12 +6022,17 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
       "sender": {
         "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3029,6 +6053,12 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "minimum": 0,
         "type": "integer",
       },
+      "borrowScope": {
+        "items": {
+          "type": "string",
+        },
+        "type": "array",
+      },
       "composableAllowed": {
         "type": "boolean",
       },
@@ -3047,10 +6077,20 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "minimum": 0,
         "type": "integer",
       },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
+      },
+      "permissions": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer",
       },
       "proposeThreshold": {
         "maximum": 9007199254740991,
@@ -3063,7 +6103,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "integer",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3076,6 +6116,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "minLength": 1,
         "type": "string",
       },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
     },
     "required": [
       "orgId",
@@ -3084,11 +6129,113 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "prepare_org_upgrade_propose": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "build": {
+        "additionalProperties": false,
+        "properties": {
+          "dependencies": {
+            "items": {
+              "pattern": "^0x[0-9a-fA-F]{1,64}$",
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "modules": {
+            "description": "Base64 module bytecode.",
+            "items": {
+              "type": "string",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+        },
+        "required": [
+          "modules",
+          "dependencies",
+        ],
+        "type": "object",
+      },
+      "capId": {
+        "description": "The UpgradeCap id in the unit’s vault.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "digest": {
+        "description": "The new package digest, 32 bytes.",
+        "items": {
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer",
+        },
+        "maxItems": 32,
+        "minItems": 32,
+        "type": "array",
+      },
+      "metadataIpfs": {
+        "description": "IPFS reference recorded on the proposal (ProposalCreated.metadata_ipfs). Upload it first — this server hosts nothing.",
+        "minLength": 1,
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "packageId": {
+        "description": "The package being upgraded.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "policy": {
+        "anyOf": [
+          {
+            "const": 0,
+            "type": "number",
+          },
+          {
+            "const": 128,
+            "type": "number",
+          },
+          {
+            "const": 192,
+            "type": "number",
+          },
+        ],
+        "description": "0 compatible (default), 128 additive, 192 dep-only.",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit to act ON (default: the acting seat). A parent’s board can target a child it does not sit on — the action then routes through the parent’s SubOUControl.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "capId",
+      "packageId",
+      "digest",
+    ],
+    "type": "object",
+  },
   "prepare_org_vault_deinit": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "editorDaoId": {
+      "editorOuId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3098,7 +6245,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3123,10 +6270,6 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "daoVaultId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
       "items": {
         "description": "Asset ids and amounts, as decimal strings.",
         "items": {
@@ -3160,7 +6303,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3170,6 +6313,10 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "storageUnitId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "vaultId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3186,7 +6333,8 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "editorDaoId": {
+      "editorOuId": {
+        "description": "The unit whose board satisfies edit; defaults to the seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3195,8 +6343,10 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
           "additionalProperties": false,
           "properties": {
             "kind": {
+              "description": ""player" (a wallet), "machine" (a bot/service key — a distinct principal from player for the same address), or "ou" (any board member of that organization unit).",
               "enum": [
                 "player",
+                "machine",
                 "ou",
               ],
               "type": "string",
@@ -3210,7 +6360,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
               "type": "string",
             },
             "value": {
-              "description": "Wallet address, or organization id for "ou".",
+              "description": "Wallet / machine address, or organization unit id for "ou".",
               "pattern": "^0x[0-9a-fA-F]{1,64}$",
               "type": "string",
             },
@@ -3231,7 +6381,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3257,13 +6407,70 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "depositPrincipals": {
+        "description": "Defaults to the acting unit.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "description": ""player" (a wallet), "machine" (a bot/service key — a distinct principal from player for the same address), or "ou" (any board member of that organization unit).",
+              "enum": [
+                "player",
+                "machine",
+                "ou",
+              ],
+              "type": "string",
+            },
+            "value": {
+              "description": "Wallet / machine address, or organization unit id for "ou".",
+              "pattern": "^0x[0-9a-fA-F]{1,64}$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "kind",
+            "value",
+          ],
+          "type": "object",
+        },
+        "type": "array",
+      },
+      "editPrincipals": {
+        "description": "Defaults to the acting unit’s parent (itself at the root).",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "description": ""player" (a wallet), "machine" (a bot/service key — a distinct principal from player for the same address), or "ou" (any board member of that organization unit).",
+              "enum": [
+                "player",
+                "machine",
+                "ou",
+              ],
+              "type": "string",
+            },
+            "value": {
+              "description": "Wallet / machine address, or organization unit id for "ou".",
+              "pattern": "^0x[0-9a-fA-F]{1,64}$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "kind",
+            "value",
+          ],
+          "type": "object",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
       "orgId": {
         "description": "Organization object id — the root or any unit in its tree.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3280,6 +6487,34 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
+      "withdrawPrincipals": {
+        "description": "Defaults to the acting unit.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "description": ""player" (a wallet), "machine" (a bot/service key — a distinct principal from player for the same address), or "ou" (any board member of that organization unit).",
+              "enum": [
+                "player",
+                "machine",
+                "ou",
+              ],
+              "type": "string",
+            },
+            "value": {
+              "description": "Wallet / machine address, or organization unit id for "ou".",
+              "pattern": "^0x[0-9a-fA-F]{1,64}$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "kind",
+            "value",
+          ],
+          "type": "object",
+        },
+        "type": "array",
+      },
     },
     "required": [
       "orgId",
@@ -3288,11 +6523,51 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "prepare_org_vault_rekey": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "editorOuId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "newRegistrantOrgId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization object id — the root or any unit in its tree.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "seat": {
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "vaultId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "orgId",
+      "sender",
+      "vaultId",
+      "newRegistrantOrgId",
+    ],
+    "type": "object",
+  },
   "prepare_org_vault_revoke": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "editorDaoId": {
+      "editorOuId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3306,8 +6581,10 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
           "additionalProperties": false,
           "properties": {
             "kind": {
+              "description": ""player" (a wallet), "machine" (a bot/service key — a distinct principal from player for the same address), or "ou" (any board member of that organization unit).",
               "enum": [
                 "player",
+                "machine",
                 "ou",
               ],
               "type": "string",
@@ -3321,6 +6598,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
               "type": "string",
             },
             "value": {
+              "description": "Wallet / machine address, or organization unit id for "ou".",
               "pattern": "^0x[0-9a-fA-F]{1,64}$",
               "type": "string",
             },
@@ -3336,7 +6614,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "array",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3363,10 +6641,6 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "additionalProperties": false,
     "properties": {
       "characterId": {
-        "pattern": "^0x[0-9a-fA-F]{1,64}$",
-        "type": "string",
-      },
-      "daoVaultId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3402,7 +6676,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
@@ -3420,6 +6694,10 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
           "wallet",
           "hangar",
         ],
+        "type": "string",
+      },
+      "vaultId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
     },
@@ -3451,12 +6729,17 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "seat": {
-        "description": "Unit id to act through. Defaults to the caller’s highest-authority seat.",
+        "description": "Unit id to act THROUGH (whose board votes). Defaults to the caller’s highest-authority seat.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
       "sender": {
         "description": "Sui address the transaction is built for; only this address can sign it. Also the address whose board seat is resolved.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "unitId": {
+        "description": "The unit the proposal belongs to.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },

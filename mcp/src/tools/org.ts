@@ -7,6 +7,7 @@ import {
   suiAddress,
   u64,
 } from '../schemas.js'
+import { plain } from './orgCommon.js'
 import type { ToolDef } from './types.js'
 
 /**
@@ -142,7 +143,7 @@ export const orgTools: ToolDef[] = [
     name: 'org_proposals',
     title: 'List an organization’s proposals',
     description:
-      'Governance proposals for an organization, newest first. DISCOVERY ONLY: no per-proposal configuration and no snapshot weight, so yesWeight/noWeight have no denominator here — read org_governance for the type’s quorum before drawing a conclusion about whether a proposal can pass.',
+      'Governance proposals for an organization, newest first, from the indexer — including executed and expired ones, which cycle 7 deletes on-chain. Each carries the config snapshotted at submission (null if unindexed), createdMs and metadataIpfs, but NO snapshot weight, so yesWeight/noWeight have no denominator here: read org_proposal for the live tally. "pending" INCLUDES a lapsed voting window nobody cleaned up — such a proposal can only be deleted (org_expired_proposals, prepare_org_delete_expired_proposals), not voted on.',
     kind: 'read',
     sdkPath: 'orgs.proposals',
     inputShape: { ...orgIdShape },
@@ -212,7 +213,7 @@ export const orgTools: ToolDef[] = [
     name: 'org_governance',
     title: 'A unit’s governance rules',
     description:
-      'Which proposal types a unit has enabled and the voting rules for each: quorum and approval in basis points, expiry, execution delay, and whether the type may appear inside a composite. This is what decides whether an action executes in one transaction or becomes a proposal — a lone vote clears quorum only when boardSize × quorum ≤ 10000 and the execution delay is zero.',
+      'Which proposal types a unit has enabled and the voting rules for each: quorum and approval in basis points, expiry, execution delay, composability, permission bits and borrow scope; plus every slot keyed by Move type (with its last execution), the unit’s lifecycle and pause flags (state: migrating, executionPaused, controllerPaused, memberCount, encryptEpoch) and its freeze state. This is what decides whether an action executes in one transaction or becomes a proposal — a lone vote clears quorum only when boardSize × quorum ≤ 10000 and the execution delay is zero.',
     kind: 'read',
     sdkPath: 'org.governance.read',
     inputShape: { ...actingShape },
@@ -232,8 +233,11 @@ export const orgTools: ToolDef[] = [
       return ok({
         unitDaoId: org.seat?.daoId ?? null,
         enabledTypes: [...gov.enabledTypes],
-        configs: Object.fromEntries(gov.configs),
-        typeBindings: Object.fromEntries(gov.typeBindings),
+        configs: plain(gov.configs),
+        typeBindings: plain(gov.typeBindings),
+        slots: plain(gov.slots ?? null),
+        state: plain(gov.state ?? null),
+        freeze: plain(gov.freeze ?? null),
       })
     },
   },
@@ -241,7 +245,7 @@ export const orgTools: ToolDef[] = [
     name: 'org_treasury_balances',
     title: 'A unit’s treasury coin balances',
     description:
-      'Every coin the unit’s treasury holds. A coin fully withdrawn reports as 0 rather than disappearing, so "held nothing" and "never held" stay distinguishable.',
+      'Every coin the unit’s treasury holds, enumerated from the vault’s own coin-type set. Cycle 7 drops a coin from that set when it is drained, so an absent coin means a zero balance. Coins TRANSFERRED to the treasury’s address are not counted until claimed (prepare_org_treasury_claim).',
     kind: 'read',
     sdkPath: 'org.treasury.balances',
     inputShape: {
@@ -282,37 +286,6 @@ export const orgTools: ToolDef[] = [
       return ok({
         coinType: args.coinType ?? 'CRED',
         amount: await org.treasury.balance(args.coinType, args.treasuryVaultId),
-      })
-    },
-  },
-  {
-    name: 'org_treasury_item_balance',
-    title: 'One item’s treasury balance',
-    description:
-      'A single multicoin (item) balance in the unit’s treasury, or 0. Ask per asset — the treasury stores items behind a per-collection record, so there is no cheap "list everything" read.',
-    kind: 'read',
-    sdkPath: 'org.treasury.itemBalance',
-    inputShape: {
-      ...actingShape,
-      collectionId: objectId,
-      assetId: u64.describe('Item asset id as a decimal string.'),
-      treasuryVaultId: objectId.optional(),
-    },
-    syntheticParams: {
-      orgId: 'Names the organization whose handle is opened.',
-      address:
-        'The acting address; per-request because this server is keyless.',
-      seat: 'Which unit to answer for; the SDK takes it from the handle.',
-    },
-    handler: async (ctx, args) => {
-      const org = await handle(ctx, args)
-      return ok({
-        assetId: args.assetId,
-        amount: await org.treasury.itemBalance({
-          collectionId: args.collectionId,
-          assetId: big(args.assetId),
-          treasuryVaultId: args.treasuryVaultId,
-        }),
       })
     },
   },
@@ -407,6 +380,118 @@ export const orgTools: ToolDef[] = [
     handler: async (ctx, args) => {
       const org = await handle(ctx, args)
       return ok(await org.vault.atHub(args.hubId))
+    },
+  },
+  // ─── cycle-7 unit-scoped reads ─────────────────────────────────────────────
+
+  {
+    name: 'org_proposal',
+    title: 'One proposal’s live on-chain state',
+    description:
+      'A proposal’s LIVE state read from the chain: snapshot weight (the quorum denominator), votes cast by voter, yes/no weight, decoded payload, the config snapshotted at submission, status (active / passed), and its deadlines — votingDeadlineMs, executableFromMs, and when a passed proposal’s execution window closes. null when the object no longer exists: cycle 7 deletes a proposal on execution and on expiry cleanup, and org_proposals then has the outcome.',
+    kind: 'read',
+    sdkPath: 'org.governance.proposal',
+    inputShape: { ...actingShape, proposalId: objectId },
+    syntheticParams: {
+      orgId: 'Names the organization whose handle is opened.',
+      address:
+        'The acting address; per-request because this server is keyless.',
+      seat: 'Unused for this read; accepted so the acting shape is uniform.',
+    },
+    handler: async (ctx, args) => {
+      const org = await handle(ctx, args)
+      return ok(plain(await org.governance.proposal(args.proposalId)))
+    },
+  },
+  {
+    name: 'org_expired_proposals',
+    title: 'Proposals ready for deletion',
+    description:
+      'The organization’s proposals that prepare_org_delete_expired_proposals would accept RIGHT NOW: every indexed pending/passed proposal, hydrated from the chain and kept if its voting window (active) or execution window (passed) has closed. One chain read per open proposal.',
+    kind: 'read',
+    sdkPath: 'org.governance.expired',
+    inputShape: { ...actingShape },
+    syntheticParams: {
+      orgId: 'Names the organization whose handle is opened.',
+      address:
+        'The acting address; per-request because this server is keyless.',
+      seat: 'Unused for this read; accepted so the acting shape is uniform.',
+    },
+    handler: async (ctx, args) => {
+      const org = await handle(ctx, args)
+      return ok(plain(await org.governance.expired()))
+    },
+  },
+  {
+    name: 'org_freeze',
+    title: 'A unit’s emergency-freeze state',
+    description:
+      'Which payload Move types are frozen on a unit and until when (epoch ms), which types are exempt from freezing, and the maximum freeze duration. A frozen type cannot execute by any path until it lapses or is lifted.',
+    kind: 'read',
+    sdkPath: 'org.freeze.read',
+    inputShape: {
+      ...actingShape,
+      unitId: objectId
+        .optional()
+        .describe('Unit to read; defaults to the acting seat.'),
+    },
+    syntheticParams: {
+      orgId: 'Names the organization whose handle is opened.',
+      address:
+        'The acting address; per-request because this server is keyless.',
+      seat: 'The default unit when unitId is omitted.',
+    },
+    handler: async (ctx, args) => {
+      const org = await handle(ctx, args)
+      return ok(plain(await org.freeze.read(args.unitId)))
+    },
+  },
+  {
+    name: 'org_entries',
+    title: 'A unit’s encrypted entries',
+    description:
+      'Every encrypted entry a unit’s board has published: where its ciphertext lives, a description, who created it, the epoch it was encrypted under, and stale=true when the unit’s epoch has since rotated (re-encrypt and prepare_org_entry_update). METADATA ONLY — decrypting needs a wallet-signed Seal session key, which lives in @trinaryex/keyspace and which this server cannot produce.',
+    kind: 'read',
+    sdkPath: 'org.entries.list',
+    inputShape: {
+      ...actingShape,
+      unitId: objectId
+        .optional()
+        .describe('Unit to read; defaults to the acting seat.'),
+    },
+    syntheticParams: {
+      orgId: 'Names the organization whose handle is opened.',
+      address:
+        'The acting address; per-request because this server is keyless.',
+      seat: 'The default unit when unitId is omitted.',
+    },
+    handler: async (ctx, args) => {
+      const org = await handle(ctx, args)
+      return ok(plain(await org.entries.list(args.unitId)))
+    },
+  },
+  {
+    name: 'org_capabilities',
+    title: 'What a unit’s capability vault holds',
+    description:
+      'A unit’s capability vault by Move type: SubOUControl caps over its children, TreasuryCap<T>s of adopted currencies, ExternalExecutionCap<P>s (bypass), UpgradeCaps, a stored FreezeAdminCap, trading custody caps. The cap ids here are what the unit, currency, upgrade and bypass prepare tools take.',
+    kind: 'read',
+    sdkPath: 'org.capabilities.list',
+    inputShape: {
+      ...actingShape,
+      unitId: objectId
+        .optional()
+        .describe('Unit to read; defaults to the acting seat.'),
+    },
+    syntheticParams: {
+      orgId: 'Names the organization whose handle is opened.',
+      address:
+        'The acting address; per-request because this server is keyless.',
+      seat: 'The default unit when unitId is omitted.',
+    },
+    handler: async (ctx, args) => {
+      const org = await handle(ctx, args)
+      return ok(plain(await org.capabilities.list(args.unitId)))
     },
   },
 ]
