@@ -1,9 +1,12 @@
 # `@trinaryex/sdk` — Armature (organizations & governance) module
 
-**Status:** COMPLETE (2026-09-11) — all five phases. 309 SDK tests and 121 MCP
-tests green; the §2 story table is closed, the gateway drift gate passes, and the
-MCP surface is in lock-step (88 tools, 47 of them Armature). Remaining work is
-the named deferrals in §10 and OQ-A11's ruling — no phase is outstanding.
+**Status:** CYCLE 7 (2026-10-01) — ported to cycle-7 Armature (`armature` /
+`armature_proposals` main, "Cycle 7 (#171)", fresh testnet publish). The governance
+core now matches the type-keyed registry, permission bits, forward-only proposal
+lifecycle and event-only single-PTB executions; every first-party proposal type and
+every player/officer entry point is reachable (§13.2), with the exclusions written
+down (§13.3). Phase F in §10 records the port. MCP parity for the new surface is
+pending (done centrally). The original five phases completed 2026-09-11.
 **Package:** `@trinaryex/sdk` (repo: `sdk/`) — the second module of the umbrella SDK, a
 sibling to the trading surface described in [DESIGN.md](./DESIGN.md).
 **Audience:** organization officers, treasurers, and bots acting **on behalf of an org**
@@ -20,11 +23,12 @@ split, same zod validation, same layering.
 
 ## 1. What this module is (and isn't)
 
-Armature is the on-chain DAO framework behind Trinary Exchange **organizations**: a tree of
-DAOs (a root org and its organizational units), each with its own board, its own
-`EmergencyFreeze`, its own `TreasuryVault`, and a per-proposal-type governance config. An
-org can own a `BalanceManager` and trade exactly like a player — except every write is
-wrapped in a governance pipeline.
+Armature is the on-chain framework behind Trinary Exchange **organizations**: a tree of
+OUs (organizational units — the top-level one is the "org"), each with its own board, its
+own `EmergencyFreeze`, its own `TreasuryVault`, and a per-proposal-type governance config.
+An org can own a `TradingAccount` and trade exactly like a player — except every write is
+wrapped in a governance pipeline. (Cycle 7 renamed "DAO" to "OU" on-chain; SDK field names
+that mirror the indexer wire — `daoId`, `subdaoControlCapId` — keep their spelling.)
 
 The module gives an officer/bot one object to:
 
@@ -64,9 +68,10 @@ strategies and returns the winner plus a human-readable reason.
   (§11, OQ-A3). The app has a server route for the upload; the SDK does not.
 - **No role taxonomy.** admin/officer/member is an explicitly temporary shim in the app
   (`src/utils/orgNodes.ts:111`). This module ships the node graph as primary (§5.1).
-- **No unwired Armature surface.** Currency ops, security/freeze ops, sub-DAO lifecycle,
-  upgrade ops and friends are out of scope because the app does not wire them. §13.3 lists
-  every one, so adding them later is a lookup rather than an audit.
+- ~~No unwired Armature surface.~~ **Superseded in cycle 7**: every first-party proposal
+  type (currency, sub-OU lifecycle and control, freeze governance, upgrades, bypass) and
+  every direct entry point a player or officer can call is wrapped. §13.3 now lists only
+  what genuinely cannot be exposed, with the reason.
 - **No custody.** Same as the trading module: signing is delegated to an `executor`.
 
 ---
@@ -87,17 +92,17 @@ equivalent to do here (§13.1).
 | A6 | Whose balance manager is this? | READ | `GET /v1/balance-managers/owners` — already wrapped as `account.owners()`; the `ou:<org_id>` tag just needs documenting |
 | A7 | List an org's proposals | READ | `GET /v1/orgs/{org_id}/proposals` (**discovery only** — no configs, no snapshot weight) |
 | A8 | Hydrate one proposal for a vote decision | READ | **fullnode** — the live `Proposal` object: snapshot weight, votes cast, decoded payload, composite steps, wall-clock status |
-| A9 | What can this org actually do? | READ | **fullnode** — the DAO object's `enabled_proposal_types` / `proposal_configs` / `type_bindings` |
+| A9 | What can this org actually do? | READ | **fullnode** — the OU's `ou::TypeSlot` dynamic fields (one per enabled type), its root flags and its `EmergencyFreeze` |
 | A10 | Which keyspaces can I reach? | READ | `GET /v1/players/{address}/accessible-keyspaces` |
-| B1 | Create an organization | WRITE | `armature::tribe::create_tribe_configured` (+ the `VecMap<String, ProposalConfig>` bootstrap) |
+| B1 | Create an organization | WRITE | `armature_proposals::tribe_setup::create_tribe_configured` (+ `vector<ou::ProposalTypeInit>` overrides) |
 | B2 | Add / remove members, set a board | WRITE | `BatchAddMembers` / `BatchRemoveMembers` / `SetBoard`, or their `Controller*` forms via the parent |
 | B3 | Update org name / metadata | WRITE | `UpdateMetadata` → `admin_ops::execute_update_metadata` |
 | B4 | Enable a proposal type / change its rules | WRITE | `EnableProposalType` / `UpdateProposalConfig` |
-| B5 | Vote, expire, execute a passed proposal | WRITE | `proposal::vote`, `proposal::try_expire`, `board_voting::ticket_from_vote` → domain `execute_*` |
+| B5 | Vote, clean up, execute a passed proposal | WRITE | `board_voting::vote`, `proposal::delete_expired_proposal`, `board_voting::ticket_from_vote` (deletes the proposal) → domain `execute_*` |
 | B6 | Bundle N actions into one proposal | WRITE | `composite::{new_frame, add_step, submit_composite}`; execution advances step-by-step |
 | C1 | Fund the org treasury | WRITE | `treasury_vault::deposit<T>` — **permissionless**, no governance |
-| C2 | Read treasury balances | READ | **fullnode** — `Balance<T>` + `MultiCoinBalance` dynamic fields |
-| C3 | Pay out of the treasury | WRITE | `SendCoin<T>` (to an address) / `SendCoinToDao<T>` (to another org) |
+| C2 | Read treasury balances | READ | **fullnode** — `Balance<T>` dynamic fields (cycle 7 treasuries hold coins only) |
+| C3 | Pay out of the treasury | WRITE | `SendCoin<T>` (to an address) / `SendCoinToOU<T>` (to another org) / `SendSmallPayment<T>` (rate-limited) |
 | D1 | Give the org a trading account | WRITE | `SetupTradingAccount` → `trading_ops::execute_setup_trading_account` (shares a `TradingCustody` + custody-owned `TradingAccount`) |
 | D2 | Place / cancel an org order | WRITE | `PlaceLimitOrder<Q>` / `PlaceMarketOrder<Q>` / `PlaceLimitOrderCoin<B,Q>`, `CancelOrder<Q>` / `CancelOrderCoin<B,Q>` |
 | D3 | Buy using treasury funds | WRITE | composed PTB: `DepositCoinToBook<Q>` → `PlaceLimitOrder<Q>(isBid=true)` |
@@ -169,8 +174,14 @@ sdk/src/
 ├── armature/
 │   ├── queries.ts       # indexer reads — the 8 org routes (§2)
 │   ├── schemas.ts       # zod for OrgResponse / ProposalResponse / AccessibleKeyspace / HubDaoVault / …
-│   ├── governance.ts    # fullnode: enabled types, proposal_configs, type_bindings, singleVoteExecutable
-│   ├── proposals.ts     # fullnode: live Proposal hydration (weights, votes, payload, composite steps)
+│   ├── governance.ts    # fullnode (BCS): OU root, TypeSlot fields, freeze; PERMISSIONS; singleVoteExecutable
+│   ├── proposals.ts     # fullnode: live Proposal hydration, capability vault, entries, frame steps
+│   ├── executors.ts     # passed-proposal handlers, dispatched by payload Move type  [cycle 7]
+│   ├── lifecycle.ts     # CreateSubOU/SpawnOU/SpinOut/TransferAssets, sub-OU control, freeze gov [cycle 7]
+│   ├── currency.ts      # AdoptCurrency/MintCoin/MintAllowance/BurnCoin/ReturnCurrencyCap/bypass [cycle 7]
+│   ├── upgrade.ts       # ProposeUpgrade (authorize → Upgrade → commit)            [cycle 7]
+│   ├── create.ts        # tribe_setup::create_tribe_configured                      [cycle 7]
+│   ├── OrgClientGroups.ts # org.currency / units / freeze / entries / upgrade / capabilities [cycle 7]
 │   ├── tree.ts          # OrgResponse → node graph, seats, OuExecContext
 │   ├── harness.ts       # PURE resolver: evaluatePaths / selectStrategy / canComposite
 │   ├── plan.ts          # strategy → Transaction; composite submit; execute-passed; advance-step
@@ -257,18 +268,18 @@ org.governance.proposal(proposalId): Promise<Proposal>                 // A8  fu
 org.governance.vote({ proposalId, approve }): Promise<TxResult>        // B5
 org.governance.execute(proposalId): Promise<TxResult>                  // B5  ticket_from_vote → execute_*
 org.governance.advanceComposite(proposalId): Promise<TxResult>         // B6
-org.governance.tryExpire(proposalId): Promise<TxResult>
+org.governance.deleteExpired({ proposalIds }): Promise<TxResult>      // cycle 7 (was tryExpire)
 
 // ── handle: membership & identity ───────────────────────────────────────────
 org.members.add(addresses): Promise<RunOutcome>                        // B2
 org.members.remove(addresses): Promise<RunOutcome>                     // B2
-org.members.setBoard(addresses): Promise<RunOutcome>                   // B2
+org.members.setBoard({ add?, remove? }): Promise<RunOutcome>          // B2  a diff since cycle 7
 org.metadata.update({ name?, metadataUri }): Promise<RunOutcome>       // B3
 
 // ── handle: proposal-type administration ────────────────────────────────────
 org.types.enable(typeKey, moveType, config?): Promise<RunOutcome>      // B4
 org.types.updateConfig(typeKey, patch): Promise<RunOutcome>            // B4  every field optional
-org.types.enableTrading(opts?): Promise<RunOutcome>                    // D1 prerequisite — see §11 OQ-A4
+org.types.enableTrading(opts?): Promise<RunOutcome>                    // D1 prerequisite
 org.types.enableSendCoin(coinType): Promise<RunOutcome>                // C3 prerequisite (per-coin key)
 org.types.enableComposite(): Promise<RunOutcome>                       // B6 prerequisite
 
@@ -276,7 +287,7 @@ org.types.enableComposite(): Promise<RunOutcome>                       // B6 pre
 org.treasury.balances(): Promise<TreasuryBalances>                     // C2  fullnode
 org.treasury.deposit({ coinType, amount }): Promise<TxResult>          // C1  permissionless, no governance
 org.treasury.send({ coinType, amount, to }): Promise<RunOutcome>       // C3
-org.treasury.sendToDao({ coinType, amount, daoId }): Promise<RunOutcome>  // C3
+org.treasury.sendToOrg({ recipientTreasuryId, amount, coinType? })   // C3  SendCoinToOU<T>
 
 // ── handle: trading as the org (mirrors client.orders / client.account) ─────
 // Orders act through the unit that OWNS the trading account (its custody only
@@ -295,6 +306,21 @@ org.orders.sweepCoin({ amount, coinType?, claimFromPool?, claimFromCoinPool? }) 
 org.orders.sweepItems({ storageUnitId, assetId, amount, vaultId? })    // D5
 org.orders.sweepAll(): Promise<RunOutcome & { skipped }>               // D6  claim + park + treasury, one PTB
 org.orders.createPool({ assetId, storageUnitId? | collectionId? })     // D7
+
+// ── cycle 7 additions (every governance write takes opts?: { unitId?, metadataIpfs? }) ──
+client.orgs.create(params) / createStandalone(params)                  // B1  tribe_setup / ou::create
+org.governance.proposal(id): Promise<LiveProposal | null>              // A8  live object (null = deleted)
+org.governance.deleteExpired({ proposalIds })                          // permissionless cleanup
+org.governance.expired() / deleteExhaustedFrame(frameId)
+org.governance.execute(id, { freezeAdminCapId?, treasuryCapId?, upgrade?, deleteFrame? })
+org.types.disable(key) / enableSendCoinToOrg() / enableSendSmallPayment()
+org.treasury.sendSmall() / claim()
+org.currency.enable/adopt/mint/mintAllowance/configureAllowance/mintWithAllowance/burn/returnCap
+org.units.create/pause/unpause/transferCap/reclaimCap/spinOut/spawnSuccessor/transferAssets/destroy
+org.freeze.read/freezeType/unfreezeType/unfreeze/setMaxDuration/updateExempt/transferAdmin
+org.entries.list/publish/update/edit/rotateEpoch/remove                // member-gated, no vote
+org.upgrade.propose(...)
+org.capabilities.list/enableBypass/disableBypass
 
 // ── handle: shared storage (OuReceiptVault) ─────────────────────────────────
 org.vault.atHub(hubId): Promise<HubDaoVault[]>                         // E1  indexer
@@ -337,29 +363,38 @@ larger PTB), same contract as DESIGN.md §6. Confirmed against `triex-app-api`
 
 | Builder | Move target | Notes |
 |---|---|---|
-| `createTribeConfigured` | `tribe::create_tribe_configured` | Root + officer + member tiers in one call, each with a `VecMap<String, ProposalConfig>` bootstrap |
-| `submitVoteExecute` | `board_voting::submit_vote_execute<P>` | Returns the `ExecutionTicket<P>` a domain `execute_*` consumes; takes the DAO's `EmergencyFreeze` + `0x6` |
-| `submitProposal` | `board_voting::submit_proposal<P>` | Deferred path; creates the `Proposal<P>` |
-| `ticketFromVote` | `board_voting::ticket_from_vote<P>` | Ticket for an already-passed proposal |
-| `vote` | `proposal::vote<P>` | |
-| `tryExpire` | `proposal::try_expire<P>` | |
-| `newConfig` / `withComposableAllowed` | `proposal::new_config`, `proposal::with_composable_allowed` | `new_config` always builds `composable_allowed = false`; chain the second call to flip it |
-| `newFrame` / `addStep` / `submitComposite` | `composite::{new_frame, add_step<P>, submit_composite}` | Frame lifecycle in one PTB; `submit_composite` seals, shares, and creates the proposal |
-| `advanceStep` | `composite::advance_step<P>` | Per-step execution against the shared frame |
-| `treasuryDeposit` | `treasury_vault::deposit<T>` | **Permissionless.** Use `coinWithBalance({ useGasCoin: false })` — see §11 OQ-A2 |
+| `submitVoteExecute` | `board_voting::submit_vote_execute[_readonly]<P>(ou, metadata_ipfs, payload, freeze, clock)` | No `type_key` (cycle 7): `P` selects the slot. Creates **no** `Proposal` — the id is minted from the tx context, events are the audit trail. `_readonly` (cooldown-0 types) takes `&OU`, so the OU is an immutable input and concurrent single-vote executions stop contending on it |
+| `submitProposal` | `board_voting::submit_proposal<P>(ou, metadata_ipfs, payload, clock)` | The only path that shares a `Proposal<P>` |
+| `ticketFromVote` | `board_voting::ticket_from_vote[_readonly]<P>(ou, proposal, freeze, clock)` | Takes the proposal **by value and deletes it**; rebate to the gas payer; executor must be a CURRENT member; aborts after `passed_at + delay + expiry` |
+| `voteTx` | `board_voting::vote<P>(proposal, ou, approve, clock)` | Moved from `proposal::vote`; voters are the members at the proposal's snapshot roster version |
+| `appendDeleteExpiredProposal` / `deleteExpiredProposalTx` | `proposal::delete_expired_proposal<P>(proposal, clock)` | Replaces `try_expire`. Permissionless; Active past `created + expiry`, or Passed past its execution window |
+| `newConfig` | `proposal::new_config` + `with_composable_allowed` / `with_permissions` / `with_borrow_scope` | Chains whichever the input sets |
+| `typeNameOf` / `typeNameVec` | `ou::type_name_of<T>()` (+ `MakeMoveVec<TypeName>`) | `TypeName` cannot cross as pure |
+| `newTypeInit` / `typeInitVec` / `initBoard` | `ou::new_type_init<T>`, `governance::init_board` | Construction-time slots / board init |
+| `newFrame` / `addStep` / `submitComposite` | `composite::{new_frame, add_step<P> / add_enable_proposal_type_step / add_update_proposal_config_step, submit_composite}` | `addStep` picks the typed entry for the two grant-capable types |
+| `beginPipeline` / `advanceStep` / `finalizePipeline` / `appendDeleteExhaustedFrame` | `composite::*` | Execution pipeline; frame cleanup is permissionless |
+| `freezeTypeTx` / `unfreezeTypeTx` | `emergency::{freeze_type<P>, unfreeze_type<P>}` | `FreezeAdminCap` holder, no vote; keyed by Move type |
+| `publishEntryTx` … `removeEntryTx` | `encrypted_entry::*` | Member-gated by design, no vote, no bit |
+| `createOuTx` / `destroyOuTx` | `ou::{create, destroy}` | Standalone OU; permissionless cleanup of a migrating one |
+| `depositToTreasuryTx` / `claimTreasuryCoinsTx` (treasury.ts) | `treasury_vault::{deposit<T>, claim_coin<T>}` | Permissionless |
+| `createTribeTx` (create.ts) | `armature_proposals::tribe_setup::create_tribe_configured` | Enables the controller types with their bits on root + officers |
 
-> `<P>` is the payload Move type. The on-chain `type_key` is a **bare ascii name**
-> (`SetBoard`) while the type argument is fully qualified (`0xPKG::set_board::SetBoard`) —
-> the DAO's `type_bindings` map is what connects them, and generic payloads (`SendCoin<T>`,
-> `PlaceLimitOrder<Q>`) use the bare name as the key with the instantiated type as the
-> argument. Getting this pairing wrong is the single easiest way to produce a transaction
-> that aborts at `submit_*`.
+> `<P>` is the payload Move type, and since cycle 7 it is the WHOLE contract: the OU's
+> registry is keyed by `TypeName` (`with_defining_ids`), so there is no `type_key` to get
+> wrong and no binding map — the display key (`SetBoard`, `CharterUpdate`,
+> `SendCoin<…>`) is a label the chain records. The SDK therefore looks configs up by
+> Move type (`slotForType`), mapping `current → original` package ids first, and falls
+> back to the display key only for a read that carries no slots.
 
-### 6.2 Governance actions (`armature_proposals`) — `armature/actions.ts`
+### 6.2 Governance actions — `actions.ts`, `treasury.ts`, `lifecycle.ts`, `currency.ts`, `upgrade.ts`
 
 Not raw builders: each is an `OuProposalAction` carrying an `own` adapter (payload +
-`execute_*`) and, where the app wires one, a `control` adapter the parent uses via its
-`SubDAOControl` cap. The resolver picks between them. Full catalog in §13.2.
+`execute_*`) and/or a `control` adapter the parent uses via its `SubOUControl`. Adapters
+declare the permission bits / borrow scope their handler needs (`requiredPermissions`,
+`requiredBorrowScope`) so the resolver can refuse a type that would abort with
+`EPermissionDenied`. Full catalog in §13.2. Executing a PASSED proposal dispatches on
+its payload type (`executors.ts`: `executorForPayload`), reading objects named in the
+payload (a target treasury, a child unit) from the live object.
 
 ### 6.3 Trading (`armature_trading`, cycle 7) — `armature/trading.ts`
 
@@ -483,6 +518,29 @@ roles, decide.
 `not-permitted`. An action may set `fallbackPolicy: 'single-vote-only'` to refuse degrading
 into a slow proposal (the app uses this where a deferred proposal would be surprising).
 
+**Cycle 7 gates.** The ladder now also models the on-chain checks that would otherwise
+surface as an abort after signing — each as a per-candidate `blocker`:
+
+| Gate | Source | Effect |
+|---|---|---|
+| Permission bits / borrow scope | slot `config.permissions` / `borrow_scope` vs the adapter's `requiredPermissions` / `requiredBorrowScope` | BOTH tiers non-viable (`missing-permissions`) — a proposal that can never execute is not offered |
+| Pause / migration | OU root `execution_paused`, `controller_paused`, `status` | immediate tier only (`paused`); a migrating OU runs only `TransferAssets` |
+| Freeze | `EmergencyFreeze.frozen_types`, keyed by Move type | immediate tier only (`frozen`) |
+| Cooldown | slot `last_executed_ms + cooldown_ms` | immediate tier only (`cooldown`) |
+| Propose threshold | `propose_threshold > 1` (board weight is 1) | both tiers (`not-permitted`) |
+
+Board size comes from the OU root's `member_count` and membership from the roster table
+(`fetchIsBoardMember`) when available — both head-current — instead of the lagging
+indexer. A winning immediate strategy carries `readonly: true` when the type's cooldown
+is 0, and `plan.ts` then uses `submit_vote_execute_readonly`. When several gates apply,
+the block code names the most actionable (`missing-permissions` > `paused` > `frozen` >
+`cooldown` > `needs-slow-tier` > `not-permitted`).
+
+`privileged_submit` is NOT a strategy: it needs a `&SubOUControl`, which only a handler
+holding the loaned cap can produce, so the control strategies reach it through the
+`subou_ops` / `lifecycle_ops` handlers. Methods that act ON a unit take `unitId`, so a
+parent's board can act on a child it does not sit on (`OrgHandle.contextFor`).
+
 **`evaluatePaths()` returns every candidate with a reason**, viable or not, and
 `selectStrategy()` picks the first viable one from that same list. They are separate
 functions over one array specifically so a trace can never disagree with the decision —
@@ -491,7 +549,8 @@ can log *why* it ended up proposing.
 
 **Composite eligibility** (`canComposite`) is a batch concern, not a fifth strategy: a cart
 of same-tier `own-propose` actions collapses into one `Proposal<CompositePayload>` when the
-`Composite` type is enabled on the DAO, every step type is `composable_allowed`, and there
+unit has the `Composite` slot (a DEFAULT since cycle 7), every step type is
+`composable_allowed`, no step grants permission bits (`EGrantInComposite`), and there
 are ≤16 steps (`MAX_COMPOSITE_STEPS`, mirroring `composite.move`). There is no
 control-composite — composites run only against a DAO's own pipeline, so every action needs
 an `own` adapter.
@@ -505,11 +564,11 @@ than the HTTP layer and has no swagger to check against.
 
 | Module | Reads | Why not the indexer |
 |---|---|---|
-| `governance.ts` | `enabled_proposal_types` (VecSet), `proposal_configs` (VecMap), `type_bindings` (VecMap) | Not exposed by any route; the resolver needs it head-current, since a config change and an action can land in the same session |
-| `proposals.ts` | Snapshot weight, votes cast per address, decoded payload fields, composite `frameId` + per-step Move types, wall-clock-derived status | `GET /v1/orgs/{id}/proposals` is explicitly discovery-only — its own description says to read the live object when hydrating one proposal |
+| `governance.ts` | OU root (BCS: status, pause flags, `member_count`, roster table id, companion ids), every `ou::TypeSlot` dynamic field (BCS: display key, `ProposalConfig` incl. bits + scope, `last_executed_ms`), the `EmergencyFreeze` (BCS) | Cycle 7 moved the registry off the root into one dynamic field per type; the resolver needs it head-current |
+| `proposals.ts` | Live `Proposal<P>` (JSON — `P` sits mid-struct, so no BCS), capability vault (BCS), encrypted entries (BCS), composite frame step payloads | The indexer now carries each proposal's slot config at creation, but not snapshot weight or votes; an executed/expired proposal no longer exists on-chain at all |
 | `vault.ts` | `OuReceiptVaultRegistry` → `Table<VaultKey, ID>` dynamic field; per-asset balances (dynamic OBJECT fields keyed by the `u64` asset id → `getDynamicObjectField`); live ACL (Move enums: `@variant` in gRPC JSON, `variant`/`fields` in JSON-RPC) | Registry lookup is a BCS-keyed dynamic field; `/v1/hubs/{id}/dao-vaults` gives ACLs (`principal_kind` ∈ `player`/`machine`/`ou`), not balances |
 | `trading.ts` | `TradingAccount.owner` → `TradingCustody { ou_id, trading_account_id }` | The indexer does not index `TradingCustodyCreated`; the custody resolves from the account alone |
-| `treasury.ts` | `Balance<T>` and `MultiCoinBalance` dynamic fields on the `TreasuryVault` | No treasury-balance route exists |
+| `treasury.ts` | `Balance<T>` dynamic fields on the `TreasuryVault` (coins only since cycle 7) | No treasury-balance route exists |
 
 **Transport shape gotcha, and it bites every parser here:** Move structs cross in two
 shapes — gRPC proto-JSON exposes fields directly (`{ contents: [...] }`), JSON-RPC nests
@@ -532,7 +591,8 @@ tests pin that with an override).
 (`src/constants/tenants.ts`), same as DESIGN.md §8. Cycle 7 is a fresh publish of
 `armature`, `armature_proposals`, `armature_vault` and `armature_trading`, so every
 `*Original` currently equals its current id. Org trading also uses triex's `triexRegistry`
-(pool creation) and `triexFeePolicy` (every order handler) shared objects.
+(pool creation) and `triexFeePolicy` (every order handler) shared objects. Each Armature
+package carries flat `{ current, original }` siblings (D-A6):
 
 ```ts
 armature, armatureOriginal
@@ -542,23 +602,15 @@ armatureVault, armatureVaultOriginal              // equal after the cycle-7 fre
 ouReceiptVaultRegistry                            // shared object, not a package
 ```
 
-This introduces a config concept the current `PackageIds` does not model — an
-`{ current, original }` pair per package. Two options:
+**Cycle 7 is a fresh publish** (`Published.toml` → `testnet_stillness`): every
+`*Original` equals its id today, so the current/original split is dormant — but the
+resolver still maps `current → original` before matching slot types
+(`OrgHandle.aliases()` → `slotForType`), because a slot is keyed by the DEFINING id and
+the first upgrade would otherwise silently miss every config. `armature_world_bridge` is
+no longer configured (the app dropped it); its `AutojoinOU` self-join is excluded (§13.3).
 
-1. **Flat sibling fields** (`armatureVault` / `armatureVaultOriginal`), matching the app.
-2. **A `PackageRef = string | { current: string; original: string }`** normalized at
-   `resolvePackageIds()`, so `ids.armatureVault.original` is always addressable and a
-   never-upgraded package can still be written as a bare string.
-
-**Decided (Phase A): option 1.** Option 2 reads better in the abstract, but it changes an
-already-published type for a benefit that only three call sites will ever use, and it taxes
-the 95% case — `${ids.armature}::board_voting::…` is what nearly every builder writes, and
-`${ids.armature.current}::…` is strictly worse there. Flat siblings are additive, match
-`triex-app-api` field-for-field (so cross-referencing stays trivial), and keep the wrong id
-one grep away rather than one type error away. Revisit if a third package diverges and the
-`*Original` fields start being passed around as pairs.
-
----
+Option 2 (a `PackageRef` object) stays rejected for the reasons recorded at Phase A:
+`${ids.armature}::board_voting::…` is what nearly every builder writes.
 
 ## 10. Phasing
 
@@ -694,6 +746,28 @@ needed: every org route in §2 is already live (§13.1).
 > The gate stays green against the installed SDK (3.8.0, which predates the module) and
 > goes red the moment a version carrying it is installed.
 
+- **Phase F — Cycle 7 port. ✅ DONE 2026-10-01.** Ported against armature `main`
+  ("Cycle 7 (#171)") and triex-app-api `main` (diffed from `d2bf307`). What changed, by
+  layer:
+
+  - *Reads.* The registry is per-type dynamic fields keyed by Move type; governance is
+    read as OU root + slots + freeze, all BCS. Configs carry `permissions` and
+    `borrowScope`. Live proposal hydration (A8) landed — and returns null for an
+    executed/expired proposal, which cycle 7 deletes. Indexer schemas gained
+    `config` / `created_ms` / `metadata_ipfs`, `machine_grant`, `machine` principals.
+  - *Builders.* No `type_key` anywhere; `board_voting::vote` (takes the OU);
+    `delete_expired_proposal` replaces `try_expire`; `_readonly` entry points; typed
+    composite steps; `CompositePayload` in `composite_payload`; framework types moved
+    from `armature_proposals` into `armature`; `SetBoard` is a diff; controller handlers
+    lost their clock; `SendCoinToDAO` → `SendCoinToOU`; multicoin treasury reads removed.
+  - *Resolver.* Permission bits / scope, pause, freeze, cooldown, propose threshold,
+    chain-current board size and membership (§7); `runBatch` validates that every action
+    agrees on the strategy (OQ-A11 ruled (1)).
+  - *Surface.* Every first-party type and direct entry point is wrapped (§13.2): org
+    creation, currency, sub-unit lifecycle and control, freeze (cap holder + governance),
+    encrypted entries, upgrades, bypass opt-in/out, capability reads, small payments,
+    coin claims, expired-proposal and frame cleanup.
+
 ---
 
 ## 11. Decisions & open questions
@@ -712,9 +786,12 @@ needed: every org route in §2 is already live (§13.1).
 - **D-A6 — OQ-A1 resolved: flat sibling package-id fields** (`armature` /
   `armatureOriginal`). Rationale in §9.
 - **D-A8 — `RunOutcome` returns `blocked`; it does not throw.** Implemented as designed
-  (D-A2), and the handle proves out the reason: `members.add()` on a root unit blocks
-  because removal is control-only on-chain, which is a fact about the org's shape rather
-  than a caller error. Genuine failures still throw.
+  (D-A2), and the handle proves out the reason: a blocked result is a fact about the org's
+  shape or state (a slot lacking its permission bits, a paused unit, an active cooldown)
+  rather than a caller error. Genuine failures still throw. (Cycle 6's example — removal
+  on a root unit blocking because it was control-only — no longer holds: cycle 7 gives
+  every unit its own `BatchRemoveMembers`.) The handle also refreshes its cached chain
+  state after every successful governance write.
 - **D-A9 — The handle caches governance per DAO id, for its own lifetime.** `resolve()` and
   `run()` each need the acting unit's config AND its parent's; a bot resolving twenty
   actions against one seat should not read the same two objects forty times. Scoping the
@@ -756,14 +833,20 @@ needed: every org route in §2 is already live (§13.1).
 - **OQ-A3 — Metadata upload.** Org create and `metadata.update` need an uploaded URI. Take
   `metadataUri` as a required param (simple, honest), or accept a pluggable uploader the way
   keyspace accepts storage adapters (nicer, more surface). Leaning param-only for Phase B.
-- **OQ-A4 — `enableTrading({ baseType })` is a permanent footgun.** Passing `baseType` binds
+- **OQ-A4 — RESOLVED by cycle 7.** Each generic instantiation is its own slot, so enabling
+  `PlaceLimitOrderCoin<B, Q>` binds nothing else; coin pairs are enabled per base
+  (`orders.enableCoinPair`, `tradingTypeEntries(..., baseTypes)`). The original note:
+  `enableTrading({ baseType })` was a permanent footgun. Passing `baseType` binds
   the coin-order type keys (`PlaceLimitOrderCoin` / `CancelOrderCoin`) to **one** base coin,
   immutably on-chain; the org can then trade only that base through governance. Orgs created
   by `create_tribe_configured` already have the unbound keys registered and should leave it
   undefined. Needs a parameter name and doc comment that make the irreversibility
   unmissable — or a separate `enableCoinPoolTradingForBase()` method so it can't be passed
   by accident.
-- **OQ-A11 — `runBatch`'s contract: does it route, or does it batch? (needs a ruling)**
+- **OQ-A11 — RULED (1), cycle 7.** `runBatch` resolves every action and throws
+  `ValidationFailed` naming the disagreement when strategies differ (a blocked action
+  returns `blocked`). The original question:
+  `runBatch`'s contract: does it route, or does it batch?
 
   Today it resolves the FIRST action and applies that strategy to all of them, without
   checking the rest agree. For its intended use — enable N trading types, every one an
@@ -797,7 +880,9 @@ needed: every org route in §2 is already live (§13.1).
 - **OQ-A5 — Which composed sweeps are first-class?** `sweepAll` is clearly worth it. Whether
   `sweep()` should also accept a hand-built plan, or only ever compute its own, is a
   Phase-D call.
-- **OQ-A6 — `PauseSubDAOExecution` has no builder.** `create_tribe_configured` enables and
+- **OQ-A6 — RESOLVED.** `units.pause` / `units.unpause` (`PauseSubOUExecution` /
+  `UnpauseSubOUExecution`, control adapters). The original note: `PauseSubDAOExecution`
+  had no builder. `create_tribe_configured` enables and
   labels the type, and `ProposalConfigSettings` will render it, but nothing can submit one.
   Either wire it (small — `subdao/pause_execution.move` exists) or stop enabling it at
   creation. Worth raising against the app regardless of what this module does.
@@ -818,7 +903,10 @@ confirmation should use `untilIndexed` (already in the SDK) against
 `GET /v1/orgs/{org_id}`.
 
 **Edge 2 — a freshly created proposal is not in `/v1/orgs/{id}/proposals` yet.** Never poll
-for it. `submit_proposal` creates a `Proposal<P>` object, so the id comes out of the
+for it — and `vote` / `execute` / `deleteExpired` read the LIVE object first (payload type
+and owning OU), so they work before the indexer catches up. Cycle 7's single-PTB
+executions create no `Proposal` at all (`RunOutcome.proposalId` is then undefined, by
+design). `submit_proposal` still creates a `Proposal<P>` object, so the id comes out of the
 transaction's created objects — that is what `extractCreatedProposalId` does in the app and
 what populates `RunOutcome.proposalId`. Same rule as the trading module's balance-manager
 id: trust returned object ids over an immediate re-read.
@@ -852,51 +940,79 @@ GET /v1/world/tribes/{tribe_id}                    (20 CU)   # adjacent: game-wo
 
 Caching, per the swagger: orgs and keyspaces 5 min, DAO vaults 30 s.
 
-### 13.2 Action catalog (what the app wires)
+### 13.2 Coverage — every cycle-7 proposal type and entry point
 
-Each row is one `OuProposalAction` factory in `armature/actions.ts`. "Control" means a
-`Control*` adapter exists, so the parent can apply it to a child via its `SubDAOControl` cap.
+"Control" means the parent applies it to a child via its `SubOUControl` (the resolver is
+handed the CHILD's context). Bits are what the handler checks; framework types hold
+theirs on-chain by construction.
 
-| Action | `type_key` | Control | Notes |
+**armature_framework proposal types** (handlers in `armature::*_ops`)
+
+| Type (display key) | SDK | Path | Bits |
 |---|---|---|---|
-| Add members | `BatchAddMembers` | `ControllerBatchAddMembers` | Sub-DAOs are deny-by-default, so the control path is the usual one |
-| Remove members | `BatchRemoveMembers` | `ControllerBatchRemoveMembers` | |
-| Set board | `SetBoard` | — | |
-| Update metadata | `UpdateMetadata` | — | Charter name + metadata URI |
-| Update proposal config | `UpdateProposalConfig` | — | Every field an `Option`; `none` = keep current. Includes `composableAllowed` |
-| Enable proposal type | `EnableProposalType` | — | Generic; the payload names the target key + config, and `execute_enable_proposal_type<NewType>` binds the Move type |
-| ↳ Enable trading | via `EnableProposalType` | — | Batch over `tradingTypeEntries()`; `TRADING_TYPE_CONFIG` (quorum 1) so an officer acts in one tx |
-| ↳ Enable treasury withdraw | via `EnableProposalType` | — | **Per-coin key** — one DAO type key binds exactly one Move type, so `SendCoin<CRED>` and `SendCoin<X>` need separate keys |
-| ↳ Enable composite | via `EnableProposalType` | — | `COMPOSITE_TYPE_CONFIG` uses 8000bps approval to clear the on-chain `SELF_UPDATE_APPROVAL_FLOOR` |
-| Send coin | `SendCoin<T>` | — | `GOVERNANCE_TYPE_CONFIG` (5000bps) — a real board vote |
-| Send coin to DAO | `SendCoinToDao<T>` | — | |
-| Execute passed proposal | — | — | `ticket_from_vote<P>` → domain `execute_*`; needs the `type_key → Move type` map |
-| Execute composite step | — | — | Advances the shared frame one step at a time |
+| `SetBoard` | `members.setBoard({add, remove})` / `setBoardAction` | own | BOARD_SET (fixed) |
+| `AddMember` / `RemoveMember` | `addMemberAction` / `removeMemberAction`; executed via `governance.execute` | own | fixed |
+| `BatchAddMembers` / `BatchRemoveMembers` | `members.add` / `members.remove` | own (+ control below) | fixed |
+| `UpdateMetadata` (`CharterUpdate`) | `metadata.update` | own | METADATA (fixed) |
+| `EnableProposalType` | `types.enable` / `enableTrading` / `enableSendCoin*` / `enableSendSmallPayment` / `currency.enable` | own | TYPE_ADMIN (fixed); whole-board 80% |
+| `DisableProposalType` | `types.disable` | own | TYPE_ADMIN |
+| `UpdateProposalConfig` | `types.updateConfig` (incl. `permissions`, `borrowScope`) | own | TYPE_ADMIN; whole-board 80% |
+| `EnableBypassType` / `DisableBypassType` | `capabilities.enableBypass` / `disableBypass` | own (root only) | fixed |
+| `TransferFreezeAdmin` / `UnfreezeProposalType` | `freeze.transferAdmin` / `freeze.unfreeze` | own | FREEZE |
+| `UpdateFreezeConfig` / `UpdateFreezeExemptTypes` | `freeze.setMaxDuration` / `freeze.updateExempt` | own | FREEZE |
+| `CreateSubOU` / `SpawnOU` | `units.create` / `units.spawnSuccessor` | own | fixed, 80% |
+| `SpinOutSubOU` | `units.spinOut({unitId})` | control (parent's own type) | fixed, 80% |
+| `TransferAssets` | `units.transferAssets` (hot-potato execution) | own; runs while migrating | fixed, 80% |
+| `CompositePayload` (`Composite`) | `governance.runComposite` / `execute` | own | none |
 
-Two config presets carry real intent and should ship as named exports, not inline literals:
-`TRADING_TYPE_CONFIG` (quorum 1, 1 h expiry — operational, single-officer) and
-`GOVERNANCE_TYPE_CONFIG` (5000bps quorum *and* approval, 7 d expiry — governance-sensitive).
-Setting quorum and approval to the same value is deliberate: a token quorum would let one
-member pass a proposal alone and make the approval threshold meaningless.
+**armature_proposals types**
 
-### 13.3 Armature Move modules deliberately out of scope
+| Type | SDK | Path | Bits / scope |
+|---|---|---|---|
+| `SendCoin<T>` / `SendCoinToOU<T>` | `treasury.send` / `treasury.sendToOrg` | own | TREASURY_WITHDRAW |
+| `SendSmallPayment<T>` | `treasury.sendSmall` | own | TREASURY_WITHDRAW |
+| `AdoptCurrency<T>` | `currency.adopt` | own | VAULT_STORE |
+| `MintCoin<T>` / `MintAllowance<T>` | `currency.mint` / `currency.mintAllowance` | own | VAULT_BORROW · `TreasuryCap<T>` |
+| `BurnCoin<T>` | `currency.burn` | own | TREASURY_WITHDRAW + VAULT_BORROW · `TreasuryCap<T>` |
+| `ReturnCurrencyCap<T>` | `currency.returnCap` | own | VAULT_EXTRACT |
+| `ConfigureMintAllowance<T>` | `currency.configureAllowance` | own | none |
+| `ControllerBatchAddMembers` / `…RemoveMembers` | `members.add` / `members.remove` | control | VAULT_BORROW · `SubOUControl` |
+| `PauseSubOUExecution` / `UnpauseSubOUExecution` | `units.pause` / `units.unpause` | control | VAULT_BORROW · `SubOUControl` |
+| `TransferCapToSubOU` | `units.transferCap` | control | VAULT_EXTRACT |
+| `ReclaimCapFromSubOU` | `units.reclaimCap` | control | VAULT_BORROW + VAULT_STORE · `SubOUControl` |
+| `ProposeUpgrade` | `upgrade.propose` / `execute(id, {upgrade})` | own | VAULT_BORROW · `UpgradeCap` |
+| `tribe_setup::create_tribe[_configured]` | `orgs.create` | direct | — |
+| `type_permissions::*` | mirrored as `PERMISSIONS` / `currencyTypeEntries` / `tradingTypeEntries` | pure | — |
 
-Published in `armature` / `armature_proposals` / `armature_trading` but **not wired by
-triex-app-api**, so excluded per the module's scope. Listed so adding one later is a lookup,
-not an audit.
+**Direct entry points (no vote)** — `board_voting::{vote, submit_*, ticket_from_vote*}`,
+`proposal::delete_expired_proposal`, `composite::*` incl. `delete_exhausted_frame`,
+`treasury_vault::{deposit, claim_coin}`, `emergency::{freeze_type, unfreeze_type}`,
+`encrypted_entry::{publish, update, edit, rotate_encryption_epoch, remove}_entry`,
+`ou::{create, destroy}`, `currency_ops::mint_allowance_bypass`.
 
-```
-currency/   adopt_currency, mint_coin, mint_allowance, burn_coin, return_currency_cap
-security/   transfer_freeze_admin, unfreeze_proposal_type, update_freeze_config,
-            update_freeze_exempt_types
-subdao/     create_subdao, spawn_dao, spin_out_subdao, transfer_assets,
-            transfer_cap_to_subdao, reclaim_cap_from_subdao, pause_execution
-treasury/   send_batch_multicoin_to_address, send_batch_multicoin_to_dao,
-            send_small_payment, multicoin_item
-admin/      disable_proposal_type
-upgrade/    propose_upgrade, upgrade_ops
-framework/  external_execution, encrypted_entry, spend_guard
-```
+Config presets ship as named exports: `TRADING_TYPE_CONFIG` (quorum 1, 1h),
+`GOVERNANCE_TYPE_CONFIG` (50/50, 7d, no bits), `TREASURY_TYPE_CONFIG` (50/80 +
+TREASURY_WITHDRAW — the 80% floor that bit requires), `WHOLE_BOARD_TYPE_CONFIG` (80/100 —
+the framework default for the type-admin meta-types), `COMPOSITE_TYPE_CONFIG` (50/80),
+`HIERARCHY_TYPE_CONFIG` (80/80).
 
-`pause_execution` is the odd one out — the app enables `PauseSubDAOExecution` at org
-creation and labels it in the UI, but ships no builder (OQ-A6).
+### 13.3 Exclusions — what cannot be exposed safely (cycle 7)
+
+| Entry point | Why |
+|---|---|
+| `controller::{privileged_submit, privileged_consume, privileged_extract, receive_cap_from_controller, assert_registered_control}` | Need a `&SubOUControl`, which only exists inside a handler that loaned it from the parent's vault — reached through the `subou_ops` / `lifecycle_ops` control actions |
+| `external_execution::ticket_from_cap[_readonly]` | Need `Permit<P>`, mintable only by `P`'s own module; the first-party bypass is wrapped as `currency.mintWithAllowance` |
+| `tribe::create_wired_subou` | Needs an `ExecutionRequest` (`ticket_request` needs `Permit<P>`) — handler-only |
+| `tribe::create_tribe[_configured]` (framework) | Superseded by `tribe_setup` (same tree, controls usable); the framework form leaves them dormant |
+| `ou::{create_subou, create_subou_configured, share_subou}` | Produce an orphan sub-OU whose controller id nothing can hold (the `SubOUControl` constructor is package-internal); `units.create` is the safe path |
+| `ou::set_execution_paused` (PAUSE bit) | No first-party payload type holds PAUSE; a third-party type's handler would call it |
+| `capability_vault::*` request-taking mutators, `borrow_external_cap` | Handler plumbing (request-gated) / a borrow with no effect outside a bypass mint |
+| `admin_ops::propose_update_proposal_config` | A submission wrapper whose extra check the OU already enforces on every stored config; `submit_proposal<UpdateProposalConfig>` is equivalent |
+| `encrypted_entry::seal_approve` | `entry` fun for the Seal key server's dry-run, not a transaction to send (decryption lives in `@trinaryex/keyspace`) |
+| `spend_guard::*`, `utils::*`, `permissions::*`, accessors | Pure library values / reads with no transaction of their own (bits mirrored as `PERMISSIONS`) |
+| `armature_world_bridge` (`AutojoinOU`) | Not configured in the SDK (the app dropped it); world-bridge self-join is a game-client flow |
+| `armature_trading::*` | Owned by the trading module (`trading.ts`, `org.orders`) |
+
+`encrypted_entry` is member-gated by design — any current board member may publish,
+edit, re-key or remove with no permission bit — and the SDK exposes it as such
+(`org.entries`, plain `TxResult`).

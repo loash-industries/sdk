@@ -26,6 +26,7 @@ import {
 } from '../src/armature/vault'
 import { resolvePackageIds } from '../src/config'
 import { TriexError } from '../src/errors'
+import { mockOuChain } from './helpers/ouChain'
 
 const hex = (pair: string) => `0x${pair.repeat(32)}`
 const ids = resolvePackageIds('testnet')
@@ -656,6 +657,12 @@ function harness(
     captured.txs.push(tx as Transaction)
     return { digest: 'D1', objectChanges: [] }
   })
+  // Governance itself is stubbed (`gov` below); the shared fake fullnode
+  // serves only the cycle-7 roster reads.
+  const chain = mockOuChain({
+    [ROOT]: { members: [ALICE], slots: [] },
+    [OFFICERS]: { members: [ALICE], slots: [] },
+  })
   const accountContent = new Uint8Array(80)
   accountContent.set(bcs.Address.serialize(CUSTODY).toBytes(), 32)
   const getObject = jest.fn(async ({ objectId }: any) => {
@@ -684,9 +691,15 @@ function harness(
         },
       }
     }
-    throw new Error(`unexpected getObject ${objectId}`)
+    return chain.core.getObject({ objectId })
   })
-  const getDynamicField = jest.fn(async ({ name }: any) => {
+  const getDynamicField = jest.fn(async (args: any) => {
+    try {
+      return await chain.core.getDynamicField(args)
+    } catch {
+      // not a roster read — fall through to the vault registry mock
+    }
+    const { name } = args
     // Decode the real VaultKey so the mock is keyed by BOTH halves — which is
     // the property under test: a vault is (storage unit, organization), and one
     // half matching is not a hit.
@@ -711,6 +724,7 @@ function harness(
     {
       suiClient: {
         core: {
+          ...chain.core,
           getObject,
           getDynamicField,
           getCoins: async () => ({ objects: [] }),

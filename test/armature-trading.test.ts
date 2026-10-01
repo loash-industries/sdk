@@ -804,6 +804,8 @@ describe('orders through the handle', () => {
     })
     expect(outcome).toEqual({ status: 'executed', digest: 'D1' })
     const tx = captured.txs[0]
+    // runAtomic bundles steps through the `&mut` entry point whatever the
+    // cooldown; only governance.run picks `_readonly`.
     expect(commandNames(tx)).toEqual([
       'place_limit_order::new',
       'board_voting::submit_vote_execute',
@@ -1196,7 +1198,7 @@ describe('orders through the handle', () => {
     })
     expect(commandNames(captured.txs[0])).toEqual([
       'setup_trading_account::new',
-      'board_voting::submit_vote_execute',
+      'board_voting::submit_vote_execute_readonly',
       'trading_ops::execute_setup_trading_account',
     ])
     // The tree still shows no account (indexer lag) — a second call must not
@@ -1218,8 +1220,9 @@ describe('orders through the handle', () => {
     })
     await handle.orders.enableCoinPair({ baseType: BASE })
     const names = commandNames(captured.txs[0])
+    // EnableProposalType has cooldown 0 here, so runBatch takes `_readonly`.
     expect(
-      names.filter((n) => n === 'board_voting::submit_vote_execute'),
+      names.filter((n) => n === 'board_voting::submit_vote_execute_readonly'),
     ).toHaveLength(2)
   })
 

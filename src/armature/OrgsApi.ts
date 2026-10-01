@@ -1,4 +1,13 @@
+import type { ClientWithCoreApi } from '@mysten/sui/client'
+
+import { TriexClientError, TriexError } from '../errors'
+import { executeAndNormalize } from '../execute'
 import type { IndexerClient } from '../queries'
+import type { PackageIds, TransactionExecutor, TxResult } from '../types'
+import { createTribeTx, tradingTypeInits, type TypeInitInput } from './create'
+import { fetchOuState } from './governance'
+import { fetchCapabilityVault } from './proposals'
+import { createOuTx } from './transactions'
 import { flattenOrg, resolveSeat, seatsFor, tradingNode } from './tree'
 import type {
   AccessibleKeyspace,
@@ -37,7 +46,7 @@ export class OrgsApi {
 
   /**
    * A2 — one organization with its full unit tree. Any unit id in the tree
-   * resolves to the TOP-LEVEL organization, so a sub-DAO id is a valid handle
+   * resolves to the TOP-LEVEL organization, so a sub-OU id is a valid handle
    * on the whole graph.
    * @throws `OrgNotFound` when nothing resolves.
    */
@@ -163,5 +172,195 @@ export class OrgsApi {
     return node?.tradingAccountId
       ? { tradingAccountId: node.tradingAccountId, node }
       : null
+  }
+}
+
+// ─── Creating organizations (needs a signer) ─────────────────────────────────
+
+/** Parameters for `orgs.create` — a three-tier organization in one call. */
+export interface CreateOrgParams {
+  name: string
+  metadataUri: string
+  /** Officers (the caller is always added). */
+  officers?: string[]
+  /** Line members (the caller is always added). */
+  members?: string[]
+  /** Root board; defaults to `[caller]`. */
+  board?: string[]
+  officerName?: string
+  memberName?: string
+  officerMetadataUri?: string
+  memberMetadataUri?: string
+  /** Receives both sub-units' `FreezeAdminCap`s; defaults to the caller. */
+  freezeAdmin?: string
+  /**
+   * Enable every `armature_trading` type on the officer unit at creation
+   * (single-vote), so the org can trade at once. Default true.
+   */
+  enableTrading?: boolean
+  /** Quote coin the trading types are instantiated at; defaults to CRED. */
+  quoteType?: string
+  /** Extra `ou::ProposalTypeInit`s per tier, applied after the defaults. */
+  overrides?: {
+    org?: TypeInitInput[]
+    officers?: TypeInitInput[]
+    members?: TypeInitInput[]
+  }
+}
+
+/** The result of `orgs.create`: the three unit ids, resolved from chain. */
+export interface CreatedOrg {
+  /** Root ("org") unit — the id every `client.org()` call takes. */
+  orgId: string
+  officersId: string
+  membersId: string
+  tx: TxResult
+}
+
+/** What creating needs beyond the read surface. */
+export interface OrgsWriteDeps {
+  suiClient: ClientWithCoreApi
+  ids: PackageIds
+  requireExecutor: () => TransactionExecutor
+}
+
+/**
+ * `OrgsApi` plus organization CREATION — the shape of `TriexClient.orgs`
+ * (`ReadOnlyClient.orgs` stays the read-only base).
+ */
+export class OrgsWriteApi extends OrgsApi {
+  constructor(
+    indexer: IndexerClient,
+    private readonly addressOf: (override?: string) => string,
+    private readonly w: OrgsWriteDeps,
+  ) {
+    super(indexer, addressOf)
+  }
+
+  /**
+   * B1 — create an organization: root + officers + members units, controls
+   * wired and the controller types enabled
+   * (`armature_proposals::tribe_setup::create_tribe_configured`). The caller
+   * sits on all three boards; the root's `FreezeAdminCap` goes to the caller.
+   *
+   * The SDK does not host metadata — pass URIs you already uploaded.
+   */
+  async create(params: CreateOrgParams): Promise<CreatedOrg> {
+    const me = this.addressOf()
+    const withMe = (xs: string[] = []) => [...new Set([me, ...xs])]
+    const { ids } = this.w
+    const officerOverrides = [
+      ...(params.enableTrading === false || !ids.armatureTrading
+        ? []
+        : tradingTypeInits(
+            ids.armatureTrading,
+            params.quoteType ?? ids.credCoinType,
+          )),
+      ...(params.overrides?.officers ?? []),
+    ]
+    const tx = createTribeTx({
+      armature: ids.armature,
+      armatureProposals: ids.armatureProposals,
+      tribeBoard: params.board ?? [me],
+      officers: withMe(params.officers),
+      members: withMe(params.members),
+      tribeName: params.name,
+      officerName: params.officerName ?? `${params.name} Officers`,
+      memberName: params.memberName ?? `${params.name} Members`,
+      tribeMetadataUri: params.metadataUri,
+      officerMetadataUri: params.officerMetadataUri ?? params.metadataUri,
+      memberMetadataUri: params.memberMetadataUri ?? params.metadataUri,
+      officerFreezeAdmin: params.freezeAdmin ?? me,
+      memberFreezeAdmin: params.freezeAdmin ?? me,
+      tribeOverrides: params.overrides?.org,
+      officerOverrides,
+      memberOverrides: params.overrides?.members,
+    })
+    const res = await executeAndNormalize(this.w.requireExecutor(), tx)
+    const result: TxResult = {
+      digest: res.digest,
+      createdObjects: res.createdObjects,
+      raw: res.raw,
+    }
+    const ouIds = res.createdObjects
+      .filter((o) => /::ou::OU$/.test(o.objectType))
+      .map((o) => o.objectId)
+    const tiers = await this.identifyTiers(ouIds)
+    return { ...tiers, tx: result }
+  }
+
+  /**
+   * A single standalone OU (`ou::create`) — default slots, no parent, no
+   * children. Returns its id from the transaction's effects.
+   */
+  async createStandalone(params: {
+    name: string
+    metadataUri: string
+    board?: string[]
+  }): Promise<{ ouId: string | undefined; tx: TxResult }> {
+    const tx = createOuTx({
+      armature: this.w.ids.armature,
+      board: params.board ?? [this.addressOf()],
+      name: params.name,
+      metadataUri: params.metadataUri,
+    })
+    const res = await executeAndNormalize(this.w.requireExecutor(), tx)
+    return {
+      ouId: res.createdObjects.find((o) => /::ou::OU$/.test(o.objectType))
+        ?.objectId,
+      tx: {
+        digest: res.digest,
+        createdObjects: res.createdObjects,
+        raw: res.raw,
+      },
+    }
+  }
+
+  /** @internal — which created OU is the root, the officers, the members. */
+  private async identifyTiers(
+    ouIds: string[],
+  ): Promise<{ orgId: string; officersId: string; membersId: string }> {
+    if (ouIds.length !== 3) {
+      throw new TriexClientError(
+        TriexError.UnexpectedResponse,
+        `Expected the transaction to create 3 OUs, saw ${ouIds.length} — the executor may not surface created objects.`,
+      )
+    }
+    const states = await Promise.all(
+      ouIds.map((id) => fetchOuState(this.w.suiClient, id)),
+    )
+    const rootIdx = states.findIndex((s) => !s.controllerCapId)
+    if (rootIdx < 0) {
+      throw new TriexClientError(
+        TriexError.UnexpectedResponse,
+        'Could not tell the root unit apart: every created OU has a controller.',
+      )
+    }
+    // The root's vault holds the officers' SubOUControl; the officers' vault
+    // holds the members'.
+    const rootVault = await fetchCapabilityVault(
+      this.w.suiClient,
+      states[rootIdx].capabilityVaultId,
+    )
+    const held = new Set(rootVault.capIds.map((x) => x.toLowerCase()))
+    const others = ouIds
+      .map((id, i) => ({ id, s: states[i] }))
+      .filter((_, i) => i !== rootIdx)
+    const officers = others.find(
+      (o) =>
+        !!o.s.controllerCapId && held.has(o.s.controllerCapId.toLowerCase()),
+    )
+    const members = others.find((o) => o !== officers)
+    if (!officers || !members) {
+      throw new TriexClientError(
+        TriexError.UnexpectedResponse,
+        'Could not tell the officers unit from the members unit.',
+      )
+    }
+    return {
+      orgId: ouIds[rootIdx],
+      officersId: officers.id,
+      membersId: members.id,
+    }
   }
 }

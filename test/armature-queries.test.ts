@@ -215,6 +215,114 @@ describe('OrgQueries request building', () => {
     })
   })
 
+  it('parses the cycle-7 proposal fields: config, created_ms, metadata_ipfs', async () => {
+    mockFetch([
+      [
+        {
+          proposal_id: ORG,
+          org_id: OFFICERS,
+          type_key: 'SendCoin<0x2::sui::SUI>',
+          proposer: ADDR,
+          status: 'executed',
+          yes_weight: 2,
+          no_weight: 0,
+          payload_type: '0x2::send_coin::SendCoin<0x2::sui::SUI>',
+          frame_id: null,
+          created_checkpoint: 9,
+          metadata_ipfs: 'ipfs://why',
+          created_ms: 1_700_000_000_000,
+          config: {
+            quorum: 5000,
+            approval_threshold: 8000,
+            propose_threshold: '0',
+            expiry_ms: '604800000',
+            execution_delay_ms: '0',
+            cooldown_ms: '60000',
+            composable_allowed: false,
+            permissions: '128',
+            borrow_scope: ['0x2::package::UpgradeCap'],
+          },
+        },
+        // An older indexer build without the cycle-7 fields still parses.
+        {
+          proposal_id: OFFICERS,
+          org_id: OFFICERS,
+          type_key: null,
+          proposer: null,
+          status: 'pending',
+          yes_weight: 0,
+          no_weight: 0,
+          payload_type: null,
+          frame_id: null,
+          created_checkpoint: 1,
+        },
+      ],
+    ])
+    const [p, old] = await new IndexerClient(
+      'https://api.test',
+      'k',
+    ).orgs.proposals(ORG)
+    expect(p.metadataIpfs).toBe('ipfs://why')
+    expect(p.createdMs).toBe(1_700_000_000_000)
+    expect(p.config).toMatchObject({
+      quorum: 5000,
+      approvalThreshold: 8000,
+      expiryMs: 604_800_000,
+      cooldownMs: 60_000,
+      permissions: 128,
+      borrowScope: [`0x${'0'.repeat(63)}2::package::UpgradeCap`],
+    })
+    expect(old).toMatchObject({
+      config: null,
+      createdMs: null,
+      metadataIpfs: null,
+    })
+  })
+
+  it('accepts machine grants and machine vault principals (cycle 7)', async () => {
+    mockFetch([
+      [
+        {
+          acl_id: ORG,
+          matched_org_id: null,
+          name: 'bots',
+          registrant_org_id: null,
+          match_via: 'machine_grant',
+          roles: ['read'],
+        },
+      ],
+    ])
+    const rows = await new IndexerClient(
+      'https://api.test',
+      'k',
+    ).orgs.accessibleKeyspaces(ADDR)
+    expect(rows[0].matchVia).toBe('machine_grant')
+
+    mockFetch([
+      [
+        {
+          vault_id: ORG,
+          registrant_dao_id: OFFICERS,
+          hub_id: ORG,
+          collection_id: ORG,
+          status: 'active',
+          acl: [
+            {
+              role: 'deposit',
+              principal_kind: 'machine',
+              principal_value: ADDR,
+            },
+          ],
+        },
+      ],
+    ])
+    const [v] = await new IndexerClient(
+      'https://api.test',
+      'k',
+    ).orgs.vaultsAtHub(ORG)
+    expect(v.acl[0].principal).toEqual({ kind: 'machine', value: ADDR })
+  })
+
   it('passes the keyspace role filter through', async () => {
     const fetchMock = mockFetch([
       [

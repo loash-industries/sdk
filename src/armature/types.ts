@@ -61,7 +61,7 @@ export interface OrgSearchParams {
 // ─── Control-tree graph (see tree.ts) ───────────────────────────────────────
 
 /**
- * One DAO in an organization's control tree, flattened out of the nested
+ * One OU (organizational unit) in an organization's control tree, flattened out of the nested
  * `Org.ous` shape and addressable by `daoId`.
  *
  * Capabilities live on the node, so callers address by identity + capability
@@ -83,7 +83,7 @@ export interface OrgNode {
   /** This unit's own governance board. */
   members: string[]
   tradingAccountId: string | null
-  /** The parent's `SubDAOControl` cap pointing here. Null at the root. */
+  /** The parent's `SubOUControl` cap pointing here. Null at the root. */
   subdaoControlCapId: string | null
   /**
    * Depth-derived role label. Open set — today `admin` / `officer` / `member`,
@@ -101,14 +101,14 @@ export interface OrgSeat extends OrgNode {
   address: string
 }
 
-/** Parent linkage for a sub-DAO — absent for a top-level organization. */
+/** Parent linkage for a sub-OU — absent for a top-level organization. */
 export interface OuParent {
   daoId: string
   board: string[]
   emergencyFreezeId: string
-  /** Parent's CapabilityVault holding the `SubDAOControl` cap over this child. */
+  /** Parent's CapabilityVault holding the `SubOUControl` cap over this child. */
   capVaultId: string
-  /** The `SubDAOControl` cap id pointing at this child. */
+  /** The `SubOUControl` cap id pointing at this child. */
   controlCapId: string
 }
 

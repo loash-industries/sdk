@@ -305,16 +305,39 @@ export type {
 
 // ─── Armature: governance core ───────────────────────────────────────────────
 export {
+  BYPASS_FORBIDDEN_PERMISSIONS,
+  configFromBcs,
+  cooldownEndsAt,
   fetchDaoGovernance,
+  fetchFreezeState,
+  fetchIsBoardMember,
+  fetchOuState,
   fetchProposalConfig,
-  parseEnabledProposalTypes,
-  parseProposalConfigs,
-  parseTypeBindings,
+  fetchTypeSlots,
+  governanceFromSlots,
+  hasPermissions,
+  HIGH_IMPACT_PERMISSIONS,
+  normalizeMoveType,
+  packageAliases,
+  parseFreezeState,
+  parseOuState,
+  parseTypeSlot,
+  permissionFloor,
+  PERMISSIONS,
+  remapPackages,
   singleVoteExecutable,
+  slotForType,
 } from './armature/governance'
-export type { DaoGovernance, ProposalConfig } from './armature/governance'
+export type {
+  DaoGovernance,
+  FreezeState,
+  OuState,
+  ProposalConfig,
+  TypeSlot,
+} from './armature/governance'
 export {
   canComposite,
+  capabilitiesFor,
   COMPOSITE_TYPE_KEY,
   evaluatePaths,
   MAX_COMPOSITE_STEPS,
@@ -346,39 +369,125 @@ export {
   extractCreatedProposalId,
   resolveExecutionPlan,
 } from './armature/plan'
-export type { CompositeStep } from './armature/plan'
+export type { CompositeStep, PlanOptions } from './armature/plan'
 export * as armatureTransactions from './armature/transactions'
 export type { ProposalConfigInput } from './armature/transactions'
 export {
+  addMemberAction,
   addMembersAction,
-  compositeStepExecutor,
   COMPOSITE_TYPE_CONFIG,
+  DEFAULT_SLOT_TYPES,
+  disableBypassTypeAction,
+  disableProposalTypeAction,
+  enableBypassTypeAction,
   enableCompositeAction,
   enableProposalTypeAction,
   enableSendCoinAction,
-  enableSendCoinToDaoAction,
+  enableSendCoinToOuAction,
   enableTradingActions,
+  genericTypeKey,
   GOVERNANCE_TYPE_CONFIG,
-  passedProposalAction,
+  removeMemberAction,
   removeMembersAction,
-  sendCoinToDaoTypeKey,
+  sendCoinToOuTypeKey,
   sendCoinTypeKey,
   setBoardAction,
+  subOuControlType,
   tradingTypeEntries,
   TRADING_TYPE_CONFIG,
+  TREASURY_TYPE_CONFIG,
   updateMetadataAction,
   updateProposalConfigAction,
+  WHOLE_BOARD_TYPE_CONFIG,
 } from './armature/actions'
-export type { ArmaturePkgs, ProposalConfigPatch } from './armature/actions'
+export type {
+  ArmaturePkgs,
+  ProposalConfigPatch,
+  TradingTypeEntry,
+} from './armature/actions'
+export {
+  compositeStepExecutor,
+  defaultSlotType,
+  executorForPayload,
+  passedProposalAction,
+  splitMoveType,
+} from './armature/executors'
+export type {
+  PassedExecutionContext,
+  PassedExecutor,
+} from './armature/executors'
+export {
+  appendTransferAssets,
+  createSubOuAction,
+  HIERARCHY_TYPE_CONFIG,
+  pauseSubOuAction,
+  reclaimCapFromSubOuAction,
+  spawnOuAction,
+  spinOutSubOuAction,
+  transferAssetsAction,
+  transferCapToSubOuAction,
+  transferFreezeAdminAction,
+  unfreezeProposalTypeAction,
+  unpauseSubOuAction,
+  updateFreezeConfigAction,
+  updateFreezeExemptTypesAction,
+} from './armature/lifecycle'
+export type { SpinOutConfigs } from './armature/lifecycle'
+export {
+  adoptCurrencyAction,
+  burnCoinAction,
+  configureMintAllowanceAction,
+  currencyTypeEntries,
+  mintAllowanceAction,
+  mintAllowanceBypassTx,
+  mintCoinAction,
+  returnCurrencyCapAction,
+  treasuryCapType,
+} from './armature/currency'
+export type { CurrencyTypeEntry } from './armature/currency'
+export {
+  appendUpgradeExecution,
+  proposeUpgradeAction,
+  UPGRADE_POLICY,
+} from './armature/upgrade'
+export type { UpgradeBuild } from './armature/upgrade'
+export { createTribeTx, tradingTypeInits } from './armature/create'
+export type { CreateTribeParams, TypeInitInput } from './armature/create'
+export {
+  capTypeOf,
+  fetchCapabilityVault,
+  fetchEncryptedEntries,
+  fetchFrameStepPayload,
+  fetchProposal,
+  isDeletable,
+  isExecutable,
+  parseCapabilityVault,
+  parseLiveProposal,
+  parseProposalConfigJson,
+  payloadTypeOf,
+} from './armature/proposals'
+export type {
+  CapabilityVaultContents,
+  EncryptedEntry,
+  LiveProposal,
+} from './armature/proposals'
+export { OrgsWriteApi } from './armature/OrgsApi'
+export type {
+  CreatedOrg,
+  CreateOrgParams,
+  OrgsWriteDeps,
+} from './armature/OrgsApi'
+export type { ExecuteOptions, RunOptions } from './armature/OrgClient'
 
 // ─── Armature: treasury & organization trading ───────────────────────────────
 export {
+  claimTreasuryCoinsTx,
   depositToTreasuryTx,
   fetchTreasuryCoinBalance,
   fetchTreasuryCoinBalances,
-  fetchTreasuryItemBalance,
   sendCoinAction,
-  sendCoinToDaoAction,
+  sendCoinToOuAction,
+  sendSmallPaymentAction,
   toTypeNameKey,
 } from './armature/treasury'
 export type { TreasuryCoinBalance } from './armature/treasury'
@@ -394,7 +503,6 @@ export {
   depositFromOuVaultToBookAction,
   extractCreatedTradingCustody,
   fetchTradingCustody,
-  normalizeMoveType,
   placeLimitOrderAction,
   placeLimitOrderCoinAction,
   placeMarketOrderAction,

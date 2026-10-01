@@ -68,7 +68,7 @@ export function flattenOrg(org: Org): OrgNode[] {
   return nodes
 }
 
-/** A node by DAO id, or null. */
+/** A node by unit (OU) id, or null. */
 export function nodeById(
   nodes: readonly OrgNode[],
   daoId: string | null | undefined,
@@ -135,8 +135,8 @@ export function resolveSeat(
  * object, plus the parent linkage that makes the `control-*` strategies
  * possible.
  *
- * The parent linkage needs four things to exist together — the parent's DAO,
- * its `EmergencyFreeze`, its `CapabilityVault`, and the `SubDAOControl` cap on
+ * The parent linkage needs four things to exist together — the parent OU,
+ * its `EmergencyFreeze`, its `CapabilityVault`, and the `SubOUControl` cap on
  * the parent pointing at THIS child (which the indexer hands us as the child's
  * own `subdaoControlCapId`). Any one missing means no control path, and
  * `parent` is left undefined so the resolver simply never offers those
@@ -176,7 +176,7 @@ export function execContextFor(
 }
 
 /**
- * Find a unit by DAO id across several organizations — e.g. labelling a
+ * Find a unit by OU id across several organizations — e.g. labelling a
  * counterparty from an order book against everything the caller belongs to.
  * Null when it belongs to none of them, so callers can fall back to the raw id.
  */

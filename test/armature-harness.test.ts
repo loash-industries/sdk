@@ -1,13 +1,23 @@
 import {
   canComposite,
+  capabilitiesFor,
   evaluatePaths,
   MAX_COMPOSITE_STEPS,
   type OuCapabilities,
   type OuProposalAction,
   selectStrategy,
 } from '../src/armature/harness'
-import type { DaoGovernance, ProposalConfig } from '../src/armature/governance'
-import { singleVoteExecutable } from '../src/armature/governance'
+import type {
+  DaoGovernance,
+  OuState,
+  ProposalConfig,
+} from '../src/armature/governance'
+import {
+  governanceFromSlots,
+  normalizeMoveType,
+  PERMISSIONS,
+  singleVoteExecutable,
+} from '../src/armature/governance'
 import type { OuExecContext } from '../src/armature/types'
 
 const ALICE = '0xAAAA'
@@ -303,7 +313,7 @@ describe('evaluatePaths', () => {
       caps(),
       ALICE,
     )
-    expect(unenabled[0].detail).toBe('type not enabled on that DAO')
+    expect(unenabled[0].detail).toBe('type not enabled on that unit')
   })
 })
 
@@ -376,5 +386,270 @@ describe('canComposite', () => {
     expect(
       canComposite([composable(), action({ control: true })], gov()),
     ).toEqual({ eligible: false, reason: 'step-not-composable' })
+  })
+})
+
+// ─── Cycle 7 gates ──────────────────────────────────────────────────────────
+
+const state = (over: Partial<OuState> = {}): OuState => ({
+  status: 'active',
+  successorOuId: null,
+  executionPaused: false,
+  controllerPaused: false,
+  controllerCapId: null,
+  memberCount: 1,
+  rosterVersion: 1,
+  membersTableId: '0xtable',
+  treasuryId: '0xt',
+  capabilityVaultId: '0xv',
+  charterId: '0xc',
+  emergencyFreezeId: '0xf',
+  encryptEpoch: 0,
+  entries: [],
+  ...over,
+})
+
+/** An own action whose handler needs `bits` (and optionally a borrow scope). */
+function needing(bits: number, scope?: string[]): OuProposalAction {
+  const a = action({ own: true })
+  a.own!.requiredPermissions = bits
+  a.own!.requiredBorrowScope = scope
+  return a
+}
+
+describe('cycle 7 — permission bits', () => {
+  it('blocks with missing-permissions when the slot lacks the handler’s bits', () => {
+    const d = selectStrategy(
+      needing(PERMISSIONS.TREASURY_WITHDRAW),
+      ctxRoot,
+      caps({ ownConfig: config({ permissions: 0 }) }),
+      ALICE,
+    )
+    expect(d).toMatchObject({ blocked: true, code: 'missing-permissions' })
+    if (d.blocked) expect(d.reason).toContain('TREASURY_WITHDRAW')
+  })
+
+  it('passes once the slot holds them', () => {
+    const d = selectStrategy(
+      needing(PERMISSIONS.TREASURY_WITHDRAW),
+      ctxRoot,
+      caps({
+        ownConfig: config({ permissions: PERMISSIONS.TREASURY_WITHDRAW | 1 }),
+      }),
+      ALICE,
+    )
+    expect(d).toMatchObject({ strategy: 'own-execute' })
+  })
+
+  it('checks the borrow scope by canonical Move type', () => {
+    const scope = ['0x2::coin::TreasuryCap<0x2::sui::SUI>']
+    const blocked = selectStrategy(
+      needing(PERMISSIONS.VAULT_BORROW, scope),
+      ctxRoot,
+      caps({ ownConfig: config({ permissions: PERMISSIONS.VAULT_BORROW }) }),
+      ALICE,
+    )
+    expect(blocked).toMatchObject({ code: 'missing-permissions' })
+    const ok = selectStrategy(
+      needing(PERMISSIONS.VAULT_BORROW, scope),
+      ctxRoot,
+      caps({
+        ownConfig: config({
+          permissions: PERMISSIONS.VAULT_BORROW,
+          borrowScope: [normalizeMoveType(scope[0])],
+        }),
+      }),
+      ALICE,
+    )
+    expect(ok).toMatchObject({ strategy: 'own-execute' })
+  })
+
+  it('a proposal that could never execute is not offered either', () => {
+    const paths = evaluatePaths(
+      needing(PERMISSIONS.TREASURY_WITHDRAW),
+      ctxRoot,
+      caps({ ownConfig: config({ quorum: 6000 }) }),
+      ALICE,
+    )
+    expect(paths.find((p) => p.strategy === 'own-propose')).toMatchObject({
+      viable: false,
+      blocker: 'missing-permissions',
+    })
+  })
+})
+
+describe('cycle 7 — pause, freeze, cooldown, migration', () => {
+  it('a paused unit cannot execute, but can still propose', () => {
+    const d = selectStrategy(
+      action({ own: true }),
+      ctxRoot,
+      caps({ ownConfig: config(), ownState: state({ executionPaused: true }) }),
+      ALICE,
+    )
+    expect(d).toMatchObject({ strategy: 'own-propose', immediate: false })
+  })
+
+  it('a parent’s pause blocks single-vote-only actions with code paused', () => {
+    const d = selectStrategy(
+      action({ own: true, fallbackPolicy: 'single-vote-only' }),
+      ctxRoot,
+      caps({
+        ownConfig: config(),
+        ownState: state({ controllerPaused: true }),
+      }),
+      ALICE,
+    )
+    expect(d).toMatchObject({ blocked: true, code: 'paused' })
+  })
+
+  it('a frozen type blocks the immediate path until the freeze expires', () => {
+    const frozen = caps({
+      ownConfig: config(),
+      ownFrozenUntil: 2_000,
+      nowMs: 1_000,
+    })
+    expect(
+      selectStrategy(
+        action({ own: true, fallbackPolicy: 'single-vote-only' }),
+        ctxRoot,
+        frozen,
+        ALICE,
+      ),
+    ).toMatchObject({ blocked: true, code: 'frozen' })
+    expect(
+      selectStrategy(
+        action({ own: true }),
+        ctxRoot,
+        { ...frozen, nowMs: 3_000 },
+        ALICE,
+      ),
+    ).toMatchObject({ strategy: 'own-execute' })
+  })
+
+  it('an active cooldown blocks the immediate path, a lapsed one does not', () => {
+    const base = caps({
+      ownConfig: config({ cooldownMs: 1_000 }),
+      ownLastExecutedMs: 10_000,
+    })
+    expect(
+      selectStrategy(
+        action({ own: true, fallbackPolicy: 'single-vote-only' }),
+        ctxRoot,
+        { ...base, nowMs: 10_500 },
+        ALICE,
+      ),
+    ).toMatchObject({ blocked: true, code: 'cooldown' })
+    expect(
+      selectStrategy(
+        action({ own: true }),
+        ctxRoot,
+        { ...base, nowMs: 11_000 },
+        ALICE,
+      ),
+    ).toMatchObject({ strategy: 'own-execute', readonly: false })
+  })
+
+  it('picks the read-only entry point only for cooldown-free types', () => {
+    expect(
+      selectStrategy(
+        action({ own: true }),
+        ctxRoot,
+        caps({ ownConfig: config() }),
+        ALICE,
+      ),
+    ).toMatchObject({ strategy: 'own-execute', readonly: true })
+  })
+
+  it('a migrating unit only runs TransferAssets', () => {
+    const migrating = caps({
+      ownConfig: config(),
+      ownState: state({ status: 'migrating' }),
+    })
+    expect(
+      selectStrategy(action({ own: true }), ctxRoot, migrating, ALICE),
+    ).toMatchObject({ blocked: true, code: 'paused' })
+    const transfer = action({ own: true })
+    transfer.own!.payloadMoveType = '0x1::transfer_assets::TransferAssets'
+    expect(selectStrategy(transfer, ctxRoot, migrating, ALICE)).toMatchObject({
+      strategy: 'own-execute',
+    })
+  })
+
+  it('a propose threshold above one vote locks every member out', () => {
+    const d = selectStrategy(
+      action({ own: true }),
+      ctxRoot,
+      caps({ ownConfig: config({ proposeThreshold: 2 }) }),
+      ALICE,
+    )
+    expect(d).toMatchObject({ blocked: true, code: 'not-permitted' })
+  })
+
+  it('board size comes from the chain when known, not the lagging indexer', () => {
+    // Indexer says 1 member; the chain already has 3 → 5000bps no longer clears.
+    const d = selectStrategy(
+      action({ own: true }),
+      ctxRoot,
+      caps({
+        ownConfig: config({ quorum: 5000 }),
+        ownState: state({ memberCount: 3 }),
+      }),
+      ALICE,
+    )
+    expect(d).toMatchObject({ strategy: 'own-propose', voterBoardSize: 3 })
+  })
+
+  it('head-current membership overrides the indexer board', () => {
+    const d = selectStrategy(
+      action({ own: true }),
+      ctxRoot,
+      caps({ ownConfig: config(), callerOnOwnBoard: true }),
+      '0xjust-added',
+    )
+    expect(d).toMatchObject({ strategy: 'own-execute' })
+  })
+})
+
+describe('capabilitiesFor', () => {
+  it('looks configs up by Move type and carries freeze + cooldown facts', () => {
+    const own = governanceFromSlots(
+      [
+        {
+          typeName: normalizeMoveType('0x2::own::Own'),
+          displayKey: 'Renamed',
+          config: config({ cooldownMs: 5 }),
+          lastExecutedMs: 42,
+        },
+      ],
+      {
+        state: state(),
+        freeze: {
+          frozenTypes: new Map([[normalizeMoveType('0x2::own::Own'), 99]]),
+          exemptTypes: [],
+          maxFreezeDurationMs: 1,
+        },
+      },
+    )
+    const c = capabilitiesFor(action({ own: true }), own, undefined)
+    expect(c.ownConfig?.cooldownMs).toBe(5)
+    expect(c.ownLastExecutedMs).toBe(42)
+    expect(c.ownFrozenUntil).toBe(99)
+    expect(c.controlConfig).toBeNull()
+  })
+})
+
+describe('canComposite — cycle 7', () => {
+  it('refuses a step that grants permission bits', () => {
+    const gov: DaoGovernance = {
+      enabledTypes: new Set(['Composite', 'Own']),
+      configs: new Map([['Own', config({ composableAllowed: true })]]),
+      typeBindings: new Map(),
+    }
+    const grant = action({ own: true })
+    grant.grantsPermissions = true
+    expect(canComposite([action({ own: true }), grant], gov)).toEqual({
+      eligible: false,
+      reason: 'grant-in-composite',
+    })
   })
 })

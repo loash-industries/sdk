@@ -6,7 +6,7 @@ import type {
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 
 import { OrgHandle } from './armature/OrgClient'
-import { OrgsApi } from './armature/OrgsApi'
+import { OrgsWriteApi } from './armature/OrgsApi'
 import { CoinsApi } from './coins/CoinsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
@@ -180,11 +180,12 @@ export class TriexClient {
   readonly characters: CharactersApi
   readonly world: WorldApi
   /**
-   * Organization identity & discovery (Armature). Address-taking methods
-   * default to the configured player. Acting AS an organization lives on the
+   * Organization identity & discovery (Armature), plus `create()` /
+   * `createStandalone()`. Address-taking methods default to the configured
+   * player. Acting AS an organization lives on the
    * handle from `client.org(id)` — see DESIGN-ARMATURE.md §5.1.
    */
-  readonly orgs: OrgsApi
+  readonly orgs: OrgsWriteApi
   /**
    * Coin (currency-pair) markets on `triex::pool` — reads (fullnode +
    * `/v1/coins`) and trading. See DESIGN-COINS.md.
@@ -209,7 +210,15 @@ export class TriexClient {
     this.routing = new RoutingApi(this)
     this.characters = new CharactersApi(this)
     this.world = new WorldApi(this)
-    this.orgs = new OrgsApi(this.indexer, (addr) => this.requireAddress(addr))
+    this.orgs = new OrgsWriteApi(
+      this.indexer,
+      (addr) => this.requireAddress(addr),
+      {
+        suiClient: this.suiClient,
+        ids: this.ids,
+        requireExecutor: () => this.requireExecutor(),
+      },
+    )
     this.coins = new CoinsApi(this)
   }
 

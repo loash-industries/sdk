@@ -1,9 +1,14 @@
 import { z } from 'zod'
 
+import type { ProposalConfig } from './governance'
+import { normalizeMoveType } from './governance'
+
 /**
  * Zod schemas for the Armature (organizations & governance) indexer surface,
  * pinned against the published gateway spec at
- * `https://api.trinary.exchange/swagger.json` (verified 2026-09-11).
+ * `https://api.trinary.exchange/swagger.json` (verified 2026-09-11; cycle-7
+ * fields re-verified 2026-10-01 against the vendored
+ * `test/fixtures/gateway-openapi.json`).
  *
  * Same conventions as `src/schemas.ts`: validate the snake_case wire shape and
  * TRANSFORM into the SDK's camelCase domain shape, with the domain types in
@@ -79,7 +84,7 @@ export interface Org {
   /** The unit's trading TradingAccount. Null when it has no trading account. */
   tradingAccountId: string | null
   /**
-   * The `SubDAOControl` cap on the PARENT that points at this unit — what the
+   * The `SubOUControl` cap on the PARENT that points at this unit — what the
    * `control-*` strategies consume. Null for a top-level organization.
    */
   subdaoControlCapId: string | null
@@ -212,10 +217,46 @@ export const ProposalCompositeStepSchema = z
     stepType: v.step_type,
   }))
 
+/** u64 as a decimal string (or a number from older builds) → number. */
+const u64 = z.union([z.string(), z.number()]).transform((v) => Number(v))
+
 /**
- * Indexer proposal summary — DISCOVERY ONLY. Per-proposal governance config and
- * snapshot weights are deliberately absent; hydrate the live object for those
- * (DESIGN-ARMATURE.md §8, `governance.proposal()` in Phase B).
+ * The type-slot `ProposalConfig` a proposal was created under, as the indexer
+ * reconstructs it from `TypeSlotAdded` / `TypeSlotConfigUpdated` events.
+ * u64s cross as decimal strings (an "infinite" expiry exceeds 2^53); they are
+ * converted to `number`, which is exact for every realistic value.
+ */
+export const ProposalConfigWireSchema = z
+  .object({
+    quorum: z.number(),
+    approval_threshold: z.number(),
+    propose_threshold: u64,
+    expiry_ms: u64,
+    execution_delay_ms: u64,
+    cooldown_ms: u64,
+    composable_allowed: z.boolean(),
+    permissions: u64,
+    borrow_scope: z.array(z.string()),
+  })
+  .transform((v): ProposalConfig => ({
+    quorum: v.quorum,
+    approvalThreshold: v.approval_threshold,
+    proposeThreshold: v.propose_threshold,
+    expiryMs: v.expiry_ms,
+    executionDelayMs: v.execution_delay_ms,
+    cooldownMs: v.cooldown_ms,
+    composableAllowed: v.composable_allowed,
+    permissions: v.permissions,
+    borrowScope: v.borrow_scope.map(normalizeMoveType),
+  }))
+
+/**
+ * Indexer proposal summary — DISCOVERY plus the slot config at creation.
+ *
+ * Cycle 7 deletes a proposal on execution or cleanup, so for `executed` /
+ * `expired` rows this is the only record left. Snapshot weight and per-voter
+ * votes are not served — hydrate the live object (`governance.proposal()`)
+ * while it still exists (DESIGN-ARMATURE.md §8).
  */
 export const ProposalSummarySchema = z
   .object({
@@ -229,22 +270,36 @@ export const ProposalSummarySchema = z
     payload_type: z.string().nullable(),
     frame_id: z.string().nullable(),
     created_checkpoint: z.number(),
+    // Cycle 7. Optional on the wire so a pre-cycle-7 indexer build still parses.
+    metadata_ipfs: z.string().nullable().optional(),
+    config: ProposalConfigWireSchema.nullable().optional(),
+    created_ms: z.number().nullable().optional(),
     composite: z.array(ProposalCompositeStepSchema).optional(),
   })
   .transform((v) => ({
     proposalId: v.proposal_id,
+    /** The UNIT the proposal belongs to (votes and execution go there). */
     orgId: v.org_id,
     typeKey: v.type_key,
     proposer: v.proposer,
-    /** `pending` INCLUDES a lapsed voting window that was never finalized. */
+    /**
+     * `pending` INCLUDES a lapsed voting window nobody cleaned up yet — such a
+     * proposal can be deleted (`governance.deleteExpired`), not voted on.
+     */
     status: v.status,
     yesWeight: v.yes_weight,
     noWeight: v.no_weight,
     payloadType: v.payload_type,
     /** Shared CompositeFrame id; null for every non-composite proposal. */
     frameId: v.frame_id,
-    /** Checkpoint sequence number, NOT a timestamp. */
+    /** Checkpoint sequence number, NOT a timestamp — see `createdMs`. */
     createdCheckpoint: v.created_checkpoint,
+    /** IPFS metadata recorded at submission, if any. */
+    metadataIpfs: v.metadata_ipfs ?? null,
+    /** The slot config at creation; null if not indexed or the slot is gone. */
+    config: v.config ?? null,
+    /** Epoch ms of the creating checkpoint; null if not indexed. */
+    createdMs: v.created_ms ?? null,
     composite: v.composite,
   }))
 
@@ -258,7 +313,7 @@ export const AccessibleKeyspaceSchema = z
     matched_org_id: z.string().nullable(),
     name: z.string(),
     registrant_org_id: z.string().nullable(),
-    match_via: z.enum(['created', 'player_grant', 'ou_grant']),
+    match_via: z.enum(['created', 'player_grant', 'machine_grant', 'ou_grant']),
     roles: z.array(z.enum(['grant', 'read', 'write'])),
   })
   .transform((v) => ({
@@ -267,7 +322,10 @@ export const AccessibleKeyspaceSchema = z
     matchedOrgId: v.matched_org_id,
     name: v.name,
     registrantOrgId: v.registrant_org_id,
-    /** `created` takes precedence over grants. */
+    /**
+     * `created` takes precedence over grants. `machine_grant` (cycle 7) is a
+     * grant to the address as a service / bot key rather than as a player.
+     */
     matchVia: v.match_via,
     roles: v.roles,
   }))
@@ -284,7 +342,7 @@ export const VaultAclEntrySchema = z
   })
   .transform((v) => ({
     role: v.role,
-    /** Wallet / machine address, or organization id (`ou`). */
+    /** Wallet (`player`), service/bot key (`machine`), or organization id (`ou`). */
     principal: { kind: v.principal_kind, value: v.principal_value },
   }))
 

@@ -7,6 +7,9 @@ import { CLOCK_ID } from '../config'
 import { TriexClientError, TriexError } from '../errors'
 import type { CreatedObject } from '../execute'
 import type { OuProposalAction } from './harness'
+import { normalizeMoveType } from './governance'
+
+export { normalizeMoveType }
 
 /**
  * Trading as an organization — the cycle-7 `armature_trading` surface.
@@ -778,21 +781,6 @@ export function extractCreatedTradingCustody(
 }
 
 // ─── Display-key resolution ─────────────────────────────────────────────────
-
-/**
- * Normalize a Move type string so the same type compares equal across its
- * spellings: `0x2::…` vs 64-hex, with or without `0x` (cycle-7 `TypeName`
- * strings carry no prefix), any letter case, any spacing after commas.
- */
-export function normalizeMoveType(type: string): string {
-  return type
-    .replace(/\s+/g, '')
-    .replace(
-      /(^|[<,])(?:0x)?([0-9a-fA-F]+)::/g,
-      (_m, lead: string, hex: string) =>
-        `${lead}0x${hex.toLowerCase().padStart(64, '0')}::`,
-    )
-}
 
 /**
  * Point an action at the display key the OU ACTUALLY enabled its payload type
