@@ -5,12 +5,14 @@ import { orgTools } from './tools/org.js'
 import { orgPrepareTools } from './tools/orgPrepare.js'
 import { prepareTools } from './tools/prepare.js'
 import { readTools } from './tools/read.js'
+import { worldTools } from './tools/world.js'
 import type { ToolDef } from './tools/types.js'
 import type { ServerMode } from './env.js'
 
 /** Every tool this server can expose, in a stable order. */
 export const ALL_TOOLS: ToolDef[] = [
   ...readTools,
+  ...worldTools,
   ...coinTools,
   ...keyspaceTools,
   ...orgTools,
@@ -89,6 +91,6 @@ export const EXCLUDED_SDK_PATHS: Record<string, string> = {
  */
 export function toolsForMode(mode: ServerMode): ToolDef[] {
   return mode === 'read'
-    ? [...readTools, ...coinTools, ...keyspaceTools, ...orgTools]
+    ? [...readTools, ...worldTools, ...coinTools, ...keyspaceTools, ...orgTools]
     : ALL_TOOLS
 }
