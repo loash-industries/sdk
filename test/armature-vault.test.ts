@@ -977,6 +977,26 @@ describe('sweepAll', () => {
     ])
   })
 
+  it('REPORTS stacks the indexer has not linked to a hub yet', async () => {
+    const { handle, captured } = harness({
+      vaultFor: { [`${SSU}|${OFFICERS}`]: VAULT },
+      sweepable: {
+        tradingAccountId: ACCOUNT,
+        pools: [],
+        // storageUnitId '' is how the schema surfaces a null hub link.
+        items: [item(SSU, '70810', 4n), item('', '999', 2n)],
+      },
+    })
+    const res = await handle.orders.sweepAll()
+    expect(res.status).toBe('executed')
+    expect(commandNames(captured.txs[0])).toContain(
+      'sweep_multicoin_to_ou_vault::new',
+    )
+    expect(res.skipped).toEqual([
+      { storageUnitId: '', assetId: 999n, amount: 2n, reason: 'unlinked' },
+    ])
+  })
+
   it('refuses when there is nothing to sweep at all', async () => {
     const { handle } = harness({
       sweepable: { tradingAccountId: ACCOUNT, pools: [], items: [] },

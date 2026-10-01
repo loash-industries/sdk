@@ -868,7 +868,12 @@ export interface OrgSweepSkip {
   storageUnitId: string
   assetId: bigint
   amount: bigint
-  reason: 'no-vault'
+  /**
+   * `no-vault` — the hub has no shared storage for this organization.
+   * `unlinked` — the indexer has not linked the item's market to a hub yet
+   * (`storageUnitId` is `''`), so there is no vault to resolve.
+   */
+  reason: 'no-vault' | 'unlinked'
 }
 
 /** A limit order placed on behalf of the organization on an item market. */
@@ -1547,6 +1552,15 @@ class OrgOrdersApi {
     const actions: OuProposalAction[] = []
 
     for (const item of manifest.items) {
+      if (!item.storageUnitId) {
+        skipped.push({
+          storageUnitId: item.storageUnitId,
+          assetId: BigInt(item.assetId),
+          amount: item.amount,
+          reason: 'unlinked',
+        })
+        continue
+      }
       const vaultId = await t.h.vault.resolve({
         storageUnitId: item.storageUnitId,
       })
