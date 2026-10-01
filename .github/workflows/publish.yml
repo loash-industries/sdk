@@ -39,16 +39,13 @@ jobs:
   # of the SDK tarball. Its version MIRRORS the SDK's exactly, so
   # @trinaryex/mcp@X.Y.Z always names the @trinaryex/sdk@X.Y.Z it wraps.
 
+  # Checked against the SDK at this commit — the one `release` is about to
+  # publish — rather than the npm version it replaces (see mcp-validate.yml).
   validate-mcp:
     if: github.actor != 'github-actions[bot]'
-    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@v0.1.0
+    uses: ./.github/workflows/mcp-validate.yml
     with:
       node_version: "22"
-      npm_client: npm
-      typecheck_command: run tscheck
-      working_directory: mcp
-      tests_report_path: mcp/junit.xml
-      tests_coverage_path: mcp/coverage/
 
   publish-mcp:
     needs: [release, validate-mcp]
@@ -82,6 +79,24 @@ jobs:
             echo "already_published=false" >> "$GITHUB_OUTPUT"
             echo "Publishing @trinaryex/mcp@$VERSION to mirror the SDK."
           fi
+
+      # `release` has only just published the SDK; the registry can take a
+      # little while to serve the new version, and the pin below needs it.
+      - name: Wait for the SDK version to reach the registry
+        if: steps.version.outputs.already_published == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for i in $(seq 1 30); do
+            if npm view "@trinaryex/sdk@$VERSION" version >/dev/null 2>&1; then
+              echo "@trinaryex/sdk@$VERSION is available."
+              exit 0
+            fi
+            echo "Waiting for @trinaryex/sdk@$VERSION ($i/30)…"
+            sleep 10
+          done
+          echo "@trinaryex/sdk@$VERSION never appeared on the registry." >&2
+          exit 1
 
       - name: Pin the MCP version and its SDK dependency
         if: steps.version.outputs.already_published == 'false'

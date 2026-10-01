@@ -14,12 +14,9 @@ permissions:
 on: pull_request
 
 jobs:
+  # Validates against the SDK at this commit, not the published one — see
+  # mcp-validate.yml for why.
   validate-mcp:
-    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@v0.1.0
+    uses: ./.github/workflows/mcp-validate.yml
     with:
       node_version: "22"
-      npm_client: npm
-      typecheck_command: run tscheck
-      working_directory: mcp
-      tests_report_path: mcp/junit.xml
-      tests_coverage_path: mcp/coverage/
