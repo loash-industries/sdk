@@ -327,6 +327,29 @@ function flatClassMethods(file, className, checker) {
   return methods
 }
 
+/**
+ * Public PROPERTY names of a class declaration — the sub-APIs it exposes as
+ * groups (`ReadOnlyClient.coins`, `.orgs`) rather than flattening into
+ * methods.
+ */
+function classPropertyNames(file, className) {
+  const names = new Set()
+  if (!file) return names
+  for (const statement of file.statements) {
+    if (
+      !ts.isClassDeclaration(statement) ||
+      statement.name?.text !== className
+    ) {
+      continue
+    }
+    for (const member of statement.members) {
+      if (!ts.isPropertyDeclaration(member) || isPrivate(member)) continue
+      names.add(member.name.getText(file))
+    }
+  }
+  return names
+}
+
 /** Absolute path to the keyspace package's AclClient declarations. */
 export function keyspaceDeclarationPath() {
   return resolvePackageDeclaration('@trinaryex/keyspace', 'AclClient.d.ts', [
@@ -417,6 +440,15 @@ export function readSdkSurface(declarationPath = sdkDeclarationPath()) {
     READ_ONLY_CLASS,
     checker,
   )
+  // Namespaces ReadOnlyClient exposes as a whole sub-API (`coins`, `orgs`) are
+  // the SAME class on both clients, not flattened into its methods. Aliasing
+  // them would be a false match: `coins.orderbook` would borrow the item-book
+  // `orderbook(storageUnitId, assetId)` and demand inputs it never takes, and
+  // `coins.openOrders` would accept history paging it silently drops.
+  const readOnlyGroups = classPropertyNames(
+    program.getSourceFile(readOnlyPath),
+    READ_ONLY_CLASS,
+  )
 
   const surface = []
   const declarationFiles = [
@@ -478,9 +510,9 @@ export function readSdkSurface(declarationPath = sdkDeclarationPath()) {
       if (seenPaths.has(path)) continue
       seenPaths.add(path)
       const returns = returnTypeText(member, source)
-      const alias = readOnlyAliases(namespace, method).find((n) =>
-        readOnly.has(n),
-      )
+      const alias = readOnlyGroups.has(namespace)
+        ? undefined
+        : readOnlyAliases(namespace, method).find((n) => readOnly.has(n))
       surface.push({
         path,
         namespace,
