@@ -54,7 +54,7 @@ export class OrgQueries {
   /**
    * A2 — one organization with its complete unit tree. The id may be the
    * top-level organization OR any unit within its tree; the TOP-LEVEL
-   * organization is always what comes back, so callers holding a sub-DAO id
+   * organization is always what comes back, so callers holding a sub-OU id
    * still get the whole graph. Cached upstream for 5 minutes.
    *
    * @throws `OrgNotFound` when the id resolves to no organization.
@@ -135,9 +135,12 @@ export class OrgQueries {
   /**
    * A7 — every governance proposal of an organization, newest first.
    *
-   * DISCOVERY ONLY: per-proposal configuration and snapshot weights are not
-   * included. To decide a vote, hydrate the live on-chain object instead
-   * (DESIGN-ARMATURE.md §8) — `yesWeight`/`noWeight` here have no denominator.
+   * Carries the slot config each proposal was created under, its creation
+   * time and IPFS metadata (cycle 7). Snapshot weight and per-voter votes are
+   * NOT included — `yesWeight`/`noWeight` have no denominator here — so to
+   * decide a vote, hydrate the live object (`governance.proposal()`). Since
+   * cycle 7 an executed or expired proposal no longer exists on-chain, so for
+   * those rows this is the only record.
    */
   async proposals(orgId: string): Promise<ProposalSummary[]> {
     const data = await this.fetchJson(
@@ -150,8 +153,9 @@ export class OrgQueries {
 
   /**
    * A10 — every keyspace the address can reach: registered by one of their
-   * organizations (`created`), granted to them directly (`player_grant`), or
-   * granted to one of their organizations (`ou_grant`). Organizations are
+   * organizations (`created`), granted to them directly (`player_grant`, or
+   * `machine_grant` for a service/bot key), or granted to one of their
+   * organizations (`ou_grant`). Organizations are
    * resolved server-side, so only the address is needed.
    *
    * Metadata only. Decrypting an entry needs a Seal session key the wallet

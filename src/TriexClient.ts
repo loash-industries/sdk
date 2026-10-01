@@ -6,7 +6,7 @@ import type {
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 
 import { OrgHandle } from './armature/OrgClient'
-import { OrgsApi } from './armature/OrgsApi'
+import { OrgsWriteApi } from './armature/OrgsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
 import { executeAndNormalize, findCreatedObject } from './execute'
@@ -134,11 +134,12 @@ export class TriexClient {
   readonly orders: OrdersApi
   readonly spatial: SpatialApi
   /**
-   * Organization identity & discovery (Armature). Address-taking methods
-   * default to the configured player. Acting AS an organization lives on the
+   * Organization identity & discovery (Armature), plus `create()` /
+   * `createStandalone()`. Address-taking methods default to the configured
+   * player. Acting AS an organization lives on the
    * handle from `client.org(id)` — see DESIGN-ARMATURE.md §5.1.
    */
-  readonly orgs: OrgsApi
+  readonly orgs: OrgsWriteApi
 
   constructor(config: TriexClientConfig) {
     this.suiClient = config.suiClient
@@ -155,7 +156,15 @@ export class TriexClient {
     this.market = new MarketApi(this)
     this.orders = new OrdersApi(this)
     this.spatial = new SpatialApi(this)
-    this.orgs = new OrgsApi(this.indexer, (addr) => this.requireAddress(addr))
+    this.orgs = new OrgsWriteApi(
+      this.indexer,
+      (addr) => this.requireAddress(addr),
+      {
+        suiClient: this.suiClient,
+        ids: this.ids,
+        requireExecutor: () => this.requireExecutor(),
+      },
+    )
   }
 
   /**

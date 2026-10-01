@@ -9,29 +9,44 @@ import type { PackageIds, TransactionExecutor, TxResult } from '../types'
 import {
   addMembersAction,
   type ArmaturePkgs,
-  compositeStepExecutor,
+  disableProposalTypeAction,
   enableCompositeAction,
-  enableSendCoinAction,
   enableProposalTypeAction,
+  enableSendCoinAction,
+  enableSendCoinToOuAction,
   enableTradingActions,
-  passedProposalAction,
   type ProposalConfigPatch,
   removeMembersAction,
   setBoardAction,
+  TRADING_TYPE_CONFIG,
   updateMetadataAction,
   updateProposalConfigAction,
 } from './actions'
+import {
+  compositeStepExecutor,
+  executorForPayload,
+  type PassedExecutionContext,
+} from './executors'
 import type { DaoGovernance } from './governance'
-import { fetchDaoGovernance } from './governance'
+import {
+  fetchDaoGovernance,
+  fetchIsBoardMember,
+  normalizeMoveType,
+  packageAliases,
+  PERMISSIONS,
+  slotForType,
+} from './governance'
 import {
   type BlockCode,
   canComposite,
+  capabilitiesFor,
   type CompositeEligibility,
   evaluatePaths,
   type OuCapabilities,
   type OuProposalAction,
   type PathCandidate,
   type ResolvedPlan,
+  selectStrategy,
 } from './harness'
 import {
   appendPlanActions,
@@ -43,8 +58,21 @@ import {
   extractCreatedProposalId,
   resolveExecutionPlan,
 } from './plan'
+import {
+  capTypeOf,
+  type CapabilityVaultContents,
+  fetchCapabilityVault,
+  fetchFrameStepPayload,
+  fetchProposal,
+  isDeletable,
+  type LiveProposal,
+} from './proposals'
 import type { ProposalConfigInput } from './transactions'
-import { tryExpireTx, voteTx } from './transactions'
+import {
+  deleteExhaustedFrameTx,
+  deleteExpiredProposalTx,
+  voteTx,
+} from './transactions'
 import {
   appendClaimSettled,
   cancelOrderAction,
@@ -73,18 +101,25 @@ import {
   type DaoVaultInfo,
 } from './vault'
 import {
+  claimTreasuryCoinsTx,
   depositToTreasuryTx,
   fetchTreasuryCoinBalance,
   fetchTreasuryCoinBalances,
-  fetchTreasuryItemBalance,
   sendCoinAction,
-  sendCoinToDaoAction,
+  sendCoinToOuAction,
+  sendSmallPaymentAction,
   type TreasuryCoinBalance,
 } from './treasury'
 import { computeBidQuoteDeposit, GTC_EXPIRE } from '../money'
 import { getTradingAccountCurrencyBalance } from '../onchain'
 import type { OrderSide } from '../types'
-import { execContextFor, flattenOrg, resolveSeat, seatsFor } from './tree'
+import {
+  execContextFor,
+  flattenOrg,
+  nodeById,
+  resolveSeat,
+  seatsFor,
+} from './tree'
 import type {
   HubDaoVault,
   Org,
@@ -95,6 +130,15 @@ import type {
   VaultPrincipal,
   VaultRole,
 } from './types'
+import type { UpgradeBuild } from './upgrade'
+import {
+  OrgCapabilitiesApi,
+  OrgCurrencyApi,
+  OrgEntriesApi,
+  OrgFreezeApi,
+  OrgUnitsApi,
+  OrgUpgradeApi,
+} from './OrgClientGroups'
 
 /**
  * A handle bound to one organization AND one seat within it.
@@ -107,6 +151,8 @@ import type {
  * lets `org.members.add([...])` be one call instead of six.
  *
  * Obtain one from `client.org(orgId)`; switch seats with `org.as(daoId)`.
+ * Methods that act ON a unit (members, pause, …) also take `unitId`, so a
+ * parent's board can act on a child it does not itself sit on.
  */
 
 /**
@@ -129,6 +175,30 @@ export type RunOutcome =
       proposalId?: string
     }
   | { status: 'blocked'; code: BlockCode; reason: string }
+
+/** Options every governance write accepts. */
+export interface RunOptions {
+  /**
+   * The unit to act ON. Defaults to the acting seat. A parent's board can
+   * target a child it does not sit on — the resolver then routes through the
+   * parent's `SubOUControl` (`control-*` strategies).
+   */
+  unitId?: string
+  /** IPFS metadata recorded on the proposal (`ProposalCreated.metadata_ipfs`). */
+  metadataIpfs?: string
+}
+
+/** Objects a passed proposal's handler may need that the chain cannot name. */
+export interface ExecuteOptions {
+  /** `TransferFreezeAdmin`: the unit's `FreezeAdminCap`, owned by the caller. */
+  freezeAdminCapId?: string
+  /** `AdoptCurrency<T>`: the `TreasuryCap<T>`, owned by the caller. */
+  treasuryCapId?: string
+  /** `ProposeUpgrade`: the compiled package. */
+  upgrade?: UpgradeBuild
+  /** Composites: also delete the exhausted frame (rebate to the gas payer). */
+  deleteFrame?: boolean
+}
 
 /** What an `OrgHandle` needs from the owning client. */
 export interface OrgHandleDeps {
@@ -158,9 +228,28 @@ export class OrgHandle {
   readonly treasury: OrgTreasuryApi
   readonly orders: OrgOrdersApi
   readonly vault: OrgVaultApi
+  /** Cycle 7 — the org's own coin (TreasuryCap custody, mint/burn). */
+  readonly currency: OrgCurrencyApi
+  /** Cycle 7 — sub-unit lifecycle and parent→child control. */
+  readonly units: OrgUnitsApi
+  /** Cycle 7 — the emergency freeze (cap holder + governance). */
+  readonly freeze: OrgFreezeApi
+  /** Cycle 7 — encrypted entries (member-gated, no vote). */
+  readonly entries: OrgEntriesApi
+  /** Cycle 7 — governed package upgrades. */
+  readonly upgrade: OrgUpgradeApi
+  /** Cycle 7 — what a unit's capability vault holds. */
+  readonly capabilities: OrgCapabilitiesApi
 
-  /** @internal — governance is read per DAO id and cached for the handle's life. */
+  /** @internal — governance is read per unit id and cached for the handle's life. */
   private readonly govCache = new Map<string, Promise<DaoGovernance>>()
+  /** @internal — head-current board membership, per unit. */
+  private readonly memberCache = new Map<string, Promise<boolean | undefined>>()
+  /** @internal — capability vault contents, per vault. */
+  private readonly vaultCache = new Map<
+    string,
+    Promise<CapabilityVaultContents>
+  >()
 
   constructor(
     /** @internal */ readonly deps: OrgHandleDeps,
@@ -179,6 +268,12 @@ export class OrgHandle {
     this.treasury = new OrgTreasuryApi(this)
     this.orders = new OrgOrdersApi(this)
     this.vault = new OrgVaultApi(this)
+    this.currency = new OrgCurrencyApi(this)
+    this.units = new OrgUnitsApi(this)
+    this.freeze = new OrgFreezeApi(this)
+    this.entries = new OrgEntriesApi(this)
+    this.upgrade = new OrgUpgradeApi(this)
+    this.capabilities = new OrgCapabilitiesApi(this)
   }
 
   /** The root organization's object id. */
@@ -231,6 +326,35 @@ export class OrgHandle {
     return ctx
   }
 
+  /**
+   * @internal — the resolver's view of `unitId` (any unit of the tree), or of
+   * the acting seat. Acting ON a unit does not need a seat on it: the control
+   * strategies vote on its parent.
+   */
+  contextFor(unitId?: string): OuExecContext {
+    if (!unitId) return this.requireContext()
+    const ctx = execContextFor(this.nodes, unitId)
+    if (!ctx) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        `Unit ${unitId} is not in organization ${this.orgId}, or has no EmergencyFreeze object.`,
+      )
+    }
+    return ctx
+  }
+
+  /** @internal — a unit of this tree, or a typed error. */
+  requireNode(unitId?: string): OrgNode {
+    const node = unitId ? nodeById(this.nodes, unitId) : this.requireSeat()
+    if (!node) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        `Unit ${unitId} is not in organization ${this.orgId}.`,
+      )
+    }
+    return node
+  }
+
   /** @internal */
   pkgs(): ArmaturePkgs {
     return {
@@ -239,13 +363,24 @@ export class OrgHandle {
     }
   }
 
+  /** @internal — `current → original` package ids, for slot lookups. */
+  aliases(): Map<string, string> {
+    const i = this.deps.ids
+    return packageAliases([
+      [i.armature, i.armatureOriginal],
+      [i.armatureProposals, i.armatureProposalsOriginal],
+      [i.armatureTrading, i.armatureTradingOriginal],
+      [i.armatureVault, i.armatureVaultOriginal],
+    ])
+  }
+
   /**
-   * @internal — a DAO's governance, cached per handle.
+   * @internal — a unit's governance, cached per handle.
    *
    * Cached deliberately: `resolve()` and `run()` each need the acting unit's
-   * config AND its parent's, and a bot resolving twenty actions against one
-   * seat should not re-read the same two objects forty times. The cache lives
-   * only as long as the handle, so re-opening picks up a config change.
+   * slots AND its parent's, and a bot resolving twenty actions against one
+   * seat should not re-read the same objects forty times. The cache lives only
+   * as long as the handle, so re-opening picks up a config change.
    */
   gov(daoId: string): Promise<DaoGovernance> {
     let cached = this.govCache.get(daoId)
@@ -256,9 +391,67 @@ export class OrgHandle {
     return cached
   }
 
-  /** Drop cached governance so the next resolve re-reads it. */
+  /**
+   * @internal — is the caller on `daoId`'s board RIGHT NOW (chain read)?
+   * Undefined when it cannot be determined, so the resolver falls back to
+   * the indexer's (possibly lagging) member list.
+   */
+  isMember(daoId: string): Promise<boolean | undefined> {
+    let cached = this.memberCache.get(daoId)
+    if (!cached) {
+      cached = this.gov(daoId)
+        .then((g) =>
+          g.state
+            ? fetchIsBoardMember(
+                this.deps.suiClient,
+                g.state.membersTableId,
+                this.deps.address,
+              )
+            : undefined,
+        )
+        .catch(() => undefined)
+      this.memberCache.set(daoId, cached)
+    }
+    return cached
+  }
+
+  /** @internal — a capability vault's contents, cached per handle. */
+  capabilityVault(vaultId: string): Promise<CapabilityVaultContents> {
+    let cached = this.vaultCache.get(vaultId)
+    if (!cached) {
+      cached = fetchCapabilityVault(this.deps.suiClient, vaultId)
+      this.vaultCache.set(vaultId, cached)
+    }
+    return cached
+  }
+
+  /** @internal — the resolver's on-chain facts for one action against `ctx`. */
+  async capsFor(
+    action: OuProposalAction,
+    ctx: OuExecContext,
+  ): Promise<OuCapabilities> {
+    const needParent = !!action.control && !!ctx.parent
+    const [own, parent, onOwn, onParent] = await Promise.all([
+      action.own ? this.gov(ctx.daoId) : undefined,
+      needParent ? this.gov(ctx.parent!.daoId) : undefined,
+      action.own ? this.isMember(ctx.daoId) : undefined,
+      needParent ? this.isMember(ctx.parent!.daoId) : undefined,
+    ])
+    // The chain read can only PROMOTE a caller the indexer has not caught up
+    // with: a failed read (transport, not just "no such member") must never
+    // demote a real member, and a stale "member" only costs an on-chain abort.
+    return capabilitiesFor(action, own, parent, {
+      aliases: this.aliases(),
+      callerOnOwnBoard: onOwn === true ? true : undefined,
+      callerOnParentBoard: onParent === true ? true : undefined,
+    })
+  }
+
+  /** Drop cached chain state so the next resolve re-reads it. */
   refresh(): void {
     this.govCache.clear()
+    this.memberCache.clear()
+    this.vaultCache.clear()
   }
 
   /**
@@ -323,27 +516,13 @@ export class OrgHandle {
 class OrgGovernanceApi {
   constructor(private readonly h: OrgHandle) {}
 
-  /** The acting unit's enabled types, per-type configs, and bindings. */
+  /**
+   * A unit's governance surface: enabled slots (keyed by Move type), per-type
+   * configs, the OU's pause/migration flags and its freeze state.
+   * Defaults to the acting seat.
+   */
   async read(daoId?: string): Promise<DaoGovernance> {
     return this.h.gov(daoId ?? this.h.requireSeat().daoId)
-  }
-
-  /** @internal — the own + control configs the resolver needs for one action. */
-  private async caps(action: OuProposalAction): Promise<OuCapabilities> {
-    const ctx = this.h.requireContext()
-    const own = action.own ? await this.h.gov(ctx.daoId) : undefined
-    const parent =
-      action.control && ctx.parent
-        ? await this.h.gov(ctx.parent.daoId)
-        : undefined
-    return {
-      ownConfig: action.own
-        ? (own?.configs.get(action.own.typeKey) ?? null)
-        : null,
-      controlConfig: action.control
-        ? (parent?.configs.get(action.control.typeKey) ?? null)
-        : null,
-    }
   }
 
   /**
@@ -351,13 +530,18 @@ class OrgGovernanceApi {
    * dry-run. Returns either a plan (with a lazy `buildTx`) or a blocked result
    * carrying the reason.
    */
-  async resolve(action: OuProposalAction): Promise<ResolvedPlan> {
+  async resolve(
+    action: OuProposalAction,
+    opts?: RunOptions,
+  ): Promise<ResolvedPlan> {
+    const ctx = this.h.contextFor(opts?.unitId)
     return resolveExecutionPlan(
       action,
-      this.h.requireContext(),
-      await this.caps(action),
+      ctx,
+      await this.h.capsFor(action, ctx),
       this.h.deps.address,
       this.h.deps.ids.armature,
+      { metadataIpfs: opts?.metadataIpfs },
     )
   }
 
@@ -366,18 +550,22 @@ class OrgGovernanceApi {
    * full trace behind what `resolve()` chose. Worth logging when a bot ends up
    * proposing where you expected it to execute.
    */
-  async paths(action: OuProposalAction): Promise<PathCandidate[]> {
+  async paths(
+    action: OuProposalAction,
+    opts?: { unitId?: string },
+  ): Promise<PathCandidate[]> {
+    const ctx = this.h.contextFor(opts?.unitId)
     return evaluatePaths(
       action,
-      this.h.requireContext(),
-      await this.caps(action),
+      ctx,
+      await this.h.capsFor(action, ctx),
       this.h.deps.address,
     )
   }
 
   /** Resolve an action and carry it out. */
-  async run(action: OuProposalAction): Promise<RunOutcome> {
-    const plan = await this.resolve(action)
+  async run(action: OuProposalAction, opts?: RunOptions): Promise<RunOutcome> {
+    const plan = await this.resolve(action, opts)
     if (plan.blocked) {
       return { status: 'blocked', code: plan.code, reason: plan.reason }
     }
@@ -387,48 +575,84 @@ class OrgGovernanceApi {
   /**
    * Apply several actions in ONE transaction under a single strategy.
    *
-   * All actions must resolve to the same strategy — they are batched, not
-   * independently routed — so this resolves the first and applies it to the
-   * rest. On an immediate strategy they execute together and atomically; on a
-   * slow one this creates N SEPARATE proposals in one signature, so the board
-   * votes N times. Use `runComposite()` for one vote over many steps.
+   * Every action is resolved (cached reads, so usually no extra I/O) and they
+   * must all agree on the strategy — a mixed cart is rejected rather than
+   * silently routed to the wrong board (DESIGN-ARMATURE.md OQ-A11, ruled (1)).
+   * On an immediate strategy they execute together and atomically; on a slow
+   * one this creates N SEPARATE proposals in one signature. Use
+   * `runComposite()` for one vote over many steps.
    */
-  async runBatch(actions: OuProposalAction[]): Promise<RunOutcome> {
+  async runBatch(
+    actions: OuProposalAction[],
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
     if (actions.length === 0) {
       throw new TriexClientError(
         TriexError.ValidationFailed,
         'runBatch needs at least one action.',
       )
     }
-    const plan = await this.resolve(actions[0])
-    if (plan.blocked) {
-      return { status: 'blocked', code: plan.code, reason: plan.reason }
+    const ctx = this.h.contextFor(opts?.unitId)
+    const decisions = []
+    for (const action of actions) {
+      const decision = selectStrategy(
+        action,
+        ctx,
+        await this.h.capsFor(action, ctx),
+        this.h.deps.address,
+      )
+      if (decision.blocked) {
+        return {
+          status: 'blocked',
+          code: decision.code,
+          reason: `${action.kind}: ${decision.reason}`,
+        }
+      }
+      decisions.push({ action, decision })
+    }
+    const first = decisions[0].decision
+    const odd = decisions.find((d) => d.decision.strategy !== first.strategy)
+    if (odd) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        `runBatch: '${decisions[0].action.kind}' resolves to ${first.strategy} but '${odd.action.kind}' to ${odd.decision.strategy} — run them separately.`,
+      )
     }
     const tx = buildBatchPlanTx(
-      plan.strategy,
+      first.strategy,
       actions,
-      this.h.requireContext(),
+      ctx,
       this.h.deps.ids.armature,
+      {
+        readonly:
+          first.immediate && decisions.every((d) => d.decision.readonly),
+        metadataIpfs: opts?.metadataIpfs,
+      },
     )
-    return this.execPlanned(tx, plan.immediate)
+    return this.execPlanned(tx, first.immediate)
   }
 
   /** Whether these actions can bundle into a single composite proposal. */
   async canComposite(
     actions: OuProposalAction[],
+    opts?: { unitId?: string },
   ): Promise<CompositeEligibility> {
-    return canComposite(actions, await this.read())
+    const ctx = this.h.contextFor(opts?.unitId)
+    return canComposite(actions, await this.h.gov(ctx.daoId), this.h.aliases())
   }
 
   /**
-   * Submit several own-DAO actions as ONE `Proposal<CompositePayload>` the
+   * Submit several own-unit actions as ONE `Proposal<CompositePayload>` the
    * board votes on once.
    *
    * @throws `ValidationFailed` when the cart is not eligible — the reason names
-   *   which of the four on-chain conditions failed.
+   *   which on-chain condition failed.
    */
-  async runComposite(actions: OuProposalAction[]): Promise<RunOutcome> {
-    const eligibility = await this.canComposite(actions)
+  async runComposite(
+    actions: OuProposalAction[],
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
+    const eligibility = await this.canComposite(actions, opts)
     if (!eligibility.eligible) {
       throw new TriexClientError(
         TriexError.ValidationFailed,
@@ -437,15 +661,26 @@ class OrgGovernanceApi {
     }
     const tx = buildCompositeSubmitTx(
       actions,
-      this.h.requireContext(),
+      this.h.contextFor(opts?.unitId),
       this.h.deps.ids.armature,
+      { metadataIpfs: opts?.metadataIpfs },
     )
     return this.execPlanned(tx, false)
   }
 
-  /** Proposals of the whole organization, newest first (indexer, discovery only). */
+  /** Proposals of the whole organization, newest first (indexer). */
   proposals(): Promise<ProposalSummary[]> {
     return this.h.deps.indexer.orgs.proposals(this.h.orgId)
+  }
+
+  /**
+   * One proposal's LIVE on-chain state (A8): snapshot weight, votes cast,
+   * decoded payload, snapshotted config, deadlines. Null when it no longer
+   * exists — cycle 7 deletes a proposal on execution and on expiry cleanup;
+   * the indexer (`proposals()`) has the outcome then.
+   */
+  proposal(proposalId: string): Promise<LiveProposal | null> {
+    return fetchProposal(this.h.deps.suiClient, proposalId)
   }
 
   /** @internal — the indexer summary for one proposal, or a typed error. */
@@ -458,36 +693,75 @@ class OrgGovernanceApi {
       throw new TriexClientError(
         TriexError.OrgNotFound,
         `Proposal ${proposalId} was not found on organization ${this.h.orgId}. ` +
-          'A proposal created seconds ago may not be indexed yet — pass `payloadType` explicitly to act on it immediately.',
+          'A proposal created seconds ago may not be indexed yet — pass `payloadType` (and `unitId`) explicitly to act on it immediately.',
       )
     }
     return hit
   }
 
   /**
-   * Vote on an open proposal.
+   * @internal — payload type + owning unit: the live object first (head-
+   * current), the indexer as the fallback.
+   */
+  private async locate(
+    proposalId: string,
+    known: { payloadType?: string; unitId?: string },
+  ): Promise<{
+    payloadType: string
+    unitId: string
+    live: LiveProposal | null
+  }> {
+    if (known.payloadType && known.unitId) {
+      return {
+        payloadType: known.payloadType,
+        unitId: known.unitId,
+        live: null,
+      }
+    }
+    const live = await this.proposal(proposalId)
+    if (live) {
+      return {
+        payloadType: known.payloadType ?? live.payloadType,
+        unitId: known.unitId ?? live.ouId,
+        live,
+      }
+    }
+    const s = await this.summary(proposalId)
+    if (s.status === 'executed' || s.status === 'expired') {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        `Proposal ${proposalId} is already ${s.status} — cycle 7 deleted it on-chain.`,
+      )
+    }
+    const payloadType = known.payloadType ?? s.payloadType
+    if (!payloadType) {
+      throw new TriexClientError(
+        TriexError.UnexpectedResponse,
+        `Proposal ${proposalId} has no decoded payload type — pass \`payloadType\` explicitly.`,
+      )
+    }
+    return { payloadType, unitId: known.unitId ?? s.orgId, live: null }
+  }
+
+  /**
+   * Vote on an open proposal (`board_voting::vote`).
    *
-   * `payloadType` is the `P` in `proposal::vote<P>`. It is looked up from the
-   * indexer when omitted, which costs a request and cannot see a
-   * just-created proposal — pass it explicitly to skip both.
+   * The payload type `P` and the owning unit are read from the live object
+   * when omitted (pass both to skip the read). The voter must have been on the
+   * board when the proposal was CREATED; voting closes at `created + expiry`.
    */
   async vote(params: {
     proposalId: string
     approve: boolean
     payloadType?: string
+    unitId?: string
   }): Promise<TxResult> {
-    const payloadType =
-      params.payloadType ?? (await this.summary(params.proposalId)).payloadType
-    if (!payloadType) {
-      throw new TriexClientError(
-        TriexError.UnexpectedResponse,
-        `Proposal ${params.proposalId} has no decoded payload type — pass \`payloadType\` explicitly.`,
-      )
-    }
+    const { payloadType, unitId } = await this.locate(params.proposalId, params)
     return this.h.submit(
       voteTx({
         armature: this.h.deps.ids.armature,
         proposalId: params.proposalId,
+        ouId: unitId,
         payloadMoveType: payloadType,
         approve: params.approve,
       }),
@@ -495,72 +769,141 @@ class OrgGovernanceApi {
   }
 
   /**
-   * Retire a proposal whose voting window lapsed. Permissionless — the indexer
-   * reports such proposals as `pending` until someone calls this, so `pending`
-   * and "still votable" are not the same thing.
+   * Delete a proposal that can no longer execute — an Active one past its
+   * voting window, or a Passed one whose execution window closed
+   * (`proposal::delete_expired_proposal`). PERMISSIONLESS: anyone may call it,
+   * and the storage rebate goes to the gas payer. Several ids clean up in one
+   * transaction; any one not yet expired aborts the whole batch, so pair with
+   * `expired()`.
    */
-  async tryExpire(params: {
-    proposalId: string
-    payloadType?: string
+  async deleteExpired(params: {
+    proposalIds: string[]
+    /** Payload types by proposal id; read from the live objects when omitted. */
+    payloadTypes?: Record<string, string>
   }): Promise<TxResult> {
-    const payloadType =
-      params.payloadType ?? (await this.summary(params.proposalId)).payloadType
-    if (!payloadType) {
+    if (params.proposalIds.length === 0) {
       throw new TriexClientError(
-        TriexError.UnexpectedResponse,
-        `Proposal ${params.proposalId} has no decoded payload type — pass \`payloadType\` explicitly.`,
+        TriexError.ValidationFailed,
+        'deleteExpired needs at least one proposal id.',
       )
     }
+    const proposals = []
+    for (const proposalId of params.proposalIds) {
+      const known = params.payloadTypes?.[proposalId]
+      const payloadMoveType =
+        known ?? (await this.locate(proposalId, {})).payloadType
+      proposals.push({ proposalId, payloadMoveType })
+    }
     return this.h.submit(
-      tryExpireTx({
+      deleteExpiredProposalTx({
         armature: this.h.deps.ids.armature,
-        proposalId: params.proposalId,
-        payloadMoveType: payloadType,
+        proposals,
       }),
     )
   }
 
   /**
-   * Execute a proposal the board already passed, dispatching to the same
-   * handler the single-vote path would have used. Composites run their whole
-   * frame pipeline in one transaction.
-   *
-   * @throws `ValidationFailed` when the proposal's type has no wired executor,
-   *   or when a composite step does not — declining beats running a partial
-   *   pipeline.
+   * The organization's proposals that `deleteExpired` would accept right now:
+   * each indexed `pending` / `passed` proposal is hydrated from the chain and
+   * kept if its window has closed.
    */
-  async execute(proposalId: string): Promise<TxResult> {
-    const p = await this.summary(proposalId)
-    const armature = this.h.deps.ids.armature
-    const node = this.h.nodes.find(
-      (n) => n.daoId.toLowerCase() === p.orgId.toLowerCase(),
+  async expired(): Promise<LiveProposal[]> {
+    const now = Date.now()
+    const open = (await this.proposals()).filter(
+      (p) => p.status === 'pending' || p.status === 'passed',
     )
+    const out: LiveProposal[] = []
+    for (const p of open) {
+      const live = await this.proposal(p.proposalId)
+      if (live && isDeletable(live, now)) out.push(live)
+    }
+    return out
+  }
+
+  /**
+   * Delete a composite's exhausted frame once every step ran
+   * (`composite::delete_exhausted_frame`). Permissionless; rebate to the gas
+   * payer. `execute(id, { deleteFrame: true })` does it in the same PTB.
+   */
+  async deleteExhaustedFrame(frameId: string): Promise<TxResult> {
+    return this.h.submit(
+      deleteExhaustedFrameTx({ armature: this.h.deps.ids.armature, frameId }),
+    )
+  }
+
+  /**
+   * Execute a proposal the board already passed, dispatching on its PAYLOAD
+   * TYPE to the handler a single-vote run would have used. Composites run
+   * their whole frame pipeline in one transaction. Cycle 7 deletes the
+   * proposal in the same call (rebate to the gas payer); the caller must be a
+   * current board member and inside the execution window.
+   *
+   * @throws `ValidationFailed` when no handler can be built — an unknown type,
+   *   an object only the caller can supply (see `ExecuteOptions`), or a
+   *   composite step without one; declining beats running a partial pipeline.
+   */
+  async execute(proposalId: string, opts?: ExecuteOptions): Promise<TxResult> {
+    const live = await this.proposal(proposalId)
+    const located = live
+      ? { payloadType: live.payloadType, unitId: live.ouId, live }
+      : await this.locate(proposalId, {})
+    const node = nodeById(this.h.nodes, located.unitId)
     const emergencyFreezeId = node?.emergencyFreezeId
     if (!node || !emergencyFreezeId) {
       throw new TriexClientError(
         TriexError.ValidationFailed,
-        `Cannot execute ${proposalId}: unit ${p.orgId} has no EmergencyFreeze object in this tree.`,
+        `Cannot execute ${proposalId}: unit ${located.unitId} has no EmergencyFreeze object in this tree.`,
       )
     }
+    const armature = this.h.deps.ids.armature
+    const ctx = await this.passedContext(node, opts)
+    const isComposite = normalizeMoveType(located.payloadType).endsWith(
+      '::composite_payload::CompositePayload',
+    )
 
-    if (p.typeKey === 'Composite') {
-      if (!p.frameId) {
+    if (isComposite) {
+      const payload = live?.payload ?? {}
+      let frameId =
+        typeof payload.frame_id === 'string' ? payload.frame_id : undefined
+      let stepTypes = Array.isArray(payload.step_types)
+        ? payload.step_types.map((t) =>
+            typeof t === 'string'
+              ? t
+              : String((t as { name?: string })?.name ?? ''),
+          )
+        : undefined
+      let stepKeys = Array.isArray(payload.step_type_keys)
+        ? payload.step_type_keys.map(String)
+        : undefined
+      if (!frameId || !stepTypes) {
+        const s = await this.summary(proposalId)
+        frameId = s.frameId ?? undefined
+        stepTypes = (s.composite ?? []).map((c) => c.stepType ?? '')
+        stepKeys = (s.composite ?? []).map((c) => c.stepTypeKey)
+      }
+      if (!frameId) {
         throw new TriexClientError(
           TriexError.UnexpectedResponse,
           `Composite proposal ${proposalId} carries no frame id.`,
         )
       }
       const steps: CompositeStep[] = []
-      for (const step of p.composite ?? []) {
+      for (let i = 0; i < stepTypes.length; i++) {
+        const stepPayload = await fetchFrameStepPayload(
+          this.h.deps.suiClient,
+          frameId,
+          i,
+        ).catch(() => undefined)
         const exec = compositeStepExecutor(
           this.h.pkgs(),
-          step.stepTypeKey,
-          step.stepType ?? undefined,
+          stepKeys?.[i] ?? '',
+          stepTypes[i] ? normalizeMoveType(stepTypes[i]) : undefined,
+          { ...ctx, payload: stepPayload },
         )
         if (!exec) {
           throw new TriexClientError(
             TriexError.ValidationFailed,
-            `Composite step ${step.stepIndex} (${step.stepTypeKey}) has no wired executor — refusing to run a partial pipeline.`,
+            `Composite step ${i} (${stepKeys?.[i] ?? stepTypes[i]}) has no wired executor — refusing to run a partial pipeline.`,
           )
         }
         steps.push(exec)
@@ -568,34 +911,96 @@ class OrgGovernanceApi {
       return this.h.submit(
         buildExecuteCompositeTx({
           armature,
-          daoId: p.orgId,
+          daoId: node.daoId,
           proposalId,
           emergencyFreezeId,
-          frameId: p.frameId,
+          frameId,
           steps,
+          deleteFrame: opts?.deleteFrame,
         }),
       )
     }
 
-    const action = passedProposalAction(this.h.pkgs(), {
-      typeKey: p.typeKey ?? '',
-      charterId: node.charterId ?? undefined,
+    const exec = executorForPayload(located.payloadType, {
+      ...ctx,
+      payload: live?.payload,
     })
-    if (!action) {
+    if ('missing' in exec) {
       throw new TriexClientError(
         TriexError.ValidationFailed,
-        `No wired executor for proposal type '${p.typeKey}'.`,
+        `Cannot execute ${proposalId}: ${exec.missing}.`,
       )
     }
+    // `ticket_from_vote_readonly` needs cooldown 0 on the slot AND the snapshot.
+    const gov = await this.h.gov(node.daoId).catch(() => undefined)
+    const slot = slotForType(gov, located.payloadType, {
+      aliases: this.h.aliases(),
+    })
+    const readonly =
+      !!slot &&
+      slot.config.cooldownMs === 0 &&
+      (live?.config.cooldownMs ?? 1) === 0
     return this.h.submit(
       buildExecutePassedTx({
-        action,
+        action: {
+          kind: 'execute_passed',
+          own: {
+            typeKey: live?.typeKey ?? '',
+            payloadMoveType: located.payloadType,
+            buildPayload: () => {
+              throw new Error('execute-only')
+            },
+            buildExecute: exec.execute,
+          },
+        },
         armature,
-        daoId: p.orgId,
+        daoId: node.daoId,
         proposalId,
         emergencyFreezeId,
+        readonly,
       }),
     )
+  }
+
+  /** @internal — the handler context for a unit's passed proposals. */
+  private async passedContext(
+    node: OrgNode,
+    opts?: ExecuteOptions,
+  ): Promise<PassedExecutionContext> {
+    const gov = await this.h.gov(node.daoId).catch(() => undefined)
+    const vaults: CapabilityVaultContents[] = []
+    for (const n of [
+      node,
+      ...this.h.nodes.filter((x) => x.parentDaoId === node.daoId),
+    ]) {
+      if (!n.capabilityVaultId) continue
+      const v = await this.h
+        .capabilityVault(n.capabilityVaultId)
+        .catch(() => undefined)
+      if (v) vaults.push(v)
+    }
+    return {
+      pkgs: this.h.pkgs(),
+      unit: {
+        daoId: node.daoId,
+        charterId: node.charterId,
+        treasuryId: node.treasuryId,
+        capabilityVaultId: node.capabilityVaultId,
+        emergencyFreezeId: node.emergencyFreezeId,
+      },
+      nodes: this.h.nodes,
+      typeForDisplayKey: (key) => gov?.typeBindings.get(key),
+      capTypeOf: (capId) => {
+        for (const v of vaults) {
+          const t = capTypeOf(v, capId)
+          if (t) return t
+        }
+        return undefined
+      },
+      freezeAdminCapId: opts?.freezeAdminCapId,
+      treasuryCapId: opts?.treasuryCapId,
+      upgrade: opts?.upgrade,
+    }
   }
 
   /** @internal — execute a built transaction and shape the outcome. */
@@ -604,6 +1009,8 @@ class OrgGovernanceApi {
     immediate: boolean,
   ): Promise<RunOutcome> {
     const res = await executeAndNormalize(this.h.deps.requireExecutor(), tx)
+    // A successful write changes what the next resolve should see.
+    this.h.refresh()
     if (immediate) return { status: 'executed', digest: res.digest }
     return {
       status: 'proposed',
@@ -618,24 +1025,39 @@ class OrgGovernanceApi {
 class OrgMembersApi {
   constructor(private readonly h: OrgHandle) {}
 
-  /** Seat addresses on the acting unit's board. */
-  add(addresses: string[]): Promise<RunOutcome> {
-    return this.h.governance.run(addMembersAction(this.h.pkgs(), addresses))
+  /**
+   * Seat addresses on a unit's board (default: the acting seat). Routes
+   * through the unit's own `BatchAddMembers` or its parent's
+   * `ControllerBatchAddMembers`, whichever the caller can carry fastest.
+   */
+  add(addresses: string[], opts?: RunOptions): Promise<RunOutcome> {
+    return this.h.governance.run(
+      addMembersAction(this.h.pkgs(), addresses),
+      opts,
+    )
   }
 
   /**
-   * Remove addresses from the acting unit's board.
-   *
-   * Control-only on-chain, so this needs a parent unit. On a ROOT unit it
-   * blocks; use `setBoard()` with the remaining members there.
+   * Remove addresses from a unit's board. Cycle 7 gives every unit (the root
+   * included) its own `BatchRemoveMembers`; a parent can also act via
+   * `ControllerBatchRemoveMembers`.
    */
-  remove(addresses: string[]): Promise<RunOutcome> {
-    return this.h.governance.run(removeMembersAction(this.h.pkgs(), addresses))
+  remove(addresses: string[], opts?: RunOptions): Promise<RunOutcome> {
+    return this.h.governance.run(
+      removeMembersAction(this.h.pkgs(), addresses),
+      opts,
+    )
   }
 
-  /** Replace the acting unit's board wholesale. */
-  setBoard(addresses: string[]): Promise<RunOutcome> {
-    return this.h.governance.run(setBoardAction(this.h.pkgs(), addresses))
+  /**
+   * Apply one board DIFF (`SetBoard { to_add, to_remove }`) — cycle 7 cannot
+   * replace a board wholesale, because the roster is an unenumerable table.
+   */
+  setBoard(
+    change: { add?: string[]; remove?: string[] },
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
+    return this.h.governance.run(setBoardAction(this.h.pkgs(), change), opts)
   }
 }
 
@@ -645,7 +1067,8 @@ class OrgMetadataApi {
   constructor(private readonly h: OrgHandle) {}
 
   /**
-   * Point the acting unit's charter at a new metadata document.
+   * Point a unit's charter at a new metadata document (default: the acting
+   * seat).
    *
    * The SDK does not host metadata — pass a URI you already uploaded
    * (DESIGN-ARMATURE.md OQ-A3).
@@ -653,8 +1076,11 @@ class OrgMetadataApi {
   async update(params: {
     metadataUri: string
     charterId?: string
+    unitId?: string
+    metadataIpfs?: string
   }): Promise<RunOutcome> {
-    const charterId = params.charterId ?? this.h.requireSeat().charterId
+    const charterId =
+      params.charterId ?? this.h.requireNode(params.unitId).charterId
     if (!charterId) {
       throw new TriexClientError(
         TriexError.ValidationFailed,
@@ -663,6 +1089,7 @@ class OrgMetadataApi {
     }
     return this.h.governance.run(
       updateMetadataAction(this.h.pkgs(), params.metadataUri, charterId),
+      { unitId: params.unitId, metadataIpfs: params.metadataIpfs },
     )
   }
 }
@@ -672,13 +1099,20 @@ class OrgMetadataApi {
 class OrgTypesApi {
   constructor(private readonly h: OrgHandle) {}
 
-  /** Enable an arbitrary proposal type on the acting unit. */
-  enable(params: {
-    typeKey: string
-    moveType: string
-    config: ProposalConfigInput
-    composableAllowed?: boolean
-  }): Promise<RunOutcome> {
+  /**
+   * Enable an arbitrary proposal type. `config.permissions` /
+   * `config.borrowScope` grant the bits its handler needs (≥80% approval for a
+   * high-impact bit); framework types get their fixed bits on-chain.
+   */
+  enable(
+    params: {
+      typeKey: string
+      moveType: string
+      config: ProposalConfigInput
+      composableAllowed?: boolean
+    },
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
     return this.h.governance.run(
       enableProposalTypeAction(this.h.pkgs(), {
         kind: 'enable_proposal_type',
@@ -687,55 +1121,118 @@ class OrgTypesApi {
         config: params.config,
         composableAllowed: params.composableAllowed,
       }),
+      opts,
     )
   }
 
-  /** Change an enabled type's voting rules; omitted fields keep their value. */
+  /** Disable a type by display key. The governance meta-types are undisableable. */
+  disable(typeKey: string, opts?: RunOptions): Promise<RunOutcome> {
+    return this.h.governance.run(
+      disableProposalTypeAction(this.h.pkgs(), typeKey),
+      opts,
+    )
+  }
+
+  /** Change an enabled type's rules; omitted fields keep their value. */
   updateConfig(
     typeKey: string,
     patch: ProposalConfigPatch,
+    opts?: RunOptions,
   ): Promise<RunOutcome> {
     return this.h.governance.run(
       updateProposalConfigAction(this.h.pkgs(), typeKey, patch),
+      opts,
     )
   }
 
-  /** Enable the `Composite` type, so carts can bundle into one proposal. */
-  enableComposite(): Promise<RunOutcome> {
-    return this.h.governance.run(enableCompositeAction(this.h.pkgs()))
+  /**
+   * Enable the `Composite` type. A DEFAULT slot since cycle 7 — this throws
+   * when the unit already has it (only a unit that disabled it needs this).
+   */
+  async enableComposite(opts?: RunOptions): Promise<RunOutcome> {
+    const gov = await this.h.gov(this.h.contextFor(opts?.unitId).daoId)
+    if (gov.enabledTypes.has('Composite')) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        '`Composite` is already enabled — it is a default slot on every cycle-7 unit. Use updateConfig("Composite", …) to change its rules.',
+      )
+    }
+    return this.h.governance.run(enableCompositeAction(this.h.pkgs()), opts)
   }
 
-  /** Enable treasury withdrawals of one coin (defaults to CRED). */
-  enableSendCoin(coinType?: string): Promise<RunOutcome> {
+  /** Enable treasury withdrawals of one coin (default CRED) — `SendCoin<T>` at 80%. */
+  enableSendCoin(coinType?: string, opts?: RunOptions): Promise<RunOutcome> {
     return this.h.governance.run(
       enableSendCoinAction(
         this.h.pkgs(),
         coinType ?? this.h.deps.ids.credCoinType,
       ),
+      opts,
+    )
+  }
+
+  /** Enable treasury-to-treasury sends of one coin (default CRED) — `SendCoinToOU<T>`. */
+  enableSendCoinToOrg(
+    coinType?: string,
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
+    return this.h.governance.run(
+      enableSendCoinToOuAction(
+        this.h.pkgs(),
+        coinType ?? this.h.deps.ids.credCoinType,
+      ),
+      opts,
     )
   }
 
   /**
-   * Enable every `armature_trading` type not already on the acting unit, in one
-   * transaction. A prerequisite for `org.orders.*` (Phase C).
-   *
-   * `bindToBaseType` is IRREVERSIBLE: it enables the coin-pool order types
-   * bound to that one base coin, permanently, after which the unit can trade
-   * only that base through governance. Organizations created by
-   * `create_tribe_configured` already carry the unbound keys and trade any base
-   * freely — leave it undefined for them. It exists only for units created
-   * before those keys were registered.
+   * Enable rate-limited small payments of one coin (default CRED) —
+   * `SendSmallPayment<T>`. Single-vote by default (quorum 1): the chain caps
+   * spend at 1% of the treasury per 24h epoch, which is what makes one
+   * officer's signature acceptable. Still 80% approval (TREASURY_WITHDRAW).
    */
-  async enableTrading(params?: {
-    quoteType?: string
-    bindToBaseType?: string
-  }): Promise<RunOutcome> {
-    const gov = await this.h.governance.read()
+  enableSendSmallPayment(
+    params?: { coinType?: string; config?: ProposalConfigInput },
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
+    const coinType = params?.coinType ?? this.h.deps.ids.credCoinType
+    return this.h.governance.run(
+      enableProposalTypeAction(this.h.pkgs(), {
+        kind: 'enable_send_small_payment',
+        enabledTypeKey: `SendSmallPayment<${coinType}>`,
+        enabledMoveType: `${this.h.deps.ids.armatureProposals}::send_small_payment::SendSmallPayment<${coinType}>`,
+        config: params?.config ?? {
+          ...TRADING_TYPE_CONFIG,
+          approvalThreshold: 8000,
+          permissions: PERMISSIONS.TREASURY_WITHDRAW,
+        },
+      }),
+      opts,
+    )
+  }
+
+  /**
+   * Enable every `armature_trading` type not already on the unit, in one
+   * transaction. A prerequisite for `org.orders.*`. `DepositCoinToBook` and
+   * `CreateMulticoinPool` get the treasury-withdraw bit at 80% approval.
+   *
+   * Coin-pool pairs (`PlaceLimitOrderCoin<B, Q>` …) are per-instantiation
+   * slots in cycle 7; enable a pair with `orders.enableCoinPair`.
+   */
+  async enableTrading(
+    params?: { quoteType?: string },
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
+    const gov = await this.h.gov(this.h.contextFor(opts?.unitId).daoId)
+    const already = new Set<string>([
+      ...gov.enabledTypes,
+      ...(gov.slots ?? []).map((s) => s.typeName),
+    ])
+    const quoteType = params?.quoteType ?? this.h.deps.ids.credCoinType
     const actions = enableTradingActions(this.h.pkgs(), {
       armatureTrading: this.h.deps.ids.armatureTrading,
-      quoteType: params?.quoteType ?? this.h.deps.ids.credCoinType,
-      alreadyEnabled: gov.enabledTypes,
-      bindToBaseType: params?.bindToBaseType,
+      quoteType,
+      alreadyEnabled: already,
     })
     if (actions.length === 0) {
       throw new TriexClientError(
@@ -743,7 +1240,7 @@ class OrgTypesApi {
         'Every trading proposal type is already enabled on this unit.',
       )
     }
-    return this.h.governance.runBatch(actions)
+    return this.h.governance.runBatch(actions, opts)
   }
 }
 
@@ -754,8 +1251,7 @@ class OrgTreasuryApi {
 
   /**
    * Every coin the acting unit's treasury holds. Enumerated from the vault's
-   * own `coin_types` set, so a coin fully withdrawn still reports as 0 rather
-   * than disappearing.
+   * own `coin_types` set; cycle 7 drops a coin from it when it is drained.
    */
   async balances(treasuryVaultId?: string): Promise<TreasuryCoinBalance[]> {
     return fetchTreasuryCoinBalances(
@@ -770,19 +1266,6 @@ class OrgTreasuryApi {
       this.h.deps.suiClient,
       this.h.requireTreasuryId(treasuryVaultId),
       coinType ?? this.h.deps.ids.credCoinType,
-    )
-  }
-
-  /** One item's treasury balance, or 0n. */
-  async itemBalance(params: {
-    collectionId: string
-    assetId: bigint
-    treasuryVaultId?: string
-  }): Promise<bigint> {
-    return fetchTreasuryItemBalance(
-      this.h.deps.suiClient,
-      this.h.requireTreasuryId(params.treasuryVaultId),
-      params,
     )
   }
 
@@ -827,18 +1310,56 @@ class OrgTreasuryApi {
   }
 
   /**
-   * Pay out of the treasury to a wallet address.
-   *
-   * Governance-sensitive, so on a real board this resolves to a proposal rather
-   * than a single vote — check `RunOutcome.status`. Requires
-   * `types.enableSendCoin(coinType)` first.
+   * Pull coin objects that were transferred to the treasury's ADDRESS into its
+   * balance (`treasury_vault::claim_coin`). Permissionless, like `deposit`.
    */
-  async send(params: {
-    recipient: string
-    amount: bigint
+  async claim(params: {
+    coinObjectIds: string[]
     coinType?: string
     treasuryVaultId?: string
-  }): Promise<RunOutcome> {
+  }): Promise<TxResult> {
+    if (params.coinObjectIds.length === 0) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'claim needs at least one coin object id.',
+      )
+    }
+    const treasuryVaultId =
+      params.treasuryVaultId ??
+      this.h.seat?.treasuryId ??
+      this.h.nodes[0]?.treasuryId
+    if (!treasuryVaultId) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        `Organization ${this.h.orgId} has no TreasuryVault.`,
+      )
+    }
+    return this.h.submit(
+      claimTreasuryCoinsTx({
+        armature: this.h.deps.ids.armature,
+        treasuryVaultId,
+        coinType: params.coinType ?? this.h.deps.ids.credCoinType,
+        coinObjectIds: params.coinObjectIds,
+      }),
+    )
+  }
+
+  /**
+   * Pay out of the treasury to a wallet address.
+   *
+   * Governance-sensitive (80% approval, TREASURY_WITHDRAW), so on a real
+   * board this resolves to a proposal rather than a single vote — check
+   * `RunOutcome.status`. Requires `types.enableSendCoin(coinType)` first.
+   */
+  async send(
+    params: {
+      recipient: string
+      amount: bigint
+      coinType?: string
+      treasuryVaultId?: string
+    },
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
     return this.h.governance.run(
       sendCoinAction(this.h.pkgs(), {
         coinType: params.coinType ?? this.h.deps.ids.credCoinType,
@@ -846,6 +1367,7 @@ class OrgTreasuryApi {
         amount: params.amount,
         treasuryVaultId: this.h.requireTreasuryId(params.treasuryVaultId),
       }),
+      opts,
     )
   }
 
@@ -854,21 +1376,50 @@ class OrgTreasuryApi {
    *
    * `recipientTreasuryId` is that organization's `TreasuryVault` object id —
    * its `treasuryId`, not its `orgId` and not a wallet. Requires
-   * `SendCoinToDAO<Coin>` enabled on this unit.
+   * `SendCoinToOU<Coin>` enabled on this unit (`types.enableSendCoinToOrg`).
    */
-  async sendToOrg(params: {
-    recipientTreasuryId: string
-    amount: bigint
-    coinType?: string
-    treasuryVaultId?: string
-  }): Promise<RunOutcome> {
+  async sendToOrg(
+    params: {
+      recipientTreasuryId: string
+      amount: bigint
+      coinType?: string
+      treasuryVaultId?: string
+    },
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
     return this.h.governance.run(
-      sendCoinToDaoAction(this.h.pkgs(), {
+      sendCoinToOuAction(this.h.pkgs(), {
         coinType: params.coinType ?? this.h.deps.ids.credCoinType,
         recipientTreasuryId: params.recipientTreasuryId,
         amount: params.amount,
         treasuryVaultId: this.h.requireTreasuryId(params.treasuryVaultId),
       }),
+      opts,
+    )
+  }
+
+  /**
+   * A rate-limited small payment (`SendSmallPayment<T>`): at most 1% of the
+   * treasury's balance per 24h epoch, tracked on-chain. Requires
+   * `types.enableSendSmallPayment(coinType)`.
+   */
+  async sendSmall(
+    params: {
+      recipient: string
+      amount: bigint
+      coinType?: string
+      treasuryVaultId?: string
+    },
+    opts?: RunOptions,
+  ): Promise<RunOutcome> {
+    return this.h.governance.run(
+      sendSmallPaymentAction(this.h.pkgs(), {
+        coinType: params.coinType ?? this.h.deps.ids.credCoinType,
+        recipient: params.recipient,
+        amount: params.amount,
+        treasuryVaultId: this.h.requireTreasuryId(params.treasuryVaultId),
+      }),
+      opts,
     )
   }
 }

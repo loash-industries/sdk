@@ -1,148 +1,178 @@
-import { jest } from '@jest/globals'
 import {
+  cooldownEndsAt,
   fetchDaoGovernance,
-  parseEnabledProposalTypes,
-  parseProposalConfigs,
-  parseTypeBindings,
+  fetchIsBoardMember,
+  fetchTypeSlots,
+  normalizeMoveType,
+  packageAliases,
+  parseTypeSlot,
+  permissionFloor,
+  PERMISSIONS,
+  singleVoteExecutable,
+  slotForType,
 } from '../src/armature/governance'
+import { baseConfig, mockOuChain, slotContent } from './helpers/ouChain'
 
-/** gRPC proto-JSON: struct fields exposed directly. */
-const grpcDao = {
-  enabled_proposal_types: { contents: ['SetBoard', 'Composite'] },
-  proposal_configs: {
-    contents: [
-      {
-        key: 'SetBoard',
-        value: {
-          quorum: 6600,
-          approval_threshold: 6600,
-          propose_threshold: '0',
-          expiry_ms: '604800000',
-          execution_delay_ms: '0',
-          cooldown_ms: '0',
-          composable_allowed: true,
-        },
-      },
-    ],
-  },
-  type_bindings: {
-    contents: [{ key: 'SetBoard', value: '0x2::set_board::SetBoard' }],
-  },
-}
+const hex = (pair: string) => `0x${pair.repeat(32)}`
+const OU = hex('c1')
+const ALICE = hex('11')
+const PKG = hex('0a')
 
-/** JSON-RPC: the same struct, nested one `.fields` layer deeper. */
-const jsonRpcDao = {
-  enabled_proposal_types: { fields: { contents: ['SetBoard', 'Composite'] } },
-  proposal_configs: {
-    fields: {
-      contents: [
-        {
-          fields: {
-            key: 'SetBoard',
-            value: {
-              fields: {
-                quorum: 6600,
-                approval_threshold: 6600,
-                propose_threshold: '0',
-                expiry_ms: '604800000',
-                execution_delay_ms: '0',
-                cooldown_ms: '0',
-                composable_allowed: true,
-              },
-            },
-          },
-        },
-      ],
-    },
-  },
-  type_bindings: {
-    fields: {
-      contents: [
-        { fields: { key: 'SetBoard', value: '0x2::set_board::SetBoard' } },
-      ],
-    },
-  },
-}
-
-describe('governance parsing', () => {
-  it.each([
-    ['gRPC proto-JSON', grpcDao],
-    ['JSON-RPC (.fields nested)', jsonRpcDao],
-  ])('parses identically across transports: %s', (_label, dao) => {
-    expect([...parseEnabledProposalTypes(dao)]).toEqual([
-      'SetBoard',
-      'Composite',
-    ])
-    expect(parseProposalConfigs(dao).get('SetBoard')).toEqual({
-      quorum: 6600,
-      approvalThreshold: 6600,
-      proposeThreshold: 0,
-      // u64s arrive as decimal STRINGS and must survive as numbers.
-      expiryMs: 604_800_000,
-      executionDelayMs: 0,
-      cooldownMs: 0,
-      composableAllowed: true,
-    })
-    expect(parseTypeBindings(dao).get('SetBoard')).toBe(
-      '0x2::set_board::SetBoard',
+describe('normalizeMoveType', () => {
+  it('pads and prefixes every address, including type arguments', () => {
+    expect(normalizeMoveType('0x2::coin::Coin<0x2::sui::SUI>')).toBe(
+      `0x${'0'.repeat(63)}2::coin::Coin<0x${'0'.repeat(63)}2::sui::SUI>`,
     )
   })
 
-  it('defaults composable_allowed to false when absent', () => {
-    const cfg = parseProposalConfigs({
-      proposal_configs: { contents: [{ key: 'X', value: { quorum: 1 } }] },
-    })
-    expect(cfg.get('X')?.composableAllowed).toBe(false)
-    // Missing numerics default to 0 rather than NaN.
-    expect(cfg.get('X')?.expiryMs).toBe(0)
+  it('treats the chain’s prefix-less TypeName and the SDK form as equal', () => {
+    const chain = `${'0a'.repeat(32)}::send_coin::SendCoin<${'0'.repeat(63)}2::sui::SUI>`
+    expect(normalizeMoveType(chain)).toBe(
+      normalizeMoveType(`${PKG}::send_coin::SendCoin<0x2::sui::SUI>`),
+    )
   })
 
-  it('returns empties for a DAO object missing the fields entirely', () => {
-    expect(parseEnabledProposalTypes({}).size).toBe(0)
-    expect(parseProposalConfigs({}).size).toBe(0)
-    expect(parseTypeBindings({}).size).toBe(0)
+  it('does not mistake a hex-looking MODULE name for an address', () => {
+    expect(normalizeMoveType('0x2::cafe::Cafe')).toBe(
+      `0x${'0'.repeat(63)}2::cafe::Cafe`,
+    )
   })
 
-  it('skips malformed entries instead of throwing', () => {
-    const cfg = parseProposalConfigs({
-      proposal_configs: {
-        contents: [
-          { key: 42, value: { quorum: 1 } }, // non-string key
-          { key: 'ok', value: null }, // no value
-          { key: 'good', value: { quorum: 7 } },
-        ],
-      },
-    })
-    expect([...cfg.keys()]).toEqual(['good'])
+  it('ignores whitespace between type arguments', () => {
+    expect(normalizeMoveType('0x1::m::P<0x2::a::A, 0x3::b::B>')).toBe(
+      normalizeMoveType('0x1::m::P<0x2::a::A,0x3::b::B>'),
+    )
+  })
+})
 
-    expect([
-      ...parseEnabledProposalTypes({
-        enabled_proposal_types: { contents: ['a', 5, null, 'b'] },
+describe('TypeSlot parsing (cycle 7 BCS)', () => {
+  it('decodes display key, config (bits + scope) and last execution', () => {
+    const slot = parseTypeSlot(
+      slotContent({
+        moveType: `${PKG}::send_coin::SendCoin<0x2::sui::SUI>`,
+        displayKey: 'SendCoin<0x2::sui::SUI>',
+        config: {
+          quorum: 5000,
+          approvalThreshold: 8000,
+          cooldownMs: 60_000,
+          permissions: PERMISSIONS.TREASURY_WITHDRAW,
+          borrowScope: ['0x2::coin::TreasuryCap<0x2::sui::SUI>'],
+        },
+        lastExecutedMs: 1_000,
       }),
-    ]).toEqual(['a', 'b'])
+    )
+    expect(slot.displayKey).toBe('SendCoin<0x2::sui::SUI>')
+    expect(slot.typeName).toBe(
+      normalizeMoveType(`${PKG}::send_coin::SendCoin<0x2::sui::SUI>`),
+    )
+    expect(slot.config).toEqual(
+      baseConfig({
+        quorum: 5000,
+        approvalThreshold: 8000,
+        cooldownMs: 60_000,
+        permissions: PERMISSIONS.TREASURY_WITHDRAW,
+        borrowScope: [
+          normalizeMoveType('0x2::coin::TreasuryCap<0x2::sui::SUI>'),
+        ],
+      }),
+    )
+    expect(slot.lastExecutedMs).toBe(1_000)
+    expect(cooldownEndsAt(slot)).toBe(61_000)
   })
 })
 
 describe('fetchDaoGovernance', () => {
-  it('reads the DAO object once and returns all three views', async () => {
-    const getObject = jest.fn(async () => ({ object: { json: grpcDao } }))
-    const suiClient = { core: { getObject } } as never
-
-    const gov = await fetchDaoGovernance(suiClient, '0xdao')
-    expect(getObject).toHaveBeenCalledWith({
-      objectId: '0xdao',
-      include: { json: true },
+  const chain = () =>
+    mockOuChain({
+      [OU]: {
+        members: [ALICE],
+        controllerPaused: true,
+        frozen: { [`${PKG}::set_board::SetBoard`]: 9_999 },
+        slots: [
+          { moveType: `${PKG}::set_board::SetBoard`, displayKey: 'SetBoard' },
+          {
+            moveType: `${PKG}::update_metadata::UpdateMetadata`,
+            displayKey: 'CharterUpdate',
+          },
+        ],
+      },
     })
-    expect(gov.enabledTypes.has('Composite')).toBe(true)
-    expect(gov.configs.get('SetBoard')?.quorum).toBe(6600)
-    expect(gov.typeBindings.size).toBe(1)
+
+  it('reads slots, root flags and the freeze in one pass', async () => {
+    const gov = await fetchDaoGovernance(chain() as never, OU)
+    expect([...gov.enabledTypes].sort()).toEqual(['CharterUpdate', 'SetBoard'])
+    expect(gov.typeBindings.get('CharterUpdate')).toBe(
+      normalizeMoveType(`${PKG}::update_metadata::UpdateMetadata`),
+    )
+    expect(gov.state).toMatchObject({
+      status: 'active',
+      controllerPaused: true,
+      executionPaused: false,
+      memberCount: 1,
+    })
+    expect(
+      gov.freeze?.frozenTypes.get(
+        normalizeMoveType(`${PKG}::set_board::SetBoard`),
+      ),
+    ).toBe(9_999)
   })
 
-  it('tolerates an object with no json payload', async () => {
-    const suiClient = {
-      core: { getObject: async () => ({ object: {} }) },
-    } as never
-    const gov = await fetchDaoGovernance(suiClient, '0xdao')
-    expect(gov.enabledTypes.size).toBe(0)
+  it('finds a slot by MOVE TYPE, whatever its display key', async () => {
+    const gov = await fetchDaoGovernance(chain() as never, OU)
+    const slot = slotForType(gov, `${PKG}::update_metadata::UpdateMetadata`)
+    expect(slot?.displayKey).toBe('CharterUpdate')
+    expect(slotForType(gov, `${PKG}::nope::Nope`)).toBeUndefined()
+  })
+
+  it('maps upgraded package ids to their defining id before matching', async () => {
+    const gov = await fetchDaoGovernance(chain() as never, OU)
+    const current = hex('0b')
+    const aliases = packageAliases([[current, PKG]])
+    expect(
+      slotForType(gov, `${current}::set_board::SetBoard`, { aliases })
+        ?.displayKey,
+    ).toBe('SetBoard')
+  })
+
+  it('lists only TypeSlot fields', async () => {
+    const slots = await fetchTypeSlots(chain() as never, OU)
+    expect(slots).toHaveLength(2)
+  })
+
+  it('reads head-current membership from the roster table', async () => {
+    const gov = await fetchDaoGovernance(chain() as never, OU)
+    const sui = chain() as never
+    expect(
+      await fetchIsBoardMember(sui, gov.state!.membersTableId, ALICE),
+    ).toBe(true)
+    expect(
+      await fetchIsBoardMember(sui, gov.state!.membersTableId, hex('99')),
+    ).toBe(false)
+  })
+})
+
+describe('singleVoteExecutable', () => {
+  it('turns on quorum × board size', () => {
+    expect(singleVoteExecutable(5, baseConfig({ quorum: 5000 }))).toBe(false)
+    expect(singleVoteExecutable(5, baseConfig({ quorum: 1 }))).toBe(true)
+    expect(singleVoteExecutable(2, baseConfig({ quorum: 5000 }))).toBe(true)
+  })
+
+  it('refuses a delay, an empty board, or a propose threshold above one vote', () => {
+    expect(singleVoteExecutable(1, baseConfig({ executionDelayMs: 1 }))).toBe(
+      false,
+    )
+    expect(singleVoteExecutable(0, baseConfig())).toBe(false)
+    expect(singleVoteExecutable(1, baseConfig({ proposeThreshold: 2 }))).toBe(
+      false,
+    )
+  })
+})
+
+describe('permission floors', () => {
+  it('80% for any high-impact bit, none otherwise', () => {
+    expect(permissionFloor(PERMISSIONS.TREASURY_WITHDRAW)).toBe(8000)
+    expect(permissionFloor(PERMISSIONS.VAULT_BORROW)).toBe(8000)
+    expect(permissionFloor(PERMISSIONS.BOARD_ADD | PERMISSIONS.FREEZE)).toBe(0)
   })
 })

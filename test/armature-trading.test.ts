@@ -15,6 +15,7 @@ import {
 import type { Org, OuExecContext } from '../src/armature/types'
 import { resolvePackageIds } from '../src/config'
 import { TriexError } from '../src/errors'
+import { mockOuChain } from './helpers/ouChain'
 import { GTC_EXPIRE } from '../src/money'
 
 const hex = (pair: string) => `0x${pair.repeat(32)}`
@@ -218,25 +219,17 @@ const TRADING_KEYS = [
   'setup_trading_account::SetupTradingAccount',
 ].map((t) => `${TRADING}::${t}`)
 
-function daoJson(keys: string[], quorum = 1) {
-  return {
-    enabled_proposal_types: { contents: keys },
-    proposal_configs: {
-      contents: keys.map((key) => ({
-        key,
-        value: {
-          quorum,
-          approval_threshold: 5000,
-          propose_threshold: '0',
-          expiry_ms: '3600000',
-          execution_delay_ms: '0',
-          cooldown_ms: '0',
-          composable_allowed: false,
-        },
-      })),
-    },
-    type_bindings: { contents: [] },
-  }
+/** A fake fullnode serving both units with `keys` as single-config slots. */
+function chainFor(keys: string[], quorum = 1) {
+  const slots = keys.map((k) => ({
+    moveType: k,
+    displayKey: k,
+    config: { quorum },
+  }))
+  return mockOuChain({
+    [ROOT]: { members: [ALICE], slots },
+    [OFFICERS]: { members: [ALICE], slots },
+  })
 }
 
 function harness(opts: { quorum?: number; hasBm?: boolean } = {}) {
@@ -247,13 +240,8 @@ function harness(opts: { quorum?: number; hasBm?: boolean } = {}) {
   })
   const handle = new OrgHandle(
     {
-      suiClient: {
-        core: {
-          getObject: async () => ({
-            object: { json: daoJson(TRADING_KEYS, opts.quorum ?? 1) },
-          }),
-        },
-      } as never,
+      // Cycle-7 governance reads: OU root + TypeSlot fields (BCS).
+      suiClient: chainFor(TRADING_KEYS, opts.quorum ?? 1) as never,
       indexer: {
         hubVault: async () => ({
           collectionId: COLLECTION,
@@ -299,7 +287,7 @@ describe('orders through the handle', () => {
     expect(outcome).toEqual({ status: 'executed', digest: 'D1' })
     expect(commandNames(captured.txs[0])).toEqual([
       'place_limit_order::new',
-      'board_voting::submit_vote_execute',
+      'board_voting::submit_vote_execute_readonly',
       'trading_ops::execute_place_limit_order',
     ])
   })
@@ -422,7 +410,7 @@ describe('orders through the handle', () => {
     await handle.orders.ensureAccount()
     expect(commandNames(captured.txs[0])).toEqual([
       'setup_trading_account::new',
-      'board_voting::submit_vote_execute',
+      'board_voting::submit_vote_execute_readonly',
       'trading_ops::execute_setup_trading_account',
     ])
   })

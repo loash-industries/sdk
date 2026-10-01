@@ -6,11 +6,11 @@ import {
   depositToTreasuryTx,
   fetchTreasuryCoinBalance,
   fetchTreasuryCoinBalances,
-  fetchTreasuryItemBalance,
   sendCoinAction,
-  sendCoinToDaoAction,
+  sendCoinToOuAction,
   toTypeNameKey,
 } from '../src/armature/treasury'
+import { PERMISSIONS } from '../src/armature/governance'
 import { buildPlanTx } from '../src/armature/plan'
 import type { OuExecContext } from '../src/armature/types'
 
@@ -84,7 +84,7 @@ describe('treasury reads', () => {
     }
   })
 
-  it('reports a withdrawn coin as 0 rather than dropping it', async () => {
+  it('reports a coin whose field is gone as 0 rather than throwing', async () => {
     const sui = {
       core: {
         getObject: async () => vaultObject([CRED_KEY]),
@@ -112,60 +112,6 @@ describe('treasury reads', () => {
     }))
     const sui = { core: { getDynamicField } } as never
     expect(await fetchTreasuryCoinBalance(sui, VAULT, CRED)).toBe(7n)
-  })
-
-  it('walks collection → asset for an item balance', async () => {
-    const RECORD = hex('55')
-    const MultiCoin = bcs.struct('MultiCoinBalance', {
-      id: bcs.Address,
-      collection: bcs.Address,
-      asset_id: bcs.u64(),
-      amount: bcs.u64(),
-    })
-    const getDynamicField = jest.fn(async ({ parentId }: any) =>
-      parentId === VAULT
-        ? {
-            dynamicField: {
-              value: { bcs: bcs.Address.serialize(RECORD).toBytes() },
-            },
-          }
-        : {
-            dynamicField: {
-              value: {
-                bcs: MultiCoin.serialize({
-                  id: RECORD,
-                  collection: hex('66'),
-                  asset_id: 70810n,
-                  amount: 12n,
-                }).toBytes(),
-              },
-            },
-          },
-    )
-    const sui = { core: { getDynamicField } } as never
-    const amount = await fetchTreasuryItemBalance(sui, VAULT, {
-      collectionId: hex('66'),
-      assetId: 70810n,
-    })
-    expect(amount).toBe(12n)
-    expect(getDynamicField).toHaveBeenCalledTimes(2)
-    expect((getDynamicField.mock.calls[1][0] as any).parentId).toBe(RECORD)
-  })
-
-  it('is 0n when the collection was never recorded', async () => {
-    const sui = {
-      core: {
-        getDynamicField: async () => {
-          throw new Error('nope')
-        },
-      },
-    } as never
-    expect(
-      await fetchTreasuryItemBalance(sui, VAULT, {
-        collectionId: hex('66'),
-        assetId: 1n,
-      }),
-    ).toBe(0n)
   })
 })
 
@@ -208,6 +154,17 @@ describe('treasury payouts are governance', () => {
     ])
   })
 
+  it('payouts declare the TREASURY_WITHDRAW bit their handler needs', () => {
+    expect(
+      sendCoinAction(PKGS, {
+        coinType: CRED,
+        recipient: ALICE,
+        amount: 1n,
+        treasuryVaultId: VAULT,
+      }).own?.requiredPermissions,
+    ).toBe(PERMISSIONS.TREASURY_WITHDRAW)
+  })
+
   it('sendCoin defers cleanly — one action serves both strategies', () => {
     const tx = buildPlanTx(
       'own-propose',
@@ -226,10 +183,10 @@ describe('treasury payouts are governance', () => {
     ])
   })
 
-  it('sendCoinToDao targets the recipient TREASURY, not a wallet', () => {
+  it('sendCoinToOu targets the recipient TREASURY, not a wallet', () => {
     const tx = buildPlanTx(
       'own-execute',
-      sendCoinToDaoAction(PKGS, {
+      sendCoinToOuAction(PKGS, {
         coinType: CRED,
         recipientTreasuryId: OTHER_VAULT,
         amount: 100n,
@@ -239,9 +196,9 @@ describe('treasury payouts are governance', () => {
       ARMATURE,
     )
     expect(commandNames(tx)).toEqual([
-      'send_coin_to_dao::new',
+      'send_coin_to_ou::new',
       'board_voting::submit_vote_execute',
-      'treasury_ops::execute_send_coin_to_dao',
+      'treasury_ops::execute_send_coin_to_ou',
     ])
     // Both vaults are inputs: source and destination.
     const objectIds = (tx.getData().inputs as any[])
@@ -264,7 +221,7 @@ describe('treasury payouts are governance', () => {
       }).fallbackPolicy,
     ).toBe('fall-back-to-proposal')
     expect(
-      sendCoinToDaoAction(PKGS, {
+      sendCoinToOuAction(PKGS, {
         coinType: CRED,
         recipientTreasuryId: OTHER_VAULT,
         amount: 1n,

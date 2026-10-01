@@ -2,17 +2,46 @@ import type { Transaction } from '@mysten/sui/transactions'
 
 import {
   addMembersAction,
-  removeMembersAction,
-  setBoardAction,
-  updateMetadataAction,
-  updateProposalConfigAction,
+  disableBypassTypeAction,
+  disableProposalTypeAction,
+  enableBypassTypeAction,
   enableSendCoinAction,
   enableTradingActions,
-  compositeStepExecutor,
-  passedProposalAction,
+  removeMembersAction,
   sendCoinTypeKey,
+  setBoardAction,
+  subOuControlType,
   tradingTypeEntries,
+  TRADING_TYPE_CONFIG,
+  updateMetadataAction,
+  updateProposalConfigAction,
 } from '../src/armature/actions'
+import { createTribeTx, tradingTypeInits } from '../src/armature/create'
+import {
+  adoptCurrencyAction,
+  currencyTypeEntries,
+  mintAllowanceBypassTx,
+  mintCoinAction,
+} from '../src/armature/currency'
+import {
+  compositeStepExecutor,
+  executorForPayload,
+  passedProposalAction,
+  splitMoveType,
+} from '../src/armature/executors'
+import { PERMISSIONS } from '../src/armature/governance'
+import {
+  createSubOuAction,
+  pauseSubOuAction,
+  reclaimCapFromSubOuAction,
+  spawnOuAction,
+  spinOutSubOuAction,
+  transferAssetsAction,
+  transferCapToSubOuAction,
+  transferFreezeAdminAction,
+  unfreezeProposalTypeAction,
+  updateFreezeExemptTypesAction,
+} from '../src/armature/lifecycle'
 import {
   buildBatchPlanTx,
   buildCompositeSubmitTx,
@@ -22,8 +51,22 @@ import {
   extractCreatedProposalId,
   resolveExecutionPlan,
 } from '../src/armature/plan'
+import {
+  createOuTx,
+  deleteExhaustedFrameTx,
+  deleteExpiredProposalTx,
+  freezeTypeTx,
+  publishEntryTx,
+  voteTx,
+} from '../src/armature/transactions'
+import {
+  claimTreasuryCoinsTx,
+  sendSmallPaymentAction,
+} from '../src/armature/treasury'
 import type { OuExecContext } from '../src/armature/types'
+import { proposeUpgradeAction } from '../src/armature/upgrade'
 import { TriexError } from '../src/errors'
+import { baseConfig } from './helpers/ouChain'
 
 // `tx.object()` and `tx.pure.address()` validate their inputs, so every id here
 // has to be real hex — a readable placeholder like `0xchild` throws at build
@@ -42,16 +85,18 @@ const STRANGER = hex('99')
 
 const CHILD = hex('c3')
 const CHILD_FREEZE = hex('c4')
+const CHILD_CAPS = hex('c5')
 const PARENT = hex('d5')
 const PARENT_FREEZE = hex('d6')
 const PARENT_CAPS = hex('d7')
 const CONTROL_CAP = hex('d8')
 const CHARTER = hex('e9')
+const TREASURY = hex('ea')
 const PROPOSAL = hex('f1')
 const FRAME = hex('f2')
+const CAP = hex('f3')
 
 const CRED = `${hex('c0')}::cred::CRED`
-const RECORDED_STEP_TYPE = `${hex('ab')}::recorded::Type`
 const BASE = `${hex('b0')}::base::BASE`
 
 const ctx: OuExecContext = {
@@ -94,39 +139,68 @@ function packages(tx: Transaction): string[] {
     .map((c: any) => c.MoveCall.package)
 }
 
-describe('buildPlanTx — one action per strategy', () => {
+/** Number of arguments of the MoveCall at `index` (of MoveCalls only). */
+function argCount(tx: Transaction, index: number): number {
+  const calls = tx.getData().commands.filter((c: any) => c.$kind === 'MoveCall')
+  return (calls[index] as any).MoveCall.arguments.length
+}
+
+function objectInputs(tx: Transaction): string[] {
+  return (tx.getData().inputs as any[])
+    .map(
+      (i) =>
+        i?.UnresolvedObject?.objectId ?? i?.Object?.ImmOrOwnedObject?.objectId,
+    )
+    .filter(Boolean)
+}
+
+describe('buildPlanTx — one action per strategy (cycle 7)', () => {
   const action = addMembersAction(PKGS, [ALICE])
 
-  it('own-execute: payload → submit_vote_execute → domain execute', () => {
+  it('own-execute: framework payload → submit_vote_execute (no type_key) → handler', () => {
     const tx = buildPlanTx('own-execute', action, ctx, PKGS.armature)
     expect(commandNames(tx)).toEqual([
       'batch_add_members::new',
       'board_voting::submit_vote_execute',
       'member_ops::execute_batch_add_members',
     ])
-    // The type ARGUMENT is fully qualified even though the type_key is bare.
     expect(typeArgs(tx)[1]).toEqual([
-      `${PROPOSALS}::batch_add_members::BatchAddMembers`,
+      `${ARMATURE}::batch_add_members::BatchAddMembers`,
     ])
-    // submit_vote_execute belongs to the framework, the rest to proposals.
-    expect(packages(tx)).toEqual([PROPOSALS, ARMATURE, PROPOSALS])
+    // BatchAddMembers moved INTO the framework in cycle 7.
+    expect(packages(tx)).toEqual([ARMATURE, ARMATURE, ARMATURE])
+    // (ou, metadata_ipfs, payload, freeze, clock) — the type_key is gone.
+    expect(argCount(tx, 1)).toBe(5)
   })
 
-  it('own-propose: payload → submit_proposal, and no execute', () => {
+  it('own-execute with readonly picks submit_vote_execute_readonly', () => {
+    const tx = buildPlanTx('own-execute', action, ctx, PKGS.armature, {
+      readonly: true,
+    })
+    expect(commandNames(tx)[1]).toBe(
+      'board_voting::submit_vote_execute_readonly',
+    )
+  })
+
+  it('own-propose: payload → submit_proposal (4 args), and no execute', () => {
     const tx = buildPlanTx('own-propose', action, ctx, PKGS.armature)
     expect(commandNames(tx)).toEqual([
       'batch_add_members::new',
       'board_voting::submit_proposal',
     ])
+    expect(argCount(tx, 1)).toBe(4)
   })
 
-  it('control-execute: control payload → parent vote → subdao execute', () => {
+  it('control-execute: control payload → parent vote → subou execute (no clock)', () => {
     const tx = buildPlanTx('control-execute', action, ctx, PKGS.armature)
     expect(commandNames(tx)).toEqual([
       'controller_batch_add_members::new',
       'board_voting::submit_vote_execute',
-      'subdao_ops::execute_controller_batch_add_members',
+      'subou_ops::execute_controller_batch_add_members',
     ])
+    // (controller_vault, members_ou, ticket) — cycle 7 dropped the clock.
+    expect(argCount(tx, 2)).toBe(3)
+    expect(packages(tx)).toEqual([PROPOSALS, ARMATURE, PROPOSALS])
   })
 
   it('control-propose: control payload → parent proposal', () => {
@@ -138,12 +212,11 @@ describe('buildPlanTx — one action per strategy', () => {
   })
 
   it('refuses a strategy the action cannot carry, with a typed error', () => {
-    const ownOnly = setBoardAction(PKGS, [ALICE])
+    const ownOnly = setBoardAction(PKGS, { add: [ALICE] })
     expect(() =>
       buildPlanTx('control-execute', ownOnly, ctx, PKGS.armature),
     ).toThrow(expect.objectContaining({ code: TriexError.ValidationFailed }))
-
-    const controlOnly = removeMembersAction(PKGS, [ALICE])
+    const controlOnly = pauseSubOuAction(PKGS)
     expect(() =>
       buildPlanTx('own-execute', controlOnly, ctx, PKGS.armature),
     ).toThrow(expect.objectContaining({ code: TriexError.ValidationFailed }))
@@ -167,51 +240,61 @@ describe('buildBatchPlanTx', () => {
       armatureTrading: TRADING,
       quoteType: CRED,
     })
-    expect(actions).toHaveLength(9) // the non-coin-pool trading types
+    expect(actions).toHaveLength(tradingTypeEntries(TRADING, CRED).length)
     const tx = buildBatchPlanTx('own-execute', actions, ctx, PKGS.armature)
-    // Four commands per action — the ProposalConfig is constructed inline as
-    // part of the payload, so it is not free.
-    expect(commandNames(tx)).toHaveLength(actions.length * 4)
-    expect(commandNames(tx).slice(0, 4)).toEqual([
+    // SetupTradingAccount: type_name_of, new_config, new, submit, execute.
+    expect(commandNames(tx).slice(0, 5)).toEqual([
+      'ou::type_name_of',
       'proposal::new_config',
       'enable_proposal_type::new',
       'board_voting::submit_vote_execute',
       'admin_ops::execute_enable_proposal_type',
     ])
-    // Each enable binds its own concrete Move type on the execute call.
-    expect(typeArgs(tx)[3]).toEqual([
-      `${TRADING}::place_limit_order::PlaceLimitOrder<${CRED}>`,
-    ])
+    // The treasury-withdrawing DepositCoinToBook carries its bit.
+    expect(commandNames(tx)).toContain('proposal::with_permissions')
   })
 })
 
 describe('buildCompositeSubmitTx', () => {
-  const composable = () =>
-    updateProposalConfigAction(PKGS, 'SetBoard', { quorum: 1 })
-
-  it('opens a frame, adds a step per action, then submits once', () => {
+  it('routes EnableProposalType / UpdateProposalConfig through the typed add_* entry points', () => {
     const tx = buildCompositeSubmitTx(
-      [composable(), composable()],
+      [
+        updateProposalConfigAction(PKGS, 'SetBoard', { quorum: 1 }),
+        setBoardAction(PKGS, { add: [NEWBIE] }),
+      ],
       ctx,
       PKGS.armature,
     )
     expect(commandNames(tx)).toEqual([
       'composite::new_frame',
       'update_proposal_config::new',
-      'composite::add_step',
-      'update_proposal_config::new',
+      'composite::add_update_proposal_config_step',
+      'set_board::new',
       'composite::add_step',
       'composite::submit_composite',
     ])
-    expect(typeArgs(tx)[2]).toEqual([
-      `${PROPOSALS}::update_proposal_config::UpdateProposalConfig`,
-    ])
+    // The typed step takes no type argument; add_step<P> does.
+    expect(typeArgs(tx)[2]).toEqual([])
+    expect(typeArgs(tx)[4]).toEqual([`${ARMATURE}::set_board::SetBoard`])
+  })
+
+  it('refuses a step that grants permission bits (EGrantInComposite)', () => {
+    expect(() =>
+      buildCompositeSubmitTx(
+        [
+          setBoardAction(PKGS, { add: [NEWBIE] }),
+          updateProposalConfigAction(PKGS, 'SendCoin', { permissions: 128 }),
+        ],
+        ctx,
+        PKGS.armature,
+      ),
+    ).toThrow(expect.objectContaining({ code: TriexError.ValidationFailed }))
   })
 
   it('refuses a control-only action — composites run the own pipeline', () => {
     expect(() =>
       buildCompositeSubmitTx(
-        [composable(), removeMembersAction(PKGS, [ALICE])],
+        [setBoardAction(PKGS, { add: [NEWBIE] }), pauseSubOuAction(PKGS)],
         ctx,
         PKGS.armature,
       ),
@@ -220,9 +303,9 @@ describe('buildCompositeSubmitTx', () => {
 })
 
 describe('buildExecutePassedTx', () => {
-  it('takes the ticket from the recorded vote, then runs the same handler', () => {
+  it('takes the ticket from the recorded vote (proposal by value), then runs the handler', () => {
     const tx = buildExecutePassedTx({
-      action: setBoardAction(PKGS, [ALICE]),
+      action: setBoardAction(PKGS, {}),
       armature: PKGS.armature,
       daoId: CHILD,
       proposalId: PROPOSAL,
@@ -232,13 +315,25 @@ describe('buildExecutePassedTx', () => {
       'board_voting::ticket_from_vote',
       'board_ops::execute_set_board',
     ])
-    expect(typeArgs(tx)[0]).toEqual([`${PROPOSALS}::set_board::SetBoard`])
+    expect(typeArgs(tx)[0]).toEqual([`${ARMATURE}::set_board::SetBoard`])
+  })
+
+  it('uses ticket_from_vote_readonly when asked', () => {
+    const tx = buildExecutePassedTx({
+      action: setBoardAction(PKGS, {}),
+      armature: PKGS.armature,
+      daoId: CHILD,
+      proposalId: PROPOSAL,
+      emergencyFreezeId: CHILD_FREEZE,
+      readonly: true,
+    })
+    expect(commandNames(tx)[0]).toBe('board_voting::ticket_from_vote_readonly')
   })
 
   it('refuses an action with no own adapter', () => {
     expect(() =>
       buildExecutePassedTx({
-        action: removeMembersAction(PKGS, [ALICE]),
+        action: pauseSubOuAction(PKGS),
         armature: PKGS.armature,
         daoId: CHILD,
         proposalId: PROPOSAL,
@@ -269,21 +364,14 @@ describe('buildExecuteCompositeTx', () => {
       'admin_ops::execute_update_proposal_config',
       'composite::finalize_pipeline',
     ])
-    // The outer ticket is the composite payload, each step its own type.
+    // Cycle 7: CompositePayload lives in its own leaf module.
     expect(typeArgs(tx)[0]).toEqual([
-      `${ARMATURE}::composite::CompositePayload`,
-    ])
-    expect(typeArgs(tx)[2]).toEqual([
-      `${PROPOSALS}::update_proposal_config::UpdateProposalConfig`,
+      `${ARMATURE}::composite_payload::CompositePayload`,
     ])
   })
 
-  it('prefers the on-chain recorded step type over the adapter default', () => {
-    const step = compositeStepExecutor(
-      PKGS,
-      'UpdateProposalConfig',
-      RECORDED_STEP_TYPE,
-    )!
+  it('can reclaim the exhausted frame in the same transaction', () => {
+    const step = compositeStepExecutor(PKGS, 'SetBoard')!
     const tx = buildExecuteCompositeTx({
       armature: PKGS.armature,
       daoId: CHILD,
@@ -291,8 +379,9 @@ describe('buildExecuteCompositeTx', () => {
       emergencyFreezeId: CHILD_FREEZE,
       frameId: FRAME,
       steps: [step],
+      deleteFrame: true,
     })
-    expect(typeArgs(tx)[2]).toEqual([RECORDED_STEP_TYPE])
+    expect(commandNames(tx).at(-1)).toBe('composite::delete_exhausted_frame')
   })
 
   it('refuses an empty pipeline', () => {
@@ -314,27 +403,32 @@ describe('buildExecuteCompositeTx', () => {
 })
 
 describe('resolveExecutionPlan', () => {
-  const cfg = {
-    quorum: 1,
-    approvalThreshold: 5000,
-    proposeThreshold: 0,
-    expiryMs: 1,
-    executionDelayMs: 0,
-    cooldownMs: 0,
-    composableAllowed: false,
-  }
-
-  it('attaches a lazy builder that matches the chosen strategy', () => {
+  it('attaches a lazy builder that matches the chosen strategy — readonly for cooldown 0', () => {
     const plan = resolveExecutionPlan(
       addMembersAction(PKGS, [ALICE]),
       ctx,
-      { ownConfig: cfg, controlConfig: null },
+      { ownConfig: baseConfig(), controlConfig: null },
       ALICE,
       PKGS.armature,
     )
     expect(plan.blocked).toBe(false)
     if (plan.blocked) return
     expect(plan.strategy).toBe('own-execute')
+    expect(plan.readonly).toBe(true)
+    expect(commandNames(plan.buildTx())).toContain(
+      'board_voting::submit_vote_execute_readonly',
+    )
+  })
+
+  it('uses the &mut entry point for a type with a cooldown', () => {
+    const plan = resolveExecutionPlan(
+      addMembersAction(PKGS, [ALICE]),
+      ctx,
+      { ownConfig: baseConfig({ cooldownMs: 1 }), controlConfig: null },
+      ALICE,
+      PKGS.armature,
+    )
+    if (plan.blocked) throw new Error('blocked')
     expect(commandNames(plan.buildTx())).toContain(
       'board_voting::submit_vote_execute',
     )
@@ -366,57 +460,170 @@ describe('extractCreatedProposalId', () => {
           { objectId: '0xa', objectType: '0x2::coin::Coin<0x2::sui::SUI>' },
           {
             objectId: '0xprop-id',
-            objectType: `${ARMATURE}::proposal::Proposal<${PROPOSALS}::set_board::SetBoard>`,
+            objectType: `${ARMATURE}::proposal::Proposal<${ARMATURE}::set_board::SetBoard>`,
           },
         ],
       }),
     ).toBe('0xprop-id')
   })
 
-  it('is undefined when the transaction created no proposal', () => {
+  it('is undefined for a single-PTB execution — cycle 7 creates no Proposal', () => {
     expect(
       extractCreatedProposalId({ digest: 'd', raw: {}, createdObjects: [] }),
     ).toBeUndefined()
   })
 })
 
-describe('action catalog details', () => {
-  it('keys treasury withdrawals per coin — one Move type per key on-chain', () => {
-    expect(sendCoinTypeKey(CRED)).toBe(`SendCoin<${CRED}>`)
-    const a = enableSendCoinAction(PKGS, CRED)
-    const tx = buildPlanTx('own-execute', a, ctx, PKGS.armature)
-    // [0] new_config, [1] enable_proposal_type::new, [2] submit_vote_execute,
-    // [3] the execute that binds the concrete SendCoin<Coin>.
-    expect(typeArgs(tx)[3]).toEqual([
-      `${PROPOSALS}::send_coin::SendCoin<${CRED}>`,
+describe('framework primitives', () => {
+  it('votes through board_voting::vote, passing the OU', () => {
+    const tx = voteTx({
+      armature: ARMATURE,
+      proposalId: PROPOSAL,
+      ouId: CHILD,
+      payloadMoveType: `${ARMATURE}::set_board::SetBoard`,
+      approve: true,
+    })
+    expect(commandNames(tx)).toEqual(['board_voting::vote'])
+    expect(objectInputs(tx)).toEqual(expect.arrayContaining([PROPOSAL, CHILD]))
+  })
+
+  it('cleans expired proposals with delete_expired_proposal, batched', () => {
+    const tx = deleteExpiredProposalTx({
+      armature: ARMATURE,
+      proposals: [
+        {
+          proposalId: PROPOSAL,
+          payloadMoveType: `${ARMATURE}::set_board::SetBoard`,
+        },
+        {
+          proposalId: FRAME,
+          payloadMoveType: `${ARMATURE}::add_member::AddMember`,
+        },
+      ],
+    })
+    expect(commandNames(tx)).toEqual([
+      'proposal::delete_expired_proposal',
+      'proposal::delete_expired_proposal',
     ])
   })
 
-  it('binds coin-pool order types only when a base coin is given', () => {
+  it('reclaims a frame, freezes a type, publishes an entry, creates an OU', () => {
+    expect(
+      commandNames(
+        deleteExhaustedFrameTx({ armature: ARMATURE, frameId: FRAME }),
+      ),
+    ).toEqual(['composite::delete_exhausted_frame'])
+    const fz = freezeTypeTx({
+      armature: ARMATURE,
+      emergencyFreezeId: CHILD_FREEZE,
+      freezeAdminCapId: CAP,
+      moveType: `${PROPOSALS}::send_coin::SendCoin<${CRED}>`,
+    })
+    expect(commandNames(fz)).toEqual(['emergency::freeze_type'])
+    expect(typeArgs(fz)[0]).toEqual([
+      `${PROPOSALS}::send_coin::SendCoin<${CRED}>`,
+    ])
+    expect(
+      commandNames(
+        publishEntryTx({
+          armature: ARMATURE,
+          ouId: CHILD,
+          location: 'walrus://x',
+          description: 'd',
+        }),
+      ),
+    ).toEqual(['encrypted_entry::publish_entry'])
+    expect(
+      commandNames(
+        createOuTx({
+          armature: ARMATURE,
+          board: [ALICE],
+          name: 'n',
+          metadataUri: 'u',
+        }),
+      ),
+    ).toEqual(['governance::init_board', 'ou::create'])
+  })
+})
+
+describe('action catalog details', () => {
+  it('keys treasury withdrawals per coin and grants TREASURY_WITHDRAW at 80%', () => {
+    expect(sendCoinTypeKey(CRED)).toBe(`SendCoin<${CRED}>`)
+    const a = enableSendCoinAction(PKGS, CRED)
+    const tx = buildPlanTx('own-propose', a, ctx, PKGS.armature)
+    expect(commandNames(tx)).toEqual([
+      'ou::type_name_of',
+      'proposal::new_config',
+      'proposal::with_permissions',
+      'enable_proposal_type::new',
+      'board_voting::submit_proposal',
+    ])
+    // The approved type is pinned IN the payload (cycle 7).
+    expect(typeArgs(tx)[0]).toEqual([
+      `${PROPOSALS}::send_coin::SendCoin<${CRED}>`,
+    ])
+    expect(a.grantsPermissions).toBe(true)
+  })
+
+  it('adds coin-pool order types per base coin, keyed by the full type', () => {
     const withoutBase = tradingTypeEntries(TRADING, CRED)
     expect(withoutBase.some((e) => e.typeKey.includes('_coin::'))).toBe(false)
-
-    const withBase = tradingTypeEntries(TRADING, CRED, BASE)
+    const withBase = tradingTypeEntries(TRADING, CRED, [BASE])
     const coinOrder = withBase.find((e) =>
-      e.typeKey.endsWith('place_limit_order_coin::PlaceLimitOrderCoin'),
+      e.moveType.includes('place_limit_order_coin::PlaceLimitOrderCoin'),
     )
-    // The KEY stays bare; the irreversible binding is in the Move TYPE.
+    expect(coinOrder?.typeKey).toBe(coinOrder?.moveType)
     expect(coinOrder?.moveType).toBe(
       `${TRADING}::place_limit_order_coin::PlaceLimitOrderCoin<${BASE}, ${CRED}>`,
     )
+    // Cycle-7 trading module set, with the treasury-withdraw bit where needed.
+    const bits = Object.fromEntries(
+      withoutBase.map((e) => [e.typeKey.split('::').at(-1), e.permissions]),
+    )
+    expect(bits).toEqual({
+      SetupTradingAccount: 0,
+      DepositCoinToBook: PERMISSIONS.TREASURY_WITHDRAW,
+      DepositFromOuVaultToBook: 0,
+      PlaceLimitOrder: 0,
+      PlaceMarketOrder: 0,
+      CancelOrder: 0,
+      CreateMulticoinPool: PERMISSIONS.TREASURY_WITHDRAW,
+      SweepCoinToTreasury: 0,
+      SweepMulticoinToOuVault: 0,
+    })
   })
 
-  it('skips types the unit already has enabled', () => {
+  it('skips types the unit already has enabled (display key OR Move type)', () => {
     const all = tradingTypeEntries(TRADING, CRED)
     const actions = enableTradingActions(PKGS, {
       armatureTrading: TRADING,
       quoteType: CRED,
-      alreadyEnabled: new Set(all.slice(0, 3).map((e) => e.typeKey)),
+      alreadyEnabled: new Set([all[0].typeKey, all[1].moveType]),
     })
-    expect(actions).toHaveLength(all.length - 3)
+    expect(actions).toHaveLength(all.length - 2)
   })
 
-  it('metadata execute targets the Charter, not the DAO', () => {
+  it('SetBoard is a diff', () => {
+    const tx = buildPlanTx(
+      'own-propose',
+      setBoardAction(PKGS, { add: [NEWBIE], remove: [CAROL] }),
+      ctx,
+      PKGS.armature,
+    )
+    expect(commandNames(tx)[0]).toBe('set_board::new')
+    expect(argCount(tx, 0)).toBe(2)
+  })
+
+  it('removal has an own path now (BatchRemoveMembers is a default slot)', () => {
+    const a = removeMembersAction(PKGS, [CAROL])
+    expect(a.own?.payloadMoveType).toBe(
+      `${ARMATURE}::batch_remove_members::BatchRemoveMembers`,
+    )
+    expect(a.control?.requiredPermissions).toBe(PERMISSIONS.VAULT_BORROW)
+    expect(a.control?.requiredBorrowScope).toEqual([subOuControlType(ARMATURE)])
+  })
+
+  it('metadata execute targets the Charter, not the OU', () => {
     const tx = buildPlanTx(
       'own-execute',
       updateMetadataAction(PKGS, 'ipfs://x', CHARTER),
@@ -428,80 +635,448 @@ describe('action catalog details', () => {
       'board_voting::submit_vote_execute',
       'admin_ops::execute_update_metadata',
     ])
-    const inputs = tx.getData().inputs as any[]
-    // The Charter object is an input; the child DAO is too (for the vote).
-    const objectIds = inputs
-      .map(
-        (i) =>
-          i?.UnresolvedObject?.objectId ??
-          i?.Object?.ImmOrOwnedObject?.objectId,
-      )
-      .filter(Boolean)
-    expect(objectIds).toContain(CHARTER)
+    expect(objectInputs(tx)).toContain(CHARTER)
   })
 
-  it('recovers the executor for a passed proposal from its type key', () => {
-    expect(
-      passedProposalAction(PKGS, { typeKey: 'SetBoard' })?.own?.typeKey,
-    ).toBe('SetBoard')
-    // EnableProposalType recovers the coin from the target key in the payload.
-    const enable = passedProposalAction(PKGS, {
-      typeKey: 'EnableProposalType',
-      payload: { type_key: `SendCoin<${CRED}>` },
+  it('config patches carry permissions and borrow scope as grants', () => {
+    const a = updateProposalConfigAction(PKGS, 'MintCoin<X>', {
+      permissions: PERMISSIONS.VAULT_BORROW,
+      borrowScope: ['0x2::coin::TreasuryCap<0x2::sui::SUI>'],
     })
-    expect(enable?.kind).toBe('enable_treasury_withdraw')
-    const toDao = passedProposalAction(PKGS, {
-      typeKey: 'EnableProposalType',
-      payload: { type_key: `SendCoinToDAO<${CRED}>` },
-    })
-    expect(toDao?.kind).toBe('enable_treasury_send_to_dao')
+    const tx = buildPlanTx('own-propose', a, ctx, PKGS.armature)
+    expect(commandNames(tx)).toEqual([
+      'update_proposal_config::new',
+      'update_proposal_config::with_permissions',
+      'ou::type_name_of',
+      'MakeMoveVec',
+      'update_proposal_config::with_borrow_scope',
+      'board_voting::submit_proposal',
+    ])
+    expect(a.grantsPermissions).toBe(true)
+  })
 
+  it('disable / bypass enable / bypass disable build their framework calls', () => {
+    expect(
+      commandNames(
+        buildPlanTx(
+          'own-execute',
+          disableProposalTypeAction(PKGS, 'X'),
+          ctx,
+          ARMATURE,
+        ),
+      ),
+    ).toEqual([
+      'disable_proposal_type::new',
+      'board_voting::submit_vote_execute',
+      'admin_ops::execute_disable_proposal_type',
+    ])
+    const moveType = `${PROPOSALS}::mint_allowance::MintAllowance<${CRED}>`
+    const en = buildPlanTx(
+      'own-execute',
+      enableBypassTypeAction(PKGS, {
+        typeKey: 'MintAllowance',
+        moveType,
+        config: TRADING_TYPE_CONFIG,
+        capabilityVaultId: CHILD_CAPS,
+      }),
+      ctx,
+      ARMATURE,
+    )
+    expect(commandNames(en).at(-1)).toBe(
+      'external_execution::execute_enable_bypass_type',
+    )
+    expect(typeArgs(en).at(-1)).toEqual([moveType])
+    const dis = buildPlanTx(
+      'own-execute',
+      disableBypassTypeAction(PKGS, {
+        typeKey: 'MintAllowance',
+        moveType,
+        capId: CAP,
+        capabilityVaultId: CHILD_CAPS,
+      }),
+      ctx,
+      ARMATURE,
+    )
+    expect(commandNames(dis).at(-1)).toBe(
+      'external_execution::execute_disable_bypass_type',
+    )
+  })
+})
+
+describe('lifecycle, control, freeze, currency, upgrade builders', () => {
+  it('pause / reclaim / transfer-cap / spin-out are parent→child control adapters', () => {
+    const pause = buildPlanTx(
+      'control-execute',
+      pauseSubOuAction(PKGS),
+      ctx,
+      ARMATURE,
+    )
+    expect(commandNames(pause)).toEqual([
+      'pause_execution::new_pause',
+      'board_voting::submit_vote_execute',
+      'subou_ops::execute_pause_subou_execution',
+    ])
+    const params = {
+      subOuId: CHILD,
+      subOuCapabilityVaultId: CHILD_CAPS,
+      capId: CAP,
+      capType: '0x2::package::UpgradeCap',
+    }
+    expect(
+      commandNames(
+        buildPlanTx(
+          'control-execute',
+          reclaimCapFromSubOuAction(PKGS, params),
+          ctx,
+          ARMATURE,
+        ),
+      ).at(-1),
+    ).toBe('subou_ops::execute_reclaim_cap')
+    expect(
+      commandNames(
+        buildPlanTx(
+          'control-execute',
+          transferCapToSubOuAction(PKGS, params),
+          ctx,
+          ARMATURE,
+        ),
+      ).at(-1),
+    ).toBe('subou_ops::execute_transfer_cap')
+    const spin = buildPlanTx(
+      'control-propose',
+      spinOutSubOuAction(PKGS, {
+        subOuId: CHILD,
+        subOuCapabilityVaultId: CHILD_CAPS,
+        freezeAdminCapId: CAP,
+      }),
+      ctx,
+      ARMATURE,
+    )
+    expect(
+      commandNames(spin).filter((c) => c === 'proposal::new_config'),
+    ).toHaveLength(3)
+  })
+
+  it('create / spawn / transfer-assets are own lifecycle actions', () => {
+    expect(
+      commandNames(
+        buildPlanTx(
+          'own-execute',
+          createSubOuAction(PKGS, {
+            name: 'n',
+            board: [ALICE],
+            metadataUri: 'u',
+            capabilityVaultId: CHILD_CAPS,
+          }),
+          ctx,
+          ARMATURE,
+        ),
+      ).at(-1),
+    ).toBe('lifecycle_ops::execute_create_subou')
+    expect(
+      commandNames(
+        buildPlanTx(
+          'own-propose',
+          spawnOuAction(PKGS, { board: [ALICE], name: 'n', metadataUri: 'u' }),
+          ctx,
+          ARMATURE,
+        ),
+      ),
+    ).toEqual([
+      'governance::init_board',
+      'spawn_ou::new',
+      'board_voting::submit_proposal',
+    ])
+    const ta = buildPlanTx(
+      'own-execute',
+      transferAssetsAction(PKGS, {
+        targetOuId: PARENT,
+        targetTreasuryId: hex('aa'),
+        targetCapabilityVaultId: hex('ab'),
+        coinTypes: [CRED],
+        caps: [{ id: CAP, type: '0x2::package::UpgradeCap' }],
+        treasuryVaultId: TREASURY,
+        capabilityVaultId: CHILD_CAPS,
+      }),
+      ctx,
+      ARMATURE,
+    )
+    expect(commandNames(ta).slice(-4)).toEqual([
+      'lifecycle_ops::begin_transfer_assets',
+      'lifecycle_ops::transfer_coin',
+      'lifecycle_ops::transfer_cap',
+      'lifecycle_ops::finish_transfer_assets',
+    ])
+  })
+
+  it('freeze governance actions target the EmergencyFreeze', () => {
+    const t = buildPlanTx(
+      'own-execute',
+      transferFreezeAdminAction(PKGS, {
+        newAdmin: ALICE,
+        freezeAdminCapId: CAP,
+        emergencyFreezeId: CHILD_FREEZE,
+      }),
+      ctx,
+      ARMATURE,
+    )
+    expect(commandNames(t).at(-1)).toBe(
+      'freeze_ops::execute_transfer_freeze_admin',
+    )
+    expect(objectInputs(t)).toEqual(expect.arrayContaining([CAP, CHILD_FREEZE]))
+    const u = buildPlanTx(
+      'own-propose',
+      unfreezeProposalTypeAction(PKGS, {
+        moveType: `${ARMATURE}::set_board::SetBoard`,
+        emergencyFreezeId: CHILD_FREEZE,
+      }),
+      ctx,
+      ARMATURE,
+    )
+    expect(typeArgs(u)[0]).toEqual([`${ARMATURE}::set_board::SetBoard`])
+    const ex = buildPlanTx(
+      'own-propose',
+      updateFreezeExemptTypesAction(PKGS, {
+        add: [CRED],
+        remove: [BASE],
+        emergencyFreezeId: CHILD_FREEZE,
+      }),
+      ctx,
+      ARMATURE,
+    )
+    expect(commandNames(ex).slice(0, 3)).toEqual([
+      'update_freeze_exempt_types::new',
+      'update_freeze_exempt_types::add_type',
+      'update_freeze_exempt_types::remove_type',
+    ])
+  })
+
+  it('currency types carry their bits and TreasuryCap scope', () => {
+    const entries = currencyTypeEntries(PROPOSALS, CRED, TRADING_TYPE_CONFIG)
+    const mint = entries.find((e) => e.typeKey === `MintCoin<${CRED}>`)!
+    expect(mint.config).toMatchObject({
+      approvalThreshold: 8000,
+      permissions: PERMISSIONS.VAULT_BORROW,
+      borrowScope: [`0x2::coin::TreasuryCap<${CRED}>`],
+    })
+    const adopt = buildPlanTx(
+      'own-execute',
+      adoptCurrencyAction(PKGS, {
+        coinType: CRED,
+        treasuryCapId: CAP,
+        capabilityVaultId: CHILD_CAPS,
+      }),
+      ctx,
+      ARMATURE,
+    )
+    expect(objectInputs(adopt)).toContain(CAP)
+    const m = mintCoinAction(PKGS, {
+      coinType: CRED,
+      treasuryCapId: CAP,
+      amount: 5n,
+      capabilityVaultId: CHILD_CAPS,
+      treasuryVaultId: TREASURY,
+    })
+    expect(m.own?.requiredBorrowScope).toEqual([
+      `0x2::coin::TreasuryCap<${CRED}>`,
+    ])
+    const bypass = mintAllowanceBypassTx({
+      armatureProposals: PROPOSALS,
+      coinType: CRED,
+      ouId: CHILD,
+      capabilityVaultId: CHILD_CAPS,
+      treasuryVaultId: TREASURY,
+      emergencyFreezeId: CHILD_FREEZE,
+      bypassCapId: CAP,
+      treasuryCapId: hex('cc'),
+      amount: 1n,
+    })
+    expect(commandNames(bypass)).toEqual([
+      'currency_ops::mint_allowance_bypass',
+    ])
+  })
+
+  it('small payments and claims build their treasury calls', () => {
+    const sp = buildPlanTx(
+      'own-execute',
+      sendSmallPaymentAction(PKGS, {
+        coinType: CRED,
+        recipient: ALICE,
+        amount: 1n,
+        treasuryVaultId: TREASURY,
+      }),
+      ctx,
+      ARMATURE,
+    )
+    expect(commandNames(sp).at(-1)).toBe(
+      'treasury_ops::execute_send_small_payment',
+    )
+    const cl = claimTreasuryCoinsTx({
+      armature: ARMATURE,
+      treasuryVaultId: TREASURY,
+      coinType: CRED,
+      coinObjectIds: [CAP, hex('cd')],
+    })
+    expect(commandNames(cl)).toEqual([
+      'treasury_vault::claim_coin',
+      'treasury_vault::claim_coin',
+    ])
+  })
+
+  it('an upgrade executes as authorize → Upgrade → commit in one PTB', () => {
+    const a = proposeUpgradeAction(PKGS, {
+      capId: CAP,
+      packageId: hex('ee'),
+      digest: new Uint8Array(32),
+      capabilityVaultId: CHILD_CAPS,
+      build: { modules: [[1, 2, 3]], dependencies: ['0x1', '0x2'] },
+    })
+    expect(commandNames(buildPlanTx('own-execute', a, ctx, ARMATURE))).toEqual([
+      'propose_upgrade::new',
+      'board_voting::submit_vote_execute',
+      'upgrade_ops::execute_propose_upgrade',
+      'Upgrade',
+      'upgrade_ops::commit_upgrade',
+    ])
+    const noBuild = proposeUpgradeAction(PKGS, {
+      capId: CAP,
+      packageId: hex('ee'),
+      digest: new Uint8Array(32),
+      capabilityVaultId: CHILD_CAPS,
+    })
+    expect(() => buildPlanTx('own-execute', noBuild, ctx, ARMATURE)).toThrow(
+      expect.objectContaining({ code: TriexError.ValidationFailed }),
+    )
+  })
+
+  it('creates a tribe through tribe_setup with ProposalTypeInit overrides', () => {
+    const tx = createTribeTx({
+      armature: ARMATURE,
+      armatureProposals: PROPOSALS,
+      tribeBoard: [ALICE],
+      officers: [ALICE],
+      members: [ALICE],
+      tribeName: 'T',
+      officerName: 'O',
+      memberName: 'M',
+      tribeMetadataUri: 'u',
+      officerMetadataUri: 'u',
+      memberMetadataUri: 'u',
+      officerFreezeAdmin: ALICE,
+      memberFreezeAdmin: ALICE,
+      officerOverrides: tradingTypeInits(TRADING, CRED),
+    })
+    const names = commandNames(tx)
+    expect(names.at(-1)).toBe('tribe_setup::create_tribe_configured')
+    expect(packages(tx).at(-1)).toBe(PROPOSALS)
+    expect(names.filter((n) => n === 'ou::new_type_init')).toHaveLength(
+      tradingTypeEntries(TRADING, CRED).length,
+    )
+  })
+})
+
+describe('executors — dispatch by payload type', () => {
+  const unit = {
+    daoId: CHILD,
+    charterId: CHARTER,
+    treasuryId: TREASURY,
+    capabilityVaultId: CHILD_CAPS,
+    emergencyFreezeId: CHILD_FREEZE,
+  }
+
+  it('splits generic Move types at the top level', () => {
+    expect(
+      splitMoveType(`${TRADING}::m::S<${BASE}, ${CRED}>`).args,
+    ).toHaveLength(2)
+  })
+
+  it('EnableProposalType executes with the type PINNED in its payload', () => {
+    const exec = executorForPayload(
+      `${ARMATURE}::enable_proposal_type::EnableProposalType`,
+      {
+        pkgs: PKGS,
+        unit,
+        payload: { type_name: { name: `${'c0'.repeat(32)}::cred::CRED` } },
+      },
+    )
+    expect('execute' in exec).toBe(true)
+  })
+
+  it('names what is missing instead of guessing', () => {
+    const r = executorForPayload(
+      `${ARMATURE}::transfer_freeze_admin::TransferFreezeAdmin`,
+      { pkgs: PKGS, unit },
+    )
+    expect(r).toEqual({ missing: expect.stringContaining('freezeAdminCapId') })
+    expect(
+      executorForPayload(`${hex('77')}::x::Y`, { pkgs: PKGS, unit }),
+    ).toEqual({ missing: expect.stringContaining('no wired executor') })
+  })
+
+  it('SendCoinToOU reads its target treasury from the payload', () => {
+    const r = executorForPayload(
+      `${PROPOSALS}::send_coin_to_ou::SendCoinToOU<${CRED}>`,
+      { pkgs: PKGS, unit, payload: { recipient_treasury: hex('9a') } },
+    )
+    if (!('execute' in r)) throw new Error(r.missing)
+    const tx = buildExecutePassedTx({
+      action: {
+        kind: 'x',
+        own: {
+          typeKey: 'x',
+          payloadMoveType: `${PROPOSALS}::send_coin_to_ou::SendCoinToOU<${CRED}>`,
+          buildPayload: () => {
+            throw new Error()
+          },
+          buildExecute: r.execute,
+        },
+      },
+      armature: ARMATURE,
+      daoId: CHILD,
+      proposalId: PROPOSAL,
+      emergencyFreezeId: CHILD_FREEZE,
+    })
+    expect(objectInputs(tx)).toEqual(
+      expect.arrayContaining([TREASURY, hex('9a')]),
+    )
+  })
+
+  it('passedProposalAction maps default display keys and per-coin keys', () => {
+    expect(
+      passedProposalAction(PKGS, { typeKey: 'SetBoard' })?.own?.payloadMoveType,
+    ).toBe(`${ARMATURE}::set_board::SetBoard`)
+    expect(
+      passedProposalAction(PKGS, {
+        typeKey: `SendCoin<${CRED}>`,
+        unit,
+      })?.own?.payloadMoveType,
+    ).toBe(`${PROPOSALS}::send_coin::SendCoin<${CRED}>`)
     // CharterUpdate needs the Charter id to build its execute call.
     expect(passedProposalAction(PKGS, { typeKey: 'CharterUpdate' })).toBeNull()
     expect(
       passedProposalAction(PKGS, {
         typeKey: 'CharterUpdate',
         charterId: CHARTER,
-      })?.kind,
-    ).toBe('update_org_metadata')
-
+      }),
+    ).not.toBeNull()
     expect(passedProposalAction(PKGS, { typeKey: 'Unwired' })).toBeNull()
-  })
-
-  it('omitted config fields become on-chain nones', () => {
-    const tx = buildPlanTx(
-      'own-propose',
-      updateProposalConfigAction(PKGS, 'SetBoard', { quorum: 1 }),
-      ctx,
-      PKGS.armature,
-    )
-    expect(commandNames(tx)).toEqual([
-      'update_proposal_config::new',
-      'board_voting::submit_proposal',
-    ])
-    // 1 type key + 7 options; each option is its own pure input.
-    const pureInputs = (tx.getData().inputs as any[]).filter((i) => i?.Pure)
-    expect(pureInputs.length).toBeGreaterThanOrEqual(8)
   })
 })
 
 /** The full ladder end-to-end: a real action, real configs, real transaction. */
 describe('resolver → builder integration', () => {
-  const enabled = {
-    quorum: 1,
-    approvalThreshold: 5000,
-    proposeThreshold: 0,
-    expiryMs: 1,
-    executionDelayMs: 0,
-    cooldownMs: 0,
-    composableAllowed: false,
-  }
+  // tribe_setup's ControllerBatch* config: single-vote, VAULT_BORROW, SubOUControl scope.
+  const controller = baseConfig({
+    approvalThreshold: 8000,
+    permissions: PERMISSIONS.VAULT_BORROW,
+    borrowScope: [subOuControlType(ARMATURE)],
+  })
 
   it('an officer adding members through the parent gets ONE transaction', () => {
     const plan = resolveExecutionPlan(
       addMembersAction(PKGS, [NEWBIE]),
       ctx,
-      { ownConfig: null, controlConfig: enabled },
+      { ownConfig: null, controlConfig: controller },
       CAROL, // on the parent board only
       PKGS.armature,
     )
@@ -510,9 +1085,20 @@ describe('resolver → builder integration', () => {
     expect(plan.immediate).toBe(true)
     expect(commandNames(plan.buildTx())).toEqual([
       'controller_batch_add_members::new',
-      'board_voting::submit_vote_execute',
-      'subdao_ops::execute_controller_batch_add_members',
+      'board_voting::submit_vote_execute_readonly',
+      'subou_ops::execute_controller_batch_add_members',
     ])
+  })
+
+  it('is blocked, not mis-signed, when the controller slot lacks its bits', () => {
+    const plan = resolveExecutionPlan(
+      addMembersAction(PKGS, [NEWBIE]),
+      ctx,
+      { ownConfig: null, controlConfig: baseConfig() },
+      CAROL,
+      PKGS.armature,
+    )
+    expect(plan).toMatchObject({ blocked: true, code: 'missing-permissions' })
   })
 
   it('the same call becomes a proposal when quorum needs a real vote', () => {
@@ -522,7 +1108,7 @@ describe('resolver → builder integration', () => {
         ...ctx,
         parent: { ...ctx.parent!, board: [CAROL, hex('dd'), hex('ee')] },
       },
-      { ownConfig: null, controlConfig: { ...enabled, quorum: 5000 } },
+      { ownConfig: null, controlConfig: { ...controller, quorum: 5000 } },
       CAROL,
       PKGS.armature,
     )

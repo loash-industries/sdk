@@ -20,6 +20,7 @@ import {
 } from '../src/armature/vault'
 import { resolvePackageIds } from '../src/config'
 import { TriexError } from '../src/errors'
+import { mockOuChain } from './helpers/ouChain'
 
 const hex = (pair: string) => `0x${pair.repeat(32)}`
 const ids = resolvePackageIds('testnet')
@@ -445,27 +446,6 @@ const TRADING_KEYS = [
   'sweep_coin_to_treasury::SweepCoinToTreasury',
 ].map((t) => `${ids.armatureTrading}::${t}`)
 
-function daoJson() {
-  return {
-    enabled_proposal_types: { contents: TRADING_KEYS },
-    proposal_configs: {
-      contents: TRADING_KEYS.map((key) => ({
-        key,
-        value: {
-          quorum: 1,
-          approval_threshold: 5000,
-          propose_threshold: '0',
-          expiry_ms: '3600000',
-          execution_delay_ms: '0',
-          cooldown_ms: '0',
-          composable_allowed: false,
-        },
-      })),
-    },
-    type_bindings: { contents: [] },
-  }
-}
-
 /** `vaultFor` maps `"<storageUnitId>|<registrantOrgId>"` → vault id. */
 function harness(
   opts: { vaultFor?: Record<string, string>; sweepable?: unknown } = {},
@@ -475,13 +455,26 @@ function harness(
     captured.txs.push(tx as Transaction)
     return { digest: 'D1', objectChanges: [] }
   })
-  const getObject = jest.fn(async ({ objectId }: any) => {
-    if (objectId === ids.ouReceiptVaultRegistry) {
+  // Cycle-7 governance reads (OU root, TypeSlot fields, roster) come from the
+  // shared fake fullnode; the vault registry stays this suite's own mock.
+  const slots = TRADING_KEYS.map((k) => ({ moveType: k, displayKey: k }))
+  const chain = mockOuChain({
+    [ROOT]: { members: [ALICE], slots },
+    [OFFICERS]: { members: [ALICE], slots },
+  })
+  const getObject = jest.fn(async (args: any) => {
+    if (args.objectId === ids.ouReceiptVaultRegistry) {
       return { object: { json: { vaults: { id: { id: TABLE } } } } }
     }
-    return { object: { json: daoJson() } }
+    return chain.core.getObject(args)
   })
-  const getDynamicField = jest.fn(async ({ name }: any) => {
+  const getDynamicField = jest.fn(async (args: any) => {
+    try {
+      return await chain.core.getDynamicField(args)
+    } catch {
+      // not a roster read — fall through to the vault registry mock
+    }
+    const { name } = args
     // Decode the real VaultKey so the mock is keyed by BOTH halves — which is
     // the property under test: a vault is (storage unit, organization), and one
     // half matching is not a hit.
@@ -503,6 +496,7 @@ function harness(
     {
       suiClient: {
         core: {
+          ...chain.core,
           getObject,
           getDynamicField,
           getCoins: async () => ({ objects: [] }),
