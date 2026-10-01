@@ -11,8 +11,8 @@ first module, with room to grow into a higher-level, full-featured client.
 **Audience:** players and bots trading on Trinary Exchange via an API key.
 **Target (MVP):** **testnet only**, the **`stillness`** tenant; **only the most-recent (v1)
 [CLOB contracts](https://github.com/loash-industries/trinary-exchange)** are supported.
-Item↔currency (CRED) markets via `multicoin_pool` ("pools"); coin-pools are out of scope
-for now.
+Item↔currency (CRED) markets via `multicoin_pool` ("pools"); coin (currency-pair) pools
+were added for cycle 7 as the `coins` group — see [DESIGN-COINS.md](./DESIGN-COINS.md).
 **Models after:** [`@trinaryex/keyspace`](https://www.npmjs.com/package/@trinaryex/keyspace)
 (client + `executor` pattern, `queries`/`transactions` split, zod validation, vite build,
 semantic-release).
@@ -376,7 +376,8 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
 ## 7. Money math (`money.ts`)
 
 - **Coin (currency-pair) pools:** `quote = base * price / TRIEX_PRICE_SCALING`
-  where `TRIEX_PRICE_SCALING = 1_000_000_000` (1e9).
+  where `TRIEX_PRICE_SCALING = 1_000_000_000` (1e9). Full cycle-7 model (maker + taker
+  fees, bid deposit bound, minimum size) in DESIGN-COINS.md §3; code in `src/coins/money.ts`.
 - **Multicoin (item) pools:** scaling factor `1` → `quote = price * quantity` (confirmed
   against the production app, which passes the unscaled price straight to
   `place_limit_order`; TRIEX_SYSTEM_DESIGN §7's blanket "all prices ×1e9" describes coin
@@ -456,7 +457,8 @@ via `packageIds`. Optionally hydrate the *package* IDs at runtime from
   keypair), semantic-release → publish `@trinaryex/sdk@0.x`.
 - **Later (post-MVP):** full sweep-all convenience (multi-hub redeem), tribe/governance
   trading, **gas-station sponsored (gasless) execution** (optional `sponsor` hook), live
-  orderbook streaming, mainnet, coin-pools (currency-pair markets). (Cancel/modify and
+  orderbook streaming, mainnet. Coin-pools (currency-pair markets) landed in cycle 7 —
+  DESIGN-COINS.md. (Cancel/modify and
   claim-settled were pulled INTO the MVP — a trading bot is not viable without them.)
 
 ---
@@ -489,7 +491,9 @@ via `packageIds`. Optionally hydrate the *package* IDs at runtime from
   (borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap → deposit_multicoin);
   see §6.1.
 - **OQ-5 — Ignore coin-pools.** MVP trades **item↔CRED** via `multicoin_pool` ("pools" family
-  only). Coin-pools deferred.
+  only). Coin-pools deferred. **Lifted (cycle 7):** coin pools merged into the main `triex`
+  package and are traded through `client.coins` — fullnode reads (the coin-pool indexer
+  routes are not on the gateway) plus `GET /v1/coins`; see DESIGN-COINS.md.
 - **OQ-6 — Always v1.** SDK supports only the newest contracts; no version branching (§7).
 - **OQ-7 — Gas:** left to the caller's `executor`; sponsored/gasless is a **post-MVP** feature
   (optional `sponsor` hook).
@@ -594,7 +598,8 @@ pools/hubs/assets/activity families, `GET /v1/characters/*`, `GET /v1/orgs*`,
 `inventory` family, including the seven POST container mutations and two GETs the SDK
 replaces with fullnode reads — `GET /v1/inventory/balance-manager` (story 1: on-chain
 `listOwnedObjects` is authoritative) and `GET /v1/inventory/receipt-objects` (story 4:
-wallet-receipt discovery is PTB input resolution). `coin-pools/*` stays disabled by choice.
+wallet-receipt discovery is PTB input resolution). `coin-pools/*` stays disabled by choice —
+the `coins` group reads coin pools from the fullnode instead and uses only `GET /v1/coins`.
 
 > Remember a merge to `main` does **not** update the running gateway — run
 > `scripts/push-gateway.sh --env <env>` (per CLAUDE.md). The balances route is already

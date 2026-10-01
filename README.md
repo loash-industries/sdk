@@ -222,11 +222,55 @@ whether the abort was `resolved`, came from a dependency package
 | `market` (locations) | `hubLocations` · `itemLocations` · `nearbyHubs` · `nearbyHubsBySystem` · `hubsEnriched` · `assemblyOwners` · `assembliesEnriched` · `solarSystemNames` |
 | `orders` | `limit` · `market` · `cancel` · `cancelAll` · `modify` · `openOrders` · `fills` · `trades` |
 | `spatial` | `system` · `systems` · `nearbySystems` · `systemsNearCoordinates` · `autocompleteSystems` · `stats` |
+| `coins` | `list` · `resolvePool` · `orderbook` · `tradeParams` · `quote` · `estimateMarket` · `openOrders` · `account` · `balances` · `deposit` · `withdraw` · `limit` · `market` · `swap` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `claimSettled` · `createPool` — see below |
 | `orgs` | `get` · `batch` · `directory` · `forPlayer` · `search` · `proposals` · `seats` · `tradingAccount` · `accessibleKeyspaces` · `vaultsAtHub` |
 | `org(id)` handle | `.governance` · `.members` · `.metadata` · `.types` · `.treasury` · `.orders` · `.vault` — see below |
 | helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `iterateDiscovery/Fills/Trades/OrgDirectory` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
 
 Runnable examples live in [`examples/`](./examples).
+
+## Coin markets (currency pairs)
+
+`client.coins` trades `triex::pool::Pool<Base, Quote>` order books — one Move
+coin against another, usually CRED. Name a pool by `poolId` or by
+`baseCoinType` (+ `quoteCoinType`, default CRED):
+
+```ts
+import { coinPriceToRaw } from '@trinaryex/sdk'
+
+const pool = { baseCoinType: '0x…::wbtc::WBTC' }        // vs CRED
+
+const book = await client.coins.orderbook({ ...pool, depth: 20 })
+const fees = await client.coins.tradeParams(pool)      // live FeePolicy rates
+
+// Limit buy 2 WBTC (8 dp) at 61,250 CRED (6 dp) each — price is 1e9-scaled.
+await client.coins.limit({
+  ...pool, side: 'buy',
+  price: coinPriceToRaw('61250', 8, 6),
+  quantity: 200_000_000n,
+})
+await client.coins.market({ ...pool, side: 'sell', quantity: 50_000_000n })
+await client.coins.swap({ ...pool, side: 'buy', amountIn: 1_000_000n }) // wallet → wallet
+await client.coins.claimSettled({ pools: [pool], withdrawCoinTypes: ['0x…::wbtc::WBTC'] })
+```
+
+- **Reads come from the fullnode.** The coin-pool indexer routes are not on the
+  gateway, so books, fees, open orders and account state are simulated view
+  calls (head-current, no API key cost). Only `coins.list()` (`GET /v1/coins`)
+  is an indexer read. `ReadOnlyClient` takes an optional `suiClient` for these.
+- **Prices are 1e9-scaled:** `quote = base × price / 1e9`; human price is
+  `raw / 10^(9 + quoteDecimals − baseDecimals)` (`coinPriceToRaw` /
+  `formatCoinPrice`). No lot/tick size; a resting order needs
+  `quantity ≥ coinMinOrderQuantity(price)`.
+- **Both sides pay fees, in quote.** Bids pay the taker fee on top and escrow a
+  maker fee for the resting part; asks pay out of their proceeds. Bid funding
+  is `computeCoinBidDeposit` at the highest entry-rung rate (taker or maker,
+  current or staged) — it never under-funds. A market buy holds the exact cost
+  against the live book (`estimateMarket`) unless you pass `quoteBudget`.
+- `coins.swap` needs no trading account and is charged the entry-rung rate;
+  `coins.quote` without `tradingAccountId` is its exact dry-run.
+
+Design notes and Move references: [DESIGN-COINS.md](./DESIGN-COINS.md).
 
 ## Organizations & governance (Armature)
 
