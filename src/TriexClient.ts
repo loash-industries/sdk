@@ -5,6 +5,8 @@ import type {
 } from '@mysten/sui/transactions'
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 
+import { OrgHandle } from './armature/OrgClient'
+import { OrgsApi } from './armature/OrgsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
 import { executeAndNormalize, findCreatedObject } from './execute'
@@ -131,6 +133,12 @@ export class TriexClient {
   readonly market: MarketApi
   readonly orders: OrdersApi
   readonly spatial: SpatialApi
+  /**
+   * Organization identity & discovery (Armature). Address-taking methods
+   * default to the configured player. Acting AS an organization lives on the
+   * handle from `client.org(id)` — see DESIGN-ARMATURE.md §5.1.
+   */
+  readonly orgs: OrgsApi
 
   constructor(config: TriexClientConfig) {
     this.suiClient = config.suiClient
@@ -147,6 +155,43 @@ export class TriexClient {
     this.market = new MarketApi(this)
     this.orders = new OrdersApi(this)
     this.spatial = new SpatialApi(this)
+    this.orgs = new OrgsApi(this.indexer, (addr) => this.requireAddress(addr))
+  }
+
+  /**
+   * Open a handle bound to one organization and one seat within it — the entry
+   * point for acting AS an organization.
+   *
+   * `orgIdOrUnitId` may be the top-level organization or any unit in its tree;
+   * the whole tree is resolved either way. The seat defaults to the caller's
+   * highest-authority board, because that is the one most likely to make an
+   * action immediate rather than deferred; `seat` pins a specific unit, and
+   * `handle.as(daoId)` switches later.
+   *
+   * The handle caches the tree and the governance state it reads, so it is
+   * worth keeping across a batch of actions and re-opening when you want to
+   * observe a config change.
+   *
+   * @throws `AddressRequired` when no address is configured or passed;
+   *   `OrgNotFound` when the id resolves to no organization.
+   */
+  async org(
+    orgIdOrUnitId: string,
+    options?: { seat?: string; address?: string },
+  ): Promise<OrgHandle> {
+    const address = this.requireAddress(options?.address)
+    const org = await this.indexer.orgs.get(orgIdOrUnitId)
+    return new OrgHandle(
+      {
+        suiClient: this.suiClient,
+        indexer: this.indexer,
+        ids: this.ids,
+        requireExecutor: () => this.requireExecutor(),
+        address,
+      },
+      org,
+      options?.seat,
+    )
   }
 
   /** @internal */

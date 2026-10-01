@@ -1,5 +1,8 @@
 import { z } from 'zod'
+import { OrgQueries } from './armature/queries'
 import { TriexClientError, TriexError } from './errors'
+import { indexerGet } from './http'
+import type { QueryParams } from './http'
 import {
   AssemblyEnrichedSchema,
   AssemblyOwnerSchema,
@@ -83,86 +86,30 @@ import type {
  * `resolvePool` remains for callers that already hold a `collection_id`.
  */
 export class IndexerClient {
+  /**
+   * Armature (organizations & governance) reads. Kept in its own module so the
+   * trading surface stays readable; shares this client's base URL + API key.
+   */
+  readonly orgs: OrgQueries
+
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-  ) {}
+  ) {
+    this.orgs = new OrgQueries(baseUrl, apiKey)
+  }
 
   /**
-   * GET `path` (+ optional query) and return parsed JSON, mapping HTTP
-   * failures onto specific `TriexError` codes: 401/403 → `Unauthorized`,
-   * 429 → `RateLimited` (with `retryAfterMs`), 404 → the endpoint's
-   * `notFound` code when given, everything else → `IndexerError`.
+   * GET `path` (+ optional query) and return parsed JSON. Delegates to the
+   * shared `indexerGet` so the trading and Armature read surfaces map HTTP
+   * failures onto `TriexError` codes identically.
    */
-  private async get<T = unknown>(
+  private get<T = unknown>(
     path: string,
-    query?: Record<string, string | number | boolean | undefined>,
+    query?: QueryParams,
     notFound?: TriexError,
   ): Promise<T> {
-    if (!this.apiKey) {
-      throw new TriexClientError(
-        TriexError.ApiKeyRequired,
-        'An apiKey is required for indexer reads.',
-      )
-    }
-    const url = new URL(path, this.baseUrl)
-    if (query) {
-      for (const [k, v] of Object.entries(query)) {
-        if (v !== undefined) url.searchParams.set(k, String(v))
-      }
-    }
-    const res = await fetch(url, {
-      headers: { 'x-api-key': this.apiKey, accept: 'application/json' },
-    })
-    if (!res.ok) {
-      // Surface the API's own message when it sent one (NestJS-style bodies).
-      let detail = ''
-      try {
-        const body: any = await res.json()
-        const msg = body?.message ?? body?.error ?? body?.reason
-        if (msg)
-          detail = ` — ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`
-      } catch {
-        // non-JSON body — ignore
-      }
-      const base = `Indexer ${res.status} ${res.statusText} for GET ${url.pathname}${detail}`
-
-      if (res.status === 401 || res.status === 403) {
-        throw new TriexClientError(
-          TriexError.Unauthorized,
-          `${base}. Check TRINARY_API_KEY and the key's access tier.`,
-          undefined,
-          res.status,
-        )
-      }
-      if (res.status === 429) {
-        const retryAfter = res.headers?.get?.('retry-after')
-        let retryAfterMs: number | undefined
-        if (retryAfter) {
-          const secs = Number(retryAfter)
-          retryAfterMs = Number.isFinite(secs)
-            ? secs * 1000
-            : Math.max(0, Date.parse(retryAfter) - Date.now()) || undefined
-        }
-        throw new TriexClientError(
-          TriexError.RateLimited,
-          `${base}. Compute-unit budget exhausted — back off${retryAfterMs ? ` ~${retryAfterMs}ms` : ''} and retry.`,
-          undefined,
-          res.status,
-          retryAfterMs,
-        )
-      }
-      if (res.status === 404 && notFound) {
-        throw new TriexClientError(notFound, base, undefined, res.status)
-      }
-      throw new TriexClientError(
-        TriexError.IndexerError,
-        base,
-        undefined,
-        res.status,
-      )
-    }
-    return (await res.json()) as T
+    return indexerGet<T>(this.baseUrl, this.apiKey, path, query, notFound)
   }
 
   // ─── Discovery / market data ──────────────────────────────────────────────

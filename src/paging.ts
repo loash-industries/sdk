@@ -1,3 +1,4 @@
+import type { OrgDirectoryEntry, OrgDirectoryParams } from './armature/types'
 import type { IndexerClient } from './queries'
 import type {
   DiscoveryFilters,
@@ -84,5 +85,31 @@ export async function* iterateTrades(
       if (++yielded >= max) return
     }
     before = page.trades[page.trades.length - 1].tradedAt
+  }
+}
+
+/**
+ * Stream the organization discovery directory across pages.
+ *
+ * The endpoint caps `limit` at 50 and defaults to 8, so a full walk is many
+ * requests at 50 CU each — keep `maxItems` tight unless you really want every
+ * organization.
+ */
+export async function* iterateOrgDirectory(
+  indexer: IndexerClient,
+  params?: OrgDirectoryParams,
+  options?: IterateOptions,
+): AsyncGenerator<OrgDirectoryEntry> {
+  const max = options?.maxItems ?? 10_000
+  let cursor = params?.cursor
+  let yielded = 0
+  for (;;) {
+    const page = await indexer.orgs.directory({ ...params, cursor })
+    for (const entry of page.entries) {
+      yield entry
+      if (++yielded >= max) return
+    }
+    if (!page.nextCursor || page.entries.length === 0) return
+    cursor = page.nextCursor
   }
 }

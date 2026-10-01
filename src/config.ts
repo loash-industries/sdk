@@ -34,6 +34,29 @@ export const STILLNESS_PACKAGE_IDS: PackageIds = {
   worldOriginal:
     '0x7be18d6294e533bedd9a5d70a96ce8d9d4b87a7c74188ba65d3fe966bbed9d92',
   clock: CLOCK_ID,
+
+  // Armature. `*Original` differs from the current id wherever the package has
+  // been upgraded — see the PackageIds doc comment for which id goes where.
+  armature:
+    '0xee0b501592a5696d2ce284086c054e9e6bc9321e5e468ab4b8bd0ce70570c048',
+  armatureOriginal:
+    '0xee0b501592a5696d2ce284086c054e9e6bc9321e5e468ab4b8bd0ce70570c048',
+  armatureProposals:
+    '0x6e5df7cf66e083181bc59d169a59e4f99ff493e9aded6fdabff71978e344f93d',
+  armatureProposalsOriginal:
+    '0x6e5df7cf66e083181bc59d169a59e4f99ff493e9aded6fdabff71978e344f93d',
+  armatureTrading:
+    '0xf9ea45362bc1b2b07de91fd5f5fbad952d2ec5a5add3a87816bb76145031defd',
+  armatureTradingOriginal:
+    '0x0493e8ccbf9477e1b37b0332f3be7abefe4b5fda3731cfe48bf5d6e7fccda1f6',
+  armatureVault:
+    '0x299e2dce9e586ef1554fe292146cbdeafce894a1d743996e1104e8643d908df8',
+  armatureVaultOriginal:
+    '0x3af6edb64f575cb65a89f1c8f445a2e2aad05324a1586aad9e2651191bf4f99b',
+  armatureWorldBridge:
+    '0x0b341844de4bac0dc824f2dd0bc6820c1dee8c7bd83ed23a827d0a859759e087',
+  daoReceiptVaultRegistry:
+    '0x647c96dd2cd1f84ae441e68b867d9ec48c9be06fd99357a0d3653250e2542623',
 }
 
 export const NETWORK_PRESETS: Record<TriexNetwork, PackageIds> = {

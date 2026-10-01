@@ -50,6 +50,8 @@ export enum TriexError {
   HubNotFound = 'TRIEX_HUB_NOT_FOUND',
   /** The requested solar system (by name or numeric id) does not exist. */
   SolarSystemNotFound = 'TRIEX_SOLAR_SYSTEM_NOT_FOUND',
+  /** The requested organization (or organizational unit) does not exist. */
+  OrgNotFound = 'TRIEX_ORG_NOT_FOUND',
   /** The player's on-chain character could not be resolved. */
   CharacterNotFound = 'TRIEX_CHARACTER_NOT_FOUND',
   /** The transaction executed but failed (aborted) on-chain. */

@@ -62,6 +62,31 @@ All configuration is **non-secret** — note the absence of any key, address, or
 
 **Prepare** — `prepare_create_account`, `prepare_deposit_currency`, `prepare_deposit_items`, `prepare_withdraw_currency`, `prepare_withdraw_items`, `prepare_claim_settled`, `prepare_limit_order`, `prepare_market_order`, `prepare_cancel_order`, `prepare_cancel_all_orders`, `prepare_modify_order`.
 
+**Organizations (Armature)** — an organization is a *tree* of DAOs, and almost every question about one is really a question about a specific unit: which board votes, whose treasury, whose shared storage. Any unit id resolves the whole tree, so `orgId` is forgiving, but the answers are per-unit.
+
+- *Identity & discovery* — `org_get`, `org_batch`, `org_directory`, `org_for_player`, `org_search`, `org_seats`, `org_trading_account`, `org_proposals`, `org_accessible_keyspaces`.
+- *Governance & treasury reads* — `org_governance`, `org_treasury_balances`, `org_treasury_balance`, `org_treasury_item_balance`.
+- *Shared storage reads* — `org_vaults_at_hub`, `org_vault_resolve`, `org_vault_info`, `org_vault_balance`.
+- *Prepare* — `prepare_org_add_members`, `prepare_org_remove_members`, `prepare_org_set_board`, `prepare_org_update_metadata`, `prepare_org_enable_type`, `prepare_org_update_type_config`, `prepare_org_enable_composite`, `prepare_org_enable_send_coin`, `prepare_org_enable_trading`, `prepare_org_vote`, `prepare_org_execute_proposal`, `prepare_org_expire_proposal`, `prepare_org_treasury_deposit`, `prepare_org_treasury_send`, `prepare_org_treasury_send_to_org`, `prepare_org_setup_trading`, `prepare_org_limit_order`, `prepare_org_cancel_order`, `prepare_org_buy_from_treasury`, `prepare_org_sell_from_vault`, `prepare_org_sweep_coin`, `prepare_org_sweep_items`, `prepare_org_sweep_all`, `prepare_org_vault_init`, `prepare_org_vault_deposit`, `prepare_org_vault_withdraw`, `prepare_org_vault_grant`, `prepare_org_vault_revoke`, `prepare_org_vault_deinit`.
+
+### Governance actions have three outcomes, not one
+
+This is the one way the org prepare tools differ from every other prepare tool, and skipping it will cost you.
+
+The **same call** resolves differently per caller. For an officer whose lone vote clears quorum it executes now; for someone whose does not it creates a **proposal** the board still has to vote on; for a third caller it is refused outright. So:
+
+- `intent.outcome` is `"executed"` or `"proposed"`. **A `proposed` result has not done the thing yet.**
+- A refusal returns `prepared: false` with the resolver's `reason` and `code` — an answer, not an error, and there are no bytes to sign.
+- Trading tools never degrade into proposals. A limit order deferred by a week is priced against a book that no longer exists, and a funded buy split into two proposals loses its atomic deposit-then-place guarantee, so they return `prepared: false` instead.
+
+`org_governance` is what predicts this: a lone vote clears quorum only when `boardSize × quorum ≤ 10000` and `executionDelayMs` is 0. Pair it with `org_seats` to know which board you are on.
+
+### Two things that bite
+
+**Shared storage is keyed by (storage unit, organization).** There is no "the vault at this hub" — anyone can register one at any SSU, so `org_vaults_at_hub` may well list a stranger's. `org_vault_resolve` answers for *your* organization.
+
+**`prepare_org_enable_trading`'s `bindToBaseType` is irreversible.** It binds the coin-pool order types to one base coin permanently. Leave it unset unless you know why you are setting it.
+
 u64-ish values (prices, quantities, amounts) cross the MCP boundary as **decimal strings**, never JSON numbers.
 
 ## The prepare contract
@@ -124,12 +149,19 @@ npm run check:parity   # readable lock-step report (builds first)
 npm run build && npm start
 ```
 
+Working against an **unpublished** SDK change? The dependency is a published
+version, so a surface added in a sibling checkout is invisible here — and the
+parity gate would cheerfully report lock-step against a version that predates
+the work. `npm run link:sdk` copies the sibling build in so local checks tell
+the truth; `npm install` restores the published copy.
+
 ### Lock-step with the SDK
 
 The tool surface is checked against the SDK's **shipped type declarations**, not against a hand-maintained list. `scripts/sdk-surface.mjs` parses `@trinaryex/sdk`'s `.d.ts` with the TypeScript compiler, which gives four things for free:
 
 - `private` helpers are excluded **structurally** — nothing to keep in sync;
-- each method's **return type classifies it**: `Promise<TxResult>` (or `EnsureAccountResult`) is a write, everything else is a read;
+- each method's **return type classifies it**: `Promise<TxResult>`, `EnsureAccountResult` or `RunOutcome` is a write, everything else is a read — including intersections like `RunOutcome & { skipped }`;
+- **handle sub-APIs are discovered**, not listed: the org handle's groups (`org.governance`, `org.treasury`, …) come from `OrgHandle`'s own property declarations, so adding a group to the SDK cannot silently escape the gate;
 - each method's **parameter types resolve** to the property names it accepts, following them into sibling declaration files;
 - it describes the **published contract**, which is what consumers actually see.
 

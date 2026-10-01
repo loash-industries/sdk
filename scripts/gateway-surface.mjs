@@ -182,8 +182,16 @@ function queryKeys(node) {
  *            file: string, line: number}[]}
  */
 export function readSdkCalls(
-  files = [join(here, '..', 'src', 'queries.ts')],
-  methodNames = { get: 'GET' },
+  files = [
+    join(here, '..', 'src', 'queries.ts'),
+    // Armature reads live in their own module but hit the same gateway, so the
+    // drift gate has to see them too — a renamed org query param is exactly as
+    // quiet as a renamed market one.
+    join(here, '..', 'src', 'armature', 'queries.ts'),
+  ],
+  // `fetchJson` is the Armature module's HTTP helper; `get` there is a public
+  // method (fetch one org), not the request primitive.
+  methodNames = { get: 'GET', fetchJson: 'GET' },
 ) {
   const calls = []
 
