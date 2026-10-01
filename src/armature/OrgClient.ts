@@ -1,6 +1,7 @@
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 import { Transaction as SuiTransaction } from '@mysten/sui/transactions'
 import type { Transaction } from '@mysten/sui/transactions'
+import { normalizeSuiAddress } from '@mysten/sui/utils'
 
 import { TriexClientError, TriexError } from '../errors'
 import { executeAndNormalize } from '../execute'
@@ -18,6 +19,7 @@ import {
   type ProposalConfigPatch,
   removeMembersAction,
   setBoardAction,
+  TRADING_TYPE_CONFIG,
   updateMetadataAction,
   updateProposalConfigAction,
 } from './actions'
@@ -47,30 +49,42 @@ import type { ProposalConfigInput } from './transactions'
 import { tryExpireTx, voteTx } from './transactions'
 import {
   appendClaimSettled,
+  appendClaimSettledCoin,
   cancelOrderAction,
+  cancelOrderCoinAction,
+  coinPairProposalTypes,
+  createMulticoinPoolAction,
   depositCoinToBookAction,
-  depositFromDaoVaultToBookAction,
+  depositFromOuVaultToBookAction,
+  extractCreatedTradingCustody,
+  fetchTradingCustody,
+  normalizeMoveType as normalizeType,
   placeLimitOrderAction,
+  placeLimitOrderCoinAction,
+  placeMarketOrderAction,
   setupTradingAccountAction,
   sweepCoinToTreasuryAction,
-  sweepMulticoinToDaoVaultAction,
+  sweepMulticoinToOuVaultAction,
+  withEnabledTypeKey,
   type OrderFlags,
   type TradingContext,
+  type TradingCustodyInfo,
 } from './trading'
 import {
-  deinitializeDaoVaultTx,
+  deinitializeOuVaultTx,
   depositReceiptTx,
-  fetchDaoVaultInfo,
+  fetchOuVaultInfo,
   fetchVaultBalance,
   grantEditOuTx,
   grantTx,
-  initializeDaoVaultTx,
-  resolveDaoVaultId,
+  initializeOuVaultTx,
+  resolveOuVaultId,
   revokeTx,
   sourceWalletReceipts,
+  updateRegistryKeyTx,
   withdrawReceiptTx,
   toStorageUnitId,
-  type DaoVaultInfo,
+  type OuVaultInfo,
 } from './vault'
 import {
   depositToTreasuryTx,
@@ -276,35 +290,6 @@ export class OrgHandle {
       )
     }
     return id
-  }
-
-  /**
-   * @internal — everything a trading action needs.
-   *
-   * The TradingAccount is found by CAPABILITY across the whole tree (whichever
-   * unit holds one), while the CapabilityVault must be the ACTING seat's: the
-   * TradeCap the handlers borrow lives with the board that votes.
-   */
-  tradingContext(): TradingContext {
-    const seat = this.requireSeat()
-    const bm = this.nodes.find((n) => n.tradingAccountId)?.tradingAccountId
-    if (!bm) {
-      throw new TriexClientError(
-        TriexError.TradingAccountNotFound,
-        `Organization ${this.orgId} has no trading account — run orders.ensureAccount() first.`,
-      )
-    }
-    if (!seat.capabilityVaultId) {
-      throw new TriexClientError(
-        TriexError.ValidationFailed,
-        `Unit ${seat.daoId} has no CapabilityVault, so it cannot hold a TradeCap.`,
-      )
-    }
-    return {
-      armatureTrading: this.deps.ids.armatureTrading,
-      capVaultId: seat.capabilityVaultId,
-      tradingAccountId: bm,
-    }
   }
 
   /** @internal — run a prepared transaction and map it to a `TxResult`. */
@@ -883,7 +868,7 @@ export interface OrgSweepSkip {
   reason: 'no-vault'
 }
 
-/** A limit order placed on behalf of the organization. */
+/** A limit order placed on behalf of the organization on an item market. */
 export interface OrgLimitOrderParams extends OrderFlags {
   storageUnitId: string
   assetId: string
@@ -895,31 +880,162 @@ export interface OrgLimitOrderParams extends OrderFlags {
   quoteType?: string
 }
 
+/** A limit order on a coin pool (`Pool<Base, Quote>`). */
+export interface OrgCoinLimitOrderParams extends OrderFlags {
+  poolId: string
+  baseType: string
+  /** Defaults to CRED. */
+  quoteType?: string
+  side: OrderSide
+  price: bigint
+  quantity: bigint
+  /** Epoch ms; defaults to good-til-cancelled. */
+  expireAt?: bigint
+  /**
+   * Fund the order from the treasury in the SAME transaction: deposits this
+   * much of the quote coin (bid) or the base coin (ask) first. Omit when the
+   * trading account already holds the funds.
+   */
+  depositAmount?: bigint
+  treasuryVaultId?: string
+}
+
+/** The trading account `ensureAccount()` just created, from the tx effects. */
+export interface OrgTradingAccountCreated {
+  tradingAccountId?: string
+  tradingCustodyId?: string
+}
+
+/** @internal — the unit that can trade, and the context its actions need. */
+interface TradingTarget {
+  h: OrgHandle
+  ctx: TradingContext
+}
+
 class OrgOrdersApi {
+  /** @internal — custody per trading account; it never changes. */
+  private readonly custodies = new Map<string, Promise<TradingCustodyInfo>>()
+  /**
+   * @internal — an account this handle created, remembered until the indexer
+   * links it to the organization. Without it a second `ensureAccount()` in the
+   * indexer's lag window would open a second, orphaned account.
+   */
+  private created: { tradingAccountId: string; ouId: string } | null = null
+
   constructor(private readonly h: OrgHandle) {}
 
-  /** Give the organization a shared trading account (`TradingAccount`). */
-  async ensureAccount(): Promise<RunOutcome> {
+  /**
+   * Give the organization a trading account, owned by a new shared
+   * `TradingCustody` on the ACTING unit. Only that unit's board can trade
+   * through it afterwards, so open it on the unit whose officers should trade.
+   *
+   * The account is ready as soon as this commits (the custody stores its caps
+   * in the same transaction). Its ids come back from the transaction's effects
+   * when the executor surfaces object types — the indexer takes a moment to
+   * catch up, so trust these over an immediate `orgs.tradingAccount()` read.
+   */
+  async ensureAccount(): Promise<RunOutcome & OrgTradingAccountCreated> {
     const existing = this.h.nodes.find((n) => n.tradingAccountId)
-    if (existing) {
+    if (existing || this.created) {
       throw new TriexClientError(
         TriexError.ValidationFailed,
-        `Organization ${this.h.orgId} already has a trading account on unit ${existing.daoId}.`,
+        `Organization ${this.h.orgId} already has a trading account on unit ${
+          existing?.daoId ?? this.created?.ouId
+        }.`,
       )
     }
     const seat = this.h.requireSeat()
-    if (!seat.capabilityVaultId) {
+    const action = await slotKeyed(
+      this.h,
+      setupTradingAccountAction({
+        armatureTrading: this.h.deps.ids.armatureTrading,
+      }),
+    )
+    const plan = await this.h.governance.resolve(action)
+    if (plan.blocked) {
+      return { status: 'blocked', code: plan.code, reason: plan.reason }
+    }
+    const res = await executeAndNormalize(
+      this.h.deps.requireExecutor(),
+      plan.buildTx(),
+    )
+    const made = extractCreatedTradingCustody(res.createdObjects)
+    if (made) {
+      this.created = {
+        tradingAccountId: made.tradingAccountId,
+        ouId: seat.daoId,
+      }
+    }
+    return { status: 'executed', digest: res.digest, ...(made ?? {}) }
+  }
+
+  /**
+   * @internal — resolve WHO trades and with WHAT.
+   *
+   * The custody only accepts tickets from the OU that set the account up, so
+   * orders always act through that unit — whatever seat the handle defaults
+   * to. That is not a silent seat switch: it is the only unit through which
+   * the account can be used at all, and the caller must hold a seat on it.
+   */
+  private async target(): Promise<TradingTarget> {
+    const seat = this.h.requireSeat()
+    const own = this.h.nodes.find(
+      (n) => sameId(n.daoId, seat.daoId) && n.tradingAccountId,
+    )
+    const seated = this.h.nodes.find(
+      (n) =>
+        n.tradingAccountId &&
+        this.h.seats.some((s) => sameId(s.daoId, n.daoId)),
+    )
+    const any = this.h.nodes.find((n) => n.tradingAccountId)
+    const tradingAccountId =
+      this.created?.tradingAccountId ??
+      own?.tradingAccountId ??
+      seated?.tradingAccountId ??
+      any?.tradingAccountId
+    if (!tradingAccountId) {
       throw new TriexClientError(
-        TriexError.ValidationFailed,
-        `Unit ${seat.daoId} has no CapabilityVault to hold the trading capability.`,
+        TriexError.TradingAccountNotFound,
+        `Organization ${this.h.orgId} has no trading account — run orders.ensureAccount() first.`,
       )
     }
-    return this.h.governance.run(
-      setupTradingAccountAction(
-        { armatureTrading: this.h.deps.ids.armatureTrading },
-        seat.capabilityVaultId,
-      ),
-    )
+
+    let custody = this.custodies.get(tradingAccountId)
+    if (!custody) {
+      custody = fetchTradingCustody(this.h.deps.suiClient, tradingAccountId)
+      // Do not cache a failure — a transient read error must not stick.
+      custody.catch(() => this.custodies.delete(tradingAccountId))
+      this.custodies.set(tradingAccountId, custody)
+    }
+    const info = await custody
+
+    const ownerUnit =
+      info.ouId ||
+      this.h.nodes.find((n) => n.tradingAccountId === tradingAccountId)
+        ?.daoId ||
+      this.created?.ouId ||
+      seat.daoId
+    let h = this.h
+    if (!sameId(ownerUnit, seat.daoId)) {
+      const held = this.h.seats.find((s) => sameId(s.daoId, ownerUnit))
+      if (!held) {
+        throw new TriexClientError(
+          TriexError.ValidationFailed,
+          `Organization ${this.h.orgId}'s trading account is held for unit ${ownerUnit}, ` +
+            `and only that unit's board can trade through it. ${this.h.deps.address} holds no seat there.`,
+        )
+      }
+      h = this.h.as(held.daoId)
+    }
+    return {
+      h,
+      ctx: {
+        armatureTrading: this.h.deps.ids.armatureTrading,
+        tradingCustodyId: info.tradingCustodyId,
+        tradingAccountId,
+        feePolicyId: this.h.deps.ids.triexFeePolicy,
+      },
+    }
   }
 
   /** @internal — hub vault → collection → pool, the same chain personal orders use. */
@@ -944,9 +1060,10 @@ class OrgOrdersApi {
   }
 
   /**
-   * Place a limit order using funds ALREADY in the organization's balance
-   * manager. To fund it from the treasury or from shared storage in the same
-   * transaction, use {@link buyFromTreasury} / {@link sellFromDaoVault}.
+   * Place a limit order on an item market using funds ALREADY in the
+   * organization's trading account. To fund it from the treasury or from
+   * shared storage in the same transaction, use {@link buyFromTreasury} /
+   * {@link sellFromVault}.
    */
   async limit(params: OrgLimitOrderParams): Promise<RunOutcome> {
     requirePositive(params)
@@ -956,8 +1073,9 @@ class OrgOrdersApi {
       params.assetId,
       params.quoteType,
     )
-    return this.h.governance.run(
-      placeLimitOrderAction(this.h.tradingContext(), {
+    const t = await this.target()
+    return runAtomic(t.h, [
+      placeLimitOrderAction(t.ctx, {
         quoteType,
         poolId,
         price: params.price,
@@ -967,13 +1085,51 @@ class OrgOrdersApi {
         orderType: params.orderType,
         selfMatchingOption: params.selfMatchingOption,
       }),
-    )
+    ])
   }
 
-  /** Cancel one of the organization's resting orders. */
+  /**
+   * Place an immediate-or-cancel market order on an item market, using funds
+   * already in the trading account. Whatever does not fill at once is
+   * cancelled, never left resting.
+   */
+  async market(params: {
+    storageUnitId: string
+    assetId: string
+    side: OrderSide
+    quantity: bigint
+    quoteType?: string
+    selfMatchingOption?: number
+  }): Promise<RunOutcome> {
+    if (params.quantity <= 0n) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'Market orders need a positive quantity.',
+      )
+    }
+    const quoteType = params.quoteType ?? this.h.deps.ids.credCoinType
+    const { poolId } = await this.resolvePool(
+      params.storageUnitId,
+      params.assetId,
+      params.quoteType,
+    )
+    const t = await this.target()
+    return runAtomic(t.h, [
+      placeMarketOrderAction(t.ctx, {
+        quoteType,
+        poolId,
+        quantity: params.quantity,
+        isBid: params.side === 'buy',
+        selfMatchingOption: params.selfMatchingOption,
+      }),
+    ])
+  }
+
+  /** Cancel one of the organization's resting orders on an item market. */
   async cancel(params: {
     storageUnitId: string
     assetId: string
+    /** triex order id (u128). */
     orderId: bigint
     quoteType?: string
   }): Promise<RunOutcome> {
@@ -982,13 +1138,14 @@ class OrgOrdersApi {
       params.assetId,
       params.quoteType,
     )
-    return this.h.governance.run(
-      cancelOrderAction(this.h.tradingContext(), {
+    const t = await this.target()
+    return runAtomic(t.h, [
+      cancelOrderAction(t.ctx, {
         quoteType: params.quoteType ?? this.h.deps.ids.credCoinType,
         poolId,
         orderId: params.orderId,
       }),
-    )
+    ])
   }
 
   /**
@@ -999,11 +1156,18 @@ class OrgOrdersApi {
    * the deficit yourself when it already holds some quote. Over-depositing is
    * safe (the funds stay in the trading account, usable by the next order);
    * under-depositing aborts the whole transaction, deposit included.
+   *
+   * The default is `notional + floor(notional × bidFeeRate / 1e9)`. Pass
+   * `bidFeeRate` (1e9-scaled) to size it yourself — cycle-7 triex escrows the
+   * maker fee on a resting bid, so the rate that matters is the HIGHER of the
+   * pool's tier-0 taker/maker rates; see {@link orgBidFeeRate}.
    */
   async buyFromTreasury(
     params: OrgLimitOrderParams & {
       depositAmount?: bigint
       treasuryVaultId?: string
+      /** 1e9-scaled fee rate the default deposit is sized with. */
+      bidFeeRate?: bigint
     },
   ): Promise<RunOutcome> {
     requirePositive(params)
@@ -1015,21 +1179,20 @@ class OrgOrdersApi {
     )
     let depositAmount = params.depositAmount
     if (depositAmount === undefined) {
-      const meta = await this.h.deps.indexer.poolMetadata(poolId)
       depositAmount = computeBidQuoteDeposit(
         params.price,
         params.quantity,
-        meta.feeRateScaled,
+        params.bidFeeRate ?? (await orgBidFeeRate(this.h, poolId)),
       )
     }
-    const ctx = this.h.tradingContext()
-    return this.runAtomic([
-      depositCoinToBookAction(ctx, {
-        quoteType,
+    const t = await this.target()
+    return runAtomic(t.h, [
+      depositCoinToBookAction(t.ctx, {
+        coinType: quoteType,
         amount: depositAmount,
-        treasuryVaultId: this.h.requireTreasuryId(params.treasuryVaultId),
+        treasuryVaultId: t.h.requireTreasuryId(params.treasuryVaultId),
       }),
-      placeLimitOrderAction(ctx, {
+      placeLimitOrderAction(t.ctx, {
         quoteType,
         poolId,
         price: params.price,
@@ -1050,11 +1213,12 @@ class OrgOrdersApi {
    * It defaults to the full quantity.
    *
    * The vault is resolved from the storage unit and this organization; pass
-   * `daoVaultId` to skip the lookup.
+   * `vaultId` to skip the lookup. The trading unit's board must satisfy the
+   * vault's `withdraw` role.
    */
-  async sellFromDaoVault(
+  async sellFromVault(
     params: OrgLimitOrderParams & {
-      daoVaultId?: string
+      vaultId?: string
       vaultQuantity?: bigint
       registrantOrgId?: string
     },
@@ -1066,15 +1230,15 @@ class OrgOrdersApi {
       params.assetId,
       params.quoteType,
     )
-    const daoVaultId = await requireVaultId(this.h, params)
-    const ctx = this.h.tradingContext()
-    return this.runAtomic([
-      depositFromDaoVaultToBookAction(ctx, {
-        daoVaultId,
+    const vaultId = await requireVaultId(this.h, params)
+    const t = await this.target()
+    return runAtomic(t.h, [
+      depositFromOuVaultToBookAction(t.ctx, {
+        vaultId,
         assetId: BigInt(params.assetId),
         amount: params.vaultQuantity ?? params.quantity,
       }),
-      placeLimitOrderAction(ctx, {
+      placeLimitOrderAction(t.ctx, {
         quoteType,
         poolId,
         price: params.price,
@@ -1088,40 +1252,222 @@ class OrgOrdersApi {
   }
 
   /**
-   * Sweep quote coin out of the trading account and back into the treasury.
+   * Move a coin from the treasury into the trading account, on its own —
+   * e.g. a coin pool's BASE coin ahead of an ask. Bids on item markets are
+   * better served by {@link buyFromTreasury}, which funds and places at once.
+   */
+  async deposit(params: {
+    amount: bigint
+    coinType?: string
+    treasuryVaultId?: string
+  }): Promise<RunOutcome> {
+    if (params.amount <= 0n) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'Deposit amount must be positive.',
+      )
+    }
+    const t = await this.target()
+    return runAtomic(t.h, [
+      depositCoinToBookAction(t.ctx, {
+        coinType: params.coinType ?? this.h.deps.ids.credCoinType,
+        amount: params.amount,
+        treasuryVaultId: t.h.requireTreasuryId(params.treasuryVaultId),
+      }),
+    ])
+  }
+
+  /**
+   * Place a limit order on a COIN pool (`Pool<Base, Quote>`).
    *
-   * `claimFromPool` first claims that pool's settled balances into the balance
-   * manager, in the same transaction — a resting maker order that filled leaves
-   * its proceeds IN the pool, so sweeping without claiming quietly moves less
-   * than the caller expects.
+   * Requires the pair's `PlaceLimitOrderCoin<Base, Quote>` type on the trading
+   * unit — {@link enableCoinPair}. With `depositAmount`, the order is funded
+   * from the treasury in the same transaction: quote for a bid, base for an
+   * ask (which then also needs `DepositCoinToBook<Base>` enabled).
+   */
+  async limitCoin(params: OrgCoinLimitOrderParams): Promise<RunOutcome> {
+    requirePositive(params)
+    const quoteType = params.quoteType ?? this.h.deps.ids.credCoinType
+    const isBid = params.side === 'buy'
+    const t = await this.target()
+    const actions: OuProposalAction[] = []
+    if (params.depositAmount !== undefined) {
+      actions.push(
+        depositCoinToBookAction(t.ctx, {
+          coinType: isBid ? quoteType : params.baseType,
+          amount: params.depositAmount,
+          treasuryVaultId: t.h.requireTreasuryId(params.treasuryVaultId),
+        }),
+      )
+    }
+    actions.push(
+      placeLimitOrderCoinAction(t.ctx, {
+        baseType: params.baseType,
+        quoteType,
+        poolId: params.poolId,
+        price: params.price,
+        quantity: params.quantity,
+        isBid,
+        expireTimestamp: params.expireAt ?? GTC_EXPIRE,
+        orderType: params.orderType,
+        selfMatchingOption: params.selfMatchingOption,
+      }),
+    )
+    return runAtomic(t.h, actions)
+  }
+
+  /** Cancel a resting order on a coin pool. */
+  async cancelCoin(params: {
+    poolId: string
+    baseType: string
+    quoteType?: string
+    /** triex order id (u128). */
+    orderId: bigint
+  }): Promise<RunOutcome> {
+    const t = await this.target()
+    return runAtomic(t.h, [
+      cancelOrderCoinAction(t.ctx, {
+        baseType: params.baseType,
+        quoteType: params.quoteType ?? this.h.deps.ids.credCoinType,
+        poolId: params.poolId,
+        orderId: params.orderId,
+      }),
+    ])
+  }
+
+  /**
+   * Enable governed trading of one coin pair on the acting unit: registers
+   * `PlaceLimitOrderCoin<Base, Quote>` and `CancelOrderCoin<Base, Quote>`
+   * under per-pair display keys, so further pairs can be added later — unlike
+   * the old generics-free key, which bound a unit to ONE base forever.
+   */
+  async enableCoinPair(params: {
+    baseType: string
+    quoteType?: string
+  }): Promise<RunOutcome> {
+    const quoteType = params.quoteType ?? this.h.deps.ids.credCoinType
+    const gov = await this.h.governance.read()
+    const enabled = new Set(
+      [...gov.typeBindings.values()].map((t) => normalizeType(t)),
+    )
+    const missing = coinPairProposalTypes(
+      this.h.deps.ids.armatureTrading,
+      params.baseType,
+      quoteType,
+    ).filter(
+      (e) =>
+        !gov.enabledTypes.has(e.typeKey) &&
+        !enabled.has(normalizeType(e.moveType)),
+    )
+    if (missing.length === 0) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        `Coin-pair trading for ${params.baseType} / ${quoteType} is already enabled on this unit.`,
+      )
+    }
+    return this.h.governance.runBatch(
+      missing.map((e) =>
+        enableProposalTypeAction(this.h.pkgs(), {
+          kind: 'enable_trading',
+          enabledTypeKey: e.typeKey,
+          enabledMoveType: e.moveType,
+          config: TRADING_TYPE_CONFIG,
+        }),
+      ),
+    )
+  }
+
+  /**
+   * Open a new item market: a permissionless `MultiCoinPool<Quote>` for one
+   * asset of the hub's collection, with the CRED creation fee paid from the
+   * ACTING unit's treasury. Requires `CreateMulticoinPool<Quote>` enabled with
+   * the `TREASURY_WITHDRAW` permission. May resolve to a proposal — a new
+   * market does not go stale while a board votes.
+   */
+  async createPool(params: {
+    assetId: bigint
+    storageUnitId?: string
+    collectionId?: string
+    quoteType?: string
+    treasuryVaultId?: string
+  }): Promise<RunOutcome> {
+    let collectionId = params.collectionId
+    if (!collectionId) {
+      if (!params.storageUnitId) {
+        throw new TriexClientError(
+          TriexError.ValidationFailed,
+          'createPool needs a `storageUnitId` or a `collectionId`.',
+        )
+      }
+      collectionId = (await this.h.deps.indexer.hubVault(params.storageUnitId))
+        .collectionId
+    }
+    const action = createMulticoinPoolAction(
+      {
+        armatureTrading: this.h.deps.ids.armatureTrading,
+        triexRegistryId: this.h.deps.ids.triexRegistry,
+        feePolicyId: this.h.deps.ids.triexFeePolicy,
+      },
+      {
+        quoteType: params.quoteType ?? this.h.deps.ids.credCoinType,
+        collectionId,
+        assetId: params.assetId,
+        treasuryVaultId: this.h.requireTreasuryId(params.treasuryVaultId),
+      },
+    )
+    return this.h.governance.run(await slotKeyed(this.h, action))
+  }
+
+  /**
+   * Sweep a coin out of the trading account and back into the treasury —
+   * quote proceeds, or a coin pool's base coin (`coinType`, default CRED).
+   *
+   * `claimFromPool` / `claimFromCoinPool` first claim that pool's settled
+   * balances into the trading account, in the same transaction — a resting
+   * maker order that filled leaves its proceeds IN the pool, so sweeping
+   * without claiming quietly moves less than the caller expects.
    */
   async sweepCoin(params: {
     amount: bigint
-    quoteType?: string
+    coinType?: string
     treasuryVaultId?: string
+    /** An item market (`MultiCoinPool<coinType>`) to claim from first. */
     claimFromPool?: string
+    /** A coin pool to claim from first. */
+    claimFromCoinPool?: { poolId: string; baseType: string; quoteType?: string }
   }): Promise<RunOutcome> {
-    const quoteType = params.quoteType ?? this.h.deps.ids.credCoinType
-    const ctx = this.h.tradingContext()
-    const action = sweepCoinToTreasuryAction(ctx, {
-      quoteType,
+    const coinType = params.coinType ?? this.h.deps.ids.credCoinType
+    const t = await this.target()
+    const action = sweepCoinToTreasuryAction(t.ctx, {
+      coinType,
       amount: params.amount,
-      treasuryVaultId: this.h.requireTreasuryId(params.treasuryVaultId),
+      treasuryVaultId: t.h.requireTreasuryId(params.treasuryVaultId),
     })
-    return this.runAtomic([action], (tx) => {
+    return runAtomic(t.h, [action], (tx) => {
       if (params.claimFromPool) {
         appendClaimSettled(tx, {
           triex: this.h.deps.ids.triex,
-          quoteType,
+          quoteType: coinType,
           poolId: params.claimFromPool,
-          tradingAccountId: ctx.tradingAccountId,
+          tradingAccountId: t.ctx.tradingAccountId,
+        })
+      }
+      if (params.claimFromCoinPool) {
+        appendClaimSettledCoin(tx, {
+          triex: this.h.deps.ids.triex,
+          baseType: params.claimFromCoinPool.baseType,
+          quoteType:
+            params.claimFromCoinPool.quoteType ?? this.h.deps.ids.credCoinType,
+          poolId: params.claimFromCoinPool.poolId,
+          tradingAccountId: t.ctx.tradingAccountId,
         })
       }
     })
   }
 
   /**
-   * Park items from the trading account into shared storage.
+   * Park items from the trading account into shared storage. The trading
+   * unit's board must satisfy the vault's `deposit` role.
    *
    * As with {@link sweepCoin}, `claimFromPool` claims settled balances first so
    * `amount` may include them.
@@ -1130,30 +1476,30 @@ class OrgOrdersApi {
     storageUnitId: string
     assetId: bigint
     amount: bigint
-    daoVaultId?: string
+    vaultId?: string
     collectionId?: string
     registrantOrgId?: string
     claimFromPool?: string
     quoteType?: string
   }): Promise<RunOutcome> {
-    const daoVaultId = await requireVaultId(this.h, params)
+    const vaultId = await requireVaultId(this.h, params)
     const collectionId =
       params.collectionId ??
       (await this.h.deps.indexer.hubVault(params.storageUnitId)).collectionId
-    const ctx = this.h.tradingContext()
-    const action = sweepMulticoinToDaoVaultAction(ctx, {
-      daoVaultId,
+    const t = await this.target()
+    const action = sweepMulticoinToOuVaultAction(t.ctx, {
+      vaultId,
       collectionId,
       assetId: params.assetId,
       amount: params.amount,
     })
-    return this.runAtomic([action], (tx) => {
+    return runAtomic(t.h, [action], (tx) => {
       if (params.claimFromPool) {
         appendClaimSettled(tx, {
           triex: this.h.deps.ids.triex,
           quoteType: params.quoteType ?? this.h.deps.ids.credCoinType,
           poolId: params.claimFromPool,
-          tradingAccountId: ctx.tradingAccountId,
+          tradingAccountId: t.ctx.tradingAccountId,
         })
       }
     })
@@ -1180,7 +1526,8 @@ class OrgOrdersApi {
     includeCurrency?: boolean
   }): Promise<RunOutcome & { skipped: OrgSweepSkip[] }> {
     const quoteType = params?.quoteType ?? this.h.deps.ids.credCoinType
-    const ctx = this.h.tradingContext()
+    const t = await this.target()
+    const ctx = t.ctx
     const manifest = await this.h.deps.indexer.sweepable(ctx.tradingAccountId)
 
     const claimPools = manifest.pools
@@ -1197,10 +1544,10 @@ class OrgOrdersApi {
     const actions: OuProposalAction[] = []
 
     for (const item of manifest.items) {
-      const daoVaultId = await this.h.vault.resolve({
+      const vaultId = await t.h.vault.resolve({
         storageUnitId: item.storageUnitId,
       })
-      if (!daoVaultId) {
+      if (!vaultId) {
         skipped.push({
           storageUnitId: item.storageUnitId,
           assetId: BigInt(item.assetId),
@@ -1210,8 +1557,8 @@ class OrgOrdersApi {
         continue
       }
       actions.push(
-        sweepMulticoinToDaoVaultAction(ctx, {
-          daoVaultId,
+        sweepMulticoinToOuVaultAction(ctx, {
+          vaultId,
           collectionId: item.collectionId,
           assetId: BigInt(item.assetId),
           amount: item.amount,
@@ -1236,9 +1583,9 @@ class OrgOrdersApi {
     if (params?.includeCurrency !== false && credAmount > 0n) {
       actions.push(
         sweepCoinToTreasuryAction(ctx, {
-          quoteType,
+          coinType: quoteType,
           amount: credAmount,
-          treasuryVaultId: this.h.requireTreasuryId(params?.treasuryVaultId),
+          treasuryVaultId: t.h.requireTreasuryId(params?.treasuryVaultId),
         }),
       )
     }
@@ -1252,7 +1599,7 @@ class OrgOrdersApi {
       )
     }
 
-    const outcome = await this.runAtomic(actions, (tx) => {
+    const outcome = await runAtomic(t.h, actions, (tx) => {
       for (const pool of claimPools) {
         appendClaimSettled(tx, {
           triex: this.h.deps.ids.triex,
@@ -1264,38 +1611,83 @@ class OrgOrdersApi {
     })
     return { ...outcome, skipped }
   }
+}
 
-  /**
-   * @internal — run several trading actions in ONE transaction.
-   *
-   * Trading actions are `single-vote-only`, so a resolved plan is always
-   * immediate; if it is not, the resolver blocks and that blocked result is
-   * what the caller sees. This never silently degrades a two-step funded order
-   * into two independent proposals, which is the failure the policy exists to
-   * prevent.
-   */
-  private async runAtomic(
-    actions: OuProposalAction[],
-    prelude?: (tx: Transaction) => void,
-  ): Promise<RunOutcome> {
-    const plan = await this.h.governance.resolve(actions[0])
-    if (plan.blocked) {
-      return { status: 'blocked', code: plan.code, reason: plan.reason }
-    }
-    // Build in order: the prelude's commands (e.g. claim settled) must land
-    // BEFORE the governance ones that consume what they produce.
-    const tx = new SuiTransaction()
-    prelude?.(tx)
-    appendPlanActions(
-      tx,
-      plan.strategy,
-      actions,
-      this.h.requireContext(),
-      this.h.deps.ids.armature,
-    )
-    const res = await executeAndNormalize(this.h.deps.requireExecutor(), tx)
-    return { status: 'executed', digest: res.digest }
+/** @internal */
+const sameId = (a: string, b: string): boolean =>
+  normalizeSuiAddress(a) === normalizeSuiAddress(b)
+
+/**
+ * @internal — point an action at the display key its payload type is
+ * actually enabled under on the acting unit (cycle-7 slots are keyed by Move
+ * type; the display key is the enabler's choice). Free function, not a
+ * method, so the parity gate does not mistake it for public surface.
+ */
+async function slotKeyed(
+  h: OrgHandle,
+  action: OuProposalAction,
+): Promise<OuProposalAction> {
+  const gov = await h.gov(h.requireSeat().daoId)
+  return withEnabledTypeKey(action, gov.typeBindings)
+}
+
+/**
+ * @internal — run several trading actions in ONE transaction through `h`.
+ *
+ * Every action is resolved, not just the first: they must all land on the
+ * same immediate strategy, or the whole bundle blocks with the first reason.
+ * Trading actions are `single-vote-only`, so a resolved plan is normally
+ * immediate; this never silently degrades a two-step funded order into two
+ * independent proposals, which is the failure the policy exists to prevent.
+ */
+async function runAtomic(
+  h: OrgHandle,
+  raw: OuProposalAction[],
+  prelude?: (tx: Transaction) => void,
+): Promise<RunOutcome> {
+  const actions = await Promise.all(raw.map((a) => slotKeyed(h, a)))
+  const plans = await Promise.all(actions.map((a) => h.governance.resolve(a)))
+  for (const p of plans) {
+    if (p.blocked) return { status: 'blocked', code: p.code, reason: p.reason }
   }
+  const resolved = plans.filter((p) => !p.blocked)
+  const first = resolved[0]
+  if (resolved.some((p) => p.strategy !== first.strategy || !p.immediate)) {
+    return {
+      status: 'blocked',
+      code: 'needs-slow-tier',
+      reason:
+        'These trading steps do not all resolve to the same single-vote strategy, so they cannot execute together in one transaction.',
+    }
+  }
+  // Build in order: the prelude's commands (e.g. claim settled) must land
+  // BEFORE the governance ones that consume what they produce.
+  const tx = new SuiTransaction()
+  prelude?.(tx)
+  appendPlanActions(
+    tx,
+    first.strategy,
+    actions,
+    h.requireContext(),
+    h.deps.ids.armature,
+  )
+  const res = await executeAndNormalize(h.deps.requireExecutor(), tx)
+  return { status: 'executed', digest: res.digest }
+}
+
+/**
+ * @internal — INTEGRATION SEAM: the 1e9-scaled fee rate an org bid's treasury
+ * deposit is sized with when the caller passes neither `depositAmount` nor
+ * `bidFeeRate`.
+ *
+ * Today this is the indexer's pool `feeRateScaled`, which does NOT reflect
+ * cycle-7 fee classes (fees on both sides, maker fee escrowed on a resting
+ * bid, laddered by turnover). It is meant to be swapped for the fullnode
+ * `getPoolTradingFees(...).bidEscrowFeeRate` read once that lands alongside
+ * this module — one call site, nothing else changes.
+ */
+async function orgBidFeeRate(h: OrgHandle, poolId: string): Promise<bigint> {
+  return (await h.deps.indexer.poolMetadata(poolId)).feeRateScaled
 }
 
 /** @internal */
@@ -1320,10 +1712,10 @@ async function requireVaultId(
   params: {
     storageUnitId: string
     registrantOrgId?: string
-    daoVaultId?: string
+    vaultId?: string
   },
 ): Promise<string> {
-  if (params.daoVaultId) return params.daoVaultId
+  if (params.vaultId) return params.vaultId
   const id = await h.vault.resolve(params)
   if (!id) {
     throw new TriexClientError(
@@ -1368,7 +1760,7 @@ class OrgVaultApi {
     for (const registrantOrgId of candidates) {
       if (seen.has(registrantOrgId)) continue
       seen.add(registrantOrgId)
-      const id = await resolveDaoVaultId(
+      const id = await resolveOuVaultId(
         this.h.deps.suiClient,
         this.h.deps.ids,
         {
@@ -1382,8 +1774,8 @@ class OrgVaultApi {
   }
 
   /** A vault's live identity, ACL, and non-empty asset count. */
-  info(vaultId: string): Promise<DaoVaultInfo | null> {
-    return fetchDaoVaultInfo(this.h.deps.suiClient, vaultId)
+  info(vaultId: string): Promise<OuVaultInfo | null> {
+    return fetchOuVaultInfo(this.h.deps.suiClient, vaultId)
   }
 
   /** One asset's balance in a vault, or 0n. */
@@ -1392,16 +1784,16 @@ class OrgVaultApi {
   }
 
   /**
-   * Register shared storage for the acting unit at a storage unit.
+   * Register shared storage for the acting unit at a storage unit
+   * (`initialize_ou_vault`). Any board member of the acting unit may do this;
+   * no storage-unit OwnerCap is needed.
    *
    * Defaults mirror the app's tiering: deposit and withdraw go to the acting
    * unit, and EDIT goes to its PARENT — a unit that governs its own access
    * control can quietly widen it, so the tier above holds the key. On a root
    * unit (no parent) edit falls back to itself, which is the only option.
    *
-   * At least one editor must be an `ou`; an all-`player` edit set is rejected
-   * on-chain because a vault whose only editors were bare keys could be bricked
-   * beyond recovery.
+   * Any principal kind may hold `edit`, but at least one editor is required.
    */
   async init(params: {
     storageUnitId: string
@@ -1411,8 +1803,15 @@ class OrgVaultApi {
     editPrincipals?: VaultPrincipal[]
   }): Promise<TxResult> {
     const seat = this.h.requireSeat()
-    const ctx = this.h.requireContext()
-    const editorDaoId = ctx.parent?.daoId ?? seat.daoId
+    // The tree parent, not the control linkage: registering a vault is not
+    // governance, so it needs neither a freeze object nor a control cap.
+    const editorOuId = seat.parentDaoId ?? seat.daoId
+    if (params.editPrincipals && params.editPrincipals.length === 0) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        'A vault needs at least one `edit` principal — it would have no administrator.',
+      )
+    }
 
     let vaultConfigId = params.vaultConfigId
     if (!vaultConfigId) {
@@ -1421,7 +1820,7 @@ class OrgVaultApi {
     }
 
     const tx = new SuiTransaction()
-    initializeDaoVaultTx(tx, {
+    initializeOuVaultTx(tx, {
       armatureVault: this.h.deps.ids.armatureVault,
       registryId: this.h.deps.ids.ouReceiptVaultRegistry,
       storageUnitId: params.storageUnitId,
@@ -1434,7 +1833,7 @@ class OrgVaultApi {
         { kind: 'ou', value: seat.daoId },
       ],
       editPrincipals: params.editPrincipals ?? [
-        { kind: 'ou', value: editorDaoId },
+        { kind: 'ou', value: editorOuId },
       ],
     })
     return this.h.submit(tx)
@@ -1445,13 +1844,13 @@ class OrgVaultApi {
    *
    * Not governance — the vault's `deposit` role is checked directly against the
    * caller, so this returns a plain `TxResult`. To move items out of the
-   * organization's BALANCE MANAGER instead, use `orders.sweepItems()`.
+   * organization's TRADING ACCOUNT instead, use `orders.sweepItems()`.
    */
   async deposit(params: {
     storageUnitId: string
     items: { assetId: bigint; amount: bigint }[]
     registrantOrgId?: string
-    daoVaultId?: string
+    vaultId?: string
   }): Promise<TxResult> {
     const seat = this.h.requireSeat()
     const vaultId = await requireVaultId(this.h, params)
@@ -1479,7 +1878,7 @@ class OrgVaultApi {
       depositReceiptTx(tx, {
         armatureVault: this.h.deps.ids.armatureVault,
         vaultId,
-        daoId: seat.daoId,
+        ouId: seat.daoId,
         balance,
       })
     }
@@ -1500,7 +1899,7 @@ class OrgVaultApi {
     to?: 'wallet' | 'hangar'
     characterId?: string
     registrantOrgId?: string
-    daoVaultId?: string
+    vaultId?: string
   }): Promise<TxResult> {
     const seat = this.h.requireSeat()
     const vaultId = await requireVaultId(this.h, params)
@@ -1536,7 +1935,7 @@ class OrgVaultApi {
       const balance = withdrawReceiptTx(tx, {
         armatureVault: this.h.deps.ids.armatureVault,
         vaultId,
-        daoId: seat.daoId,
+        ouId: seat.daoId,
         assetId: item.assetId,
         amount: item.amount,
       })
@@ -1561,61 +1960,60 @@ class OrgVaultApi {
 
   /**
    * Grant access to a vault. Requires the caller to satisfy the `edit` role
-   * through `editorDaoId` (defaults to the acting seat).
+   * through `editorOuId` (defaults to the acting seat).
    *
-   * An `ou` granted the `edit` role goes through `grant_edit_ou`, which demands
-   * a live DAO witness — that is the only path the chain allows, precisely so a
-   * mistyped org id cannot become an unsatisfiable editor.
+   * Any role may go to any principal kind (`player`, `machine` or `ou`). An
+   * `ou` granted `edit` is routed through `grant_edit_ou`, which takes the
+   * target as a live object — so a mistyped organization id fails to resolve
+   * instead of becoming an editor no one can ever satisfy.
    */
   async grant(params: {
     vaultId: string
     grants: { role: VaultRole; principal: VaultPrincipal }[]
-    editorDaoId?: string
+    editorOuId?: string
   }): Promise<TxResult> {
-    const editorDaoId = params.editorDaoId ?? this.h.requireSeat().daoId
-    const armatureVault = this.h.deps.ids.armatureVault
-    const tx = new SuiTransaction()
-
-    const editOus = params.grants.filter(
-      (g) => g.role === 'edit' && g.principal.kind === 'ou',
-    )
-    const rest = params.grants.filter(
-      (g) => !(g.role === 'edit' && g.principal.kind === 'ou'),
-    )
-    for (const g of editOus) {
-      grantEditOuTx(tx, {
-        armatureVault,
-        vaultId: params.vaultId,
-        editorDaoId,
-        targetDaoId: g.principal.value,
-      })
-    }
-    if (rest.length > 0) {
-      grantTx(tx, {
-        armatureVault,
-        vaultId: params.vaultId,
-        editorDaoId,
-        grants: rest,
-      })
-    }
     if (params.grants.length === 0) {
       throw new TriexClientError(
         TriexError.ValidationFailed,
         'grant needs at least one (role, principal) pair.',
       )
     }
+    const editorOuId = params.editorOuId ?? this.h.requireSeat().daoId
+    const armatureVault = this.h.deps.ids.armatureVault
+    const tx = new SuiTransaction()
+
+    const isEditOu = (g: { role: VaultRole; principal: VaultPrincipal }) =>
+      g.role === 'edit' && g.principal.kind === 'ou'
+    for (const g of params.grants.filter(isEditOu)) {
+      grantEditOuTx(tx, {
+        armatureVault,
+        vaultId: params.vaultId,
+        editorOuId,
+        targetOuId: g.principal.value,
+      })
+    }
+    const rest = params.grants.filter((g) => !isEditOu(g))
+    if (rest.length > 0) {
+      grantTx(tx, {
+        armatureVault,
+        vaultId: params.vaultId,
+        editorOuId,
+        grants: rest,
+      })
+    }
     return this.h.submit(tx)
   }
 
   /**
-   * Revoke access. A batch that removes nothing aborts on-chain rather than
-   * succeeding quietly — usually a kind mismatch, since `player(A)` and
-   * `machine(A)` are distinct principals for the same address.
+   * Revoke access. Aborts rather than leave `edit` empty, or leave the caller
+   * unable to administer the vault through `editorOuId`. Pairs not present are
+   * skipped — and `player(A)` and `machine(A)` are distinct principals for the
+   * same address, so name the kind that was granted.
    */
   async revoke(params: {
     vaultId: string
     revocations: { role: VaultRole; principal: VaultPrincipal }[]
-    editorDaoId?: string
+    editorOuId?: string
   }): Promise<TxResult> {
     if (params.revocations.length === 0) {
       throw new TriexClientError(
@@ -1627,8 +2025,30 @@ class OrgVaultApi {
     revokeTx(tx, {
       armatureVault: this.h.deps.ids.armatureVault,
       vaultId: params.vaultId,
-      editorDaoId: params.editorDaoId ?? this.h.requireSeat().daoId,
+      editorOuId: params.editorOuId ?? this.h.requireSeat().daoId,
       revocations: params.revocations,
+    })
+    return this.h.submit(tx)
+  }
+
+  /**
+   * File a vault under a different registrant organization — after migrating
+   * to a new unit, so `resolve()` finds it there. The ACL is untouched; grant
+   * the new unit access separately. Requires `edit` through `editorOuId`
+   * (defaults to the acting seat).
+   */
+  async rekey(params: {
+    vaultId: string
+    newRegistrantOrgId: string
+    editorOuId?: string
+  }): Promise<TxResult> {
+    const tx = new SuiTransaction()
+    updateRegistryKeyTx(tx, {
+      armatureVault: this.h.deps.ids.armatureVault,
+      registryId: this.h.deps.ids.ouReceiptVaultRegistry,
+      vaultId: params.vaultId,
+      editorOuId: params.editorOuId ?? this.h.requireSeat().daoId,
+      newRegistrantOrgId: params.newRegistrantOrgId,
     })
     return this.h.submit(tx)
   }
@@ -1636,14 +2056,14 @@ class OrgVaultApi {
   /** Retire an EMPTY vault and free its registry slot. */
   async deinit(params: {
     vaultId: string
-    editorDaoId?: string
+    editorOuId?: string
   }): Promise<TxResult> {
     const tx = new SuiTransaction()
-    deinitializeDaoVaultTx(tx, {
+    deinitializeOuVaultTx(tx, {
       armatureVault: this.h.deps.ids.armatureVault,
       registryId: this.h.deps.ids.ouReceiptVaultRegistry,
       vaultId: params.vaultId,
-      editorDaoId: params.editorDaoId ?? this.h.requireSeat().daoId,
+      editorOuId: params.editorOuId ?? this.h.requireSeat().daoId,
     })
     return this.h.submit(tx)
   }

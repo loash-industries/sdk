@@ -11,24 +11,28 @@ import type { PackageIds } from '../types'
 import type { VaultPrincipal, VaultRole } from './types'
 
 /**
- * Shared storage — `DaoReceiptVault`, the per-(storage unit, organization) place
- * an organization parks warehouse receipts.
+ * Shared storage — cycle-7 `armature_vault::ou_receipt_vault`, the
+ * per-(storage unit, organization) `OuReceiptVault` where an organization
+ * parks warehouse receipts.
  *
  * The registry is keyed by BOTH the storage unit and the registering
  * organization, which is the single most important thing to get right here:
- * there is no such thing as "the vault at this hub". Anyone can register a
- * vault at any SSU, so resolving by storage unit alone will happily hand back a
- * stranger's vault. Every lookup in this module takes both halves of the key.
+ * there is no such thing as "the vault at this hub". Anyone on an OU's board
+ * can register a vault at any SSU, so resolving by storage unit alone will
+ * happily hand back a stranger's vault. Every lookup takes both halves.
  *
  * Being keyed under an organization also does not mean that organization
  * controls the vault — `edit` principals are independent of the registrant by
  * design, so read the ACL rather than inferring authority from the key.
  */
 
-/** `dao_receipt_vault::VaultKey { storage_unit_id: ID, registrant_dao_id: ID }`. */
+/** Module path of the receipt vault inside `armature_vault`. */
+const MODULE = 'ou_receipt_vault'
+
+/** `ou_receipt_vault::VaultKey { storage_unit_id: ID, registrant_ou_id: ID }`. */
 export const VaultKeyBcs = bcs.struct('VaultKey', {
   storage_unit_id: bcs.Address,
-  registrant_dao_id: bcs.Address,
+  registrant_ou_id: bcs.Address,
 })
 
 /** `multicoin::Balance { id, collection, asset_id, amount }`. */
@@ -56,11 +60,10 @@ export function toStorageUnitId(value: string): string {
  * Two hops: the registry object holds a `Table`, whose inner UID is what the
  * `VaultKey` dynamic field actually hangs off. The key TYPE must use the
  * `armature_vault` ORIGINAL package id — objects keep the type tag of the
- * package version that created them, and on `stillness` that id has already
- * diverged from the current one, so using the current id here finds nothing and
- * reports "no vault" for a vault that exists.
+ * package version that created them, so after any upgrade the current id here
+ * finds nothing and reports "no vault" for a vault that exists.
  */
-export async function resolveDaoVaultId(
+export async function resolveOuVaultId(
   suiClient: ClientWithCoreApi,
   ids: PackageIds,
   params: { storageUnitId: string; registrantOrgId: string },
@@ -84,10 +87,10 @@ export async function resolveDaoVaultId(
     .getDynamicField({
       parentId: tableId,
       name: {
-        type: `${ids.armatureVaultOriginal}::dao_receipt_vault::VaultKey`,
+        type: `${ids.armatureVaultOriginal}::${MODULE}::VaultKey`,
         bcs: VaultKeyBcs.serialize({
           storage_unit_id: toStorageUnitId(params.storageUnitId),
-          registrant_dao_id: params.registrantOrgId,
+          registrant_ou_id: params.registrantOrgId,
         }).toBytes(),
       },
     })
@@ -111,10 +114,14 @@ function unwrapId(value: unknown): string | null {
 }
 
 /** A vault's on-chain identity and current access grants. */
-export interface DaoVaultInfo {
+export interface OuVaultInfo {
   vaultId: string
   storageUnitId: string
   collectionId: string
+  /**
+   * The registry-key half the vault is CURRENTLY filed under — equal to the
+   * initializer's OU unless `update_registry_key` has moved it since.
+   */
   registrantOrgId: string
   /** Distinct asset ids currently holding a balance. */
   nonEmptyAssets: number
@@ -130,15 +137,16 @@ const ROLE_NAMES: VaultRole[] = ['deposit', 'withdraw', 'edit']
  * head-current — deciding whether a `grant` already landed, for instance, where
  * the indexer's 30-second cache is exactly long enough to mislead.
  */
-export async function fetchDaoVaultInfo(
+export async function fetchOuVaultInfo(
   suiClient: ClientWithCoreApi,
   vaultId: string,
-): Promise<DaoVaultInfo | null> {
+): Promise<OuVaultInfo | null> {
   const res = await suiClient.core
     .getObject({ objectId: vaultId, include: { json: true } })
     .catch(() => null)
-  const json = (res?.object.json ?? null) as Record<string, unknown> | null
-  if (!json) return null
+  const raw = (res?.object.json ?? null) as Record<string, unknown> | null
+  if (!raw) return null
+  const json = (raw.fields as Record<string, unknown> | undefined) ?? raw
 
   const aclMap = (json.acl as Record<string, unknown>) ?? {}
   const contents =
@@ -146,7 +154,7 @@ export async function fetchDaoVaultInfo(
     ((aclMap.fields as Record<string, unknown>)?.contents as unknown[]) ??
     []
 
-  const acl: DaoVaultInfo['acl'] = []
+  const acl: OuVaultInfo['acl'] = []
   for (const entry of contents) {
     const e = (entry as Record<string, unknown>) ?? {}
     const inner = (e.fields as Record<string, unknown>) ?? e
@@ -163,54 +171,99 @@ export async function fetchDaoVaultInfo(
     vaultId,
     storageUnitId: String(json.storage_unit_id ?? ''),
     collectionId: String(json.collection_id ?? ''),
-    registrantOrgId: String(json.registrant_dao_id ?? ''),
+    registrantOrgId: String(json.registrant_ou_id ?? ''),
     nonEmptyAssets: Number(json.non_empty_assets ?? 0),
     acl,
   }
 }
 
-/** @internal — a Move enum arrives as a variant name or a `{ variant: {} }` tag. */
+/**
+ * @internal — a Move enum's variant name and payload, across the shapes the
+ * transports use: gRPC JSON `{ "@variant": "Ou", ou_id }`, JSON-RPC
+ * `{ variant: "Ou", fields: { ou_id } }`, an externally tagged
+ * `{ Ou: { ou_id } }`, or a bare variant name for a field-less variant.
+ */
+function enumVariant(
+  value: unknown,
+): { name: string; fields: Record<string, unknown> } | null {
+  if (typeof value === 'string') return { name: value, fields: {} }
+  if (!value || typeof value !== 'object') return null
+  const o = value as Record<string, unknown>
+  const tag = o['@variant'] ?? o.variant ?? o.$kind
+  if (typeof tag === 'string') {
+    const fields =
+      (o.fields as Record<string, unknown> | undefined) ??
+      (o[tag] as Record<string, unknown> | undefined) ??
+      o
+    return { name: tag, fields: fields ?? {} }
+  }
+  const inner = (o.fields as Record<string, unknown> | undefined) ?? o
+  const keys = Object.keys(inner)
+  if (keys.length === 1) {
+    const payload = inner[keys[0]]
+    return {
+      name: keys[0],
+      fields:
+        payload && typeof payload === 'object'
+          ? (payload as Record<string, unknown>)
+          : {},
+    }
+  }
+  return null
+}
+
+/** @internal — `ou_receipt_vault::Role { Deposit, Withdraw, Edit }`. */
 function parseRole(value: unknown): VaultRole | null {
-  const name =
-    typeof value === 'string'
-      ? value
-      : value && typeof value === 'object'
-        ? Object.keys(value as object)[0]
-        : undefined
-  const lower = name?.toLowerCase()
+  const lower = enumVariant(value)?.name.toLowerCase()
   return ROLE_NAMES.find((r) => r === lower) ?? null
 }
 
-/** @internal — `acl::Principal { kind: u8, id: address, data }`. */
+/**
+ * @internal — `acl::Principal { Player { addr }, Ou { ou_id }, Machine { addr } }`.
+ *
+ * `machine` is kept distinct from `player` even though both are satisfied by
+ * the same sender check: they are different on-chain values, so a revoke has
+ * to name the right one.
+ */
 function parsePrincipal(value: unknown): VaultPrincipal | null {
-  if (!value || typeof value !== 'object') return null
-  const o = value as Record<string, unknown>
-  const inner = (o.fields as Record<string, unknown>) ?? o
-  const id = inner.id
-  if (typeof id !== 'string') return null
-  // 0 = player, 1 = ou, 2 = machine. `machine` satisfies the same checks as a
-  // player, so it is surfaced as `player` rather than inventing a third kind
-  // the indexer's shape has no room for.
-  return { kind: Number(inner.kind) === 1 ? 'ou' : 'player', value: id }
+  const v = enumVariant(value)
+  if (!v) return null
+  const name = v.name.toLowerCase()
+  if (name === 'ou' && typeof v.fields.ou_id === 'string') {
+    return { kind: 'ou', value: v.fields.ou_id }
+  }
+  if (
+    (name === 'player' || name === 'machine') &&
+    typeof v.fields.addr === 'string'
+  ) {
+    return { kind: name, value: v.fields.addr }
+  }
+  return null
 }
 
-/** One asset's balance in a vault, or 0n. */
+/**
+ * One asset's balance in a vault, or 0n.
+ *
+ * Balances are dynamic OBJECT fields keyed by the `u64` asset id, so the field
+ * name on-chain is `dynamic_object_field::Wrapper<u64>` and its value is the
+ * child `multicoin::Balance` object — read through `getDynamicObjectField`.
+ */
 export async function fetchVaultBalance(
   suiClient: ClientWithCoreApi,
   vaultId: string,
   assetId: bigint,
 ): Promise<bigint> {
-  const field = await suiClient.core
-    .getDynamicField({
+  const res = await suiClient.core
+    .getDynamicObjectField({
       parentId: vaultId,
       name: { type: 'u64', bcs: bcs.u64().serialize(assetId).toBytes() },
+      include: { content: true },
     })
     .catch(() => null)
-  if (!field) return 0n
+  const content = res?.object.content
+  if (!content) return 0n
   try {
-    // A dynamic OBJECT field's value is the child's id; fetch the balance.
-    const parsed = MultiCoinBalanceBcs.parse(field.dynamicField.value.bcs)
-    return BigInt(parsed.amount)
+    return BigInt(MultiCoinBalanceBcs.parse(content).amount)
   } catch {
     return 0n
   }
@@ -218,40 +271,55 @@ export async function fetchVaultBalance(
 
 // ─── PTB helpers ────────────────────────────────────────────────────────────
 
+/** @internal — one `Principal` built by its `acl::` constructor. */
+function principalArg(
+  tx: Transaction,
+  armatureVault: string,
+  p: VaultPrincipal,
+): TransactionObjectArgument {
+  switch (p.kind) {
+    case 'ou':
+      return tx.moveCall({
+        target: `${armatureVault}::acl::ou`,
+        arguments: [tx.pure.id(p.value)],
+      })
+    case 'machine':
+      return tx.moveCall({
+        target: `${armatureVault}::acl::machine`,
+        arguments: [tx.pure.address(p.value)],
+      })
+    case 'player':
+      return tx.moveCall({
+        target: `${armatureVault}::acl::player`,
+        arguments: [tx.pure.address(p.value)],
+      })
+  }
+}
+
 /**
  * Build a `vector<Principal>` inside the PTB.
  *
- * `Principal` is a Move enum-like struct with no primitive encoding, so it
- * CANNOT cross as `tx.pure()`. Each element has to be constructed by a
- * `moveCall` and collected with `makeMoveVec`. This helper exists so no caller
- * ever has to discover that the hard way.
+ * `Principal` is a Move enum with no primitive encoding, so it CANNOT cross as
+ * `tx.pure()`. Each element has to be constructed by a `moveCall`
+ * (`acl::player` / `acl::ou` / `acl::machine`) and collected with
+ * `makeMoveVec`. This helper exists so no caller ever has to discover that the
+ * hard way.
  */
 export function principalVec(
   tx: Transaction,
   armatureVault: string,
   principals: VaultPrincipal[],
 ): TransactionObjectArgument {
-  const elements = principals.map((p) =>
-    p.kind === 'ou'
-      ? tx.moveCall({
-          target: `${armatureVault}::acl::ou`,
-          arguments: [tx.pure.id(p.value)],
-        })
-      : tx.moveCall({
-          target: `${armatureVault}::acl::player`,
-          arguments: [tx.pure.address(p.value)],
-        }),
-  )
   return tx.makeMoveVec({
     type: `${armatureVault}::acl::Principal`,
-    elements,
+    elements: principals.map((p) => principalArg(tx, armatureVault, p)),
   })
 }
 
 /** @internal — `Role` is a Move enum; build it with its constructor. */
 function roleArg(tx: Transaction, armatureVault: string, role: VaultRole) {
   return tx.moveCall({
-    target: `${armatureVault}::dao_receipt_vault::role_${role}`,
+    target: `${armatureVault}::${MODULE}::role_${role}`,
     arguments: [],
   })
 }
@@ -263,7 +331,7 @@ export function roleVec(
   roles: VaultRole[],
 ): TransactionObjectArgument {
   return tx.makeMoveVec({
-    type: `${armatureVault}::dao_receipt_vault::Role`,
+    type: `${armatureVault}::${MODULE}::Role`,
     elements: roles.map((r) => roleArg(tx, armatureVault, r)),
   })
 }
@@ -271,15 +339,17 @@ export function roleVec(
 // ─── Writes ─────────────────────────────────────────────────────────────────
 
 /**
- * Register a new vault for an organization at a storage unit.
+ * Register a new vault for an organization at a storage unit
+ * (`initialize_ou_vault`).
  *
- * The caller must be a governance member of `registrantOrgId`, and
- * `editPrincipals` must contain at least one *recoverable* editor — an `ou`
- * principal witnessed by a live DAO. The chain enforces that: a vault whose
- * only editors were bare keys could be bricked beyond recovery, so an
- * all-`player` edit set is rejected.
+ * The caller must be a board member of `registrantOrgId`; no
+ * `OwnerCap<StorageUnit>` is needed (cycle 7 dropped that variant), so the SSU
+ * owner and the OU board member may be different accounts. `vaultConfigId` is
+ * the hub's `warehouse_receipts::vault::VaultConfig`, which fixes the accepted
+ * collection. `editPrincipals` must be non-empty (`EEmptyEditPrincipals`); any
+ * principal kind may hold `edit`.
  */
-export function initializeDaoVaultTx(
+export function initializeOuVaultTx(
   tx: Transaction,
   args: {
     armatureVault: string
@@ -293,7 +363,7 @@ export function initializeDaoVaultTx(
   },
 ): void {
   tx.moveCall({
-    target: `${args.armatureVault}::dao_receipt_vault::initialize_dao_vault_v2`,
+    target: `${args.armatureVault}::${MODULE}::initialize_ou_vault`,
     arguments: [
       tx.object(args.registryId),
       tx.object(toStorageUnitId(args.storageUnitId)),
@@ -309,22 +379,22 @@ export function initializeDaoVaultTx(
 /**
  * Deposit an already-extracted receipt balance into a vault.
  *
- * `daoId` is the caller's OU context — the unit whose board membership
- * satisfies the `deposit` role. A bare `player` deposit principal is satisfied
- * by any `&DAO`, so the argument is still required even then.
+ * `ouId` is the caller's OU context — the unit whose board membership
+ * satisfies the `deposit` role. A bare `player`/`machine` deposit principal is
+ * satisfied by any `&OU`, so the argument is still required even then.
  */
 export function depositReceiptTx(
   tx: Transaction,
   args: {
     armatureVault: string
     vaultId: string
-    daoId: string
+    ouId: string
     balance: TransactionObjectArgument
   },
 ): void {
   tx.moveCall({
-    target: `${args.armatureVault}::dao_receipt_vault::deposit_receipt`,
-    arguments: [tx.object(args.vaultId), tx.object(args.daoId), args.balance],
+    target: `${args.armatureVault}::${MODULE}::deposit_receipt`,
+    arguments: [tx.object(args.vaultId), tx.object(args.ouId), args.balance],
   })
 }
 
@@ -334,16 +404,16 @@ export function withdrawReceiptTx(
   args: {
     armatureVault: string
     vaultId: string
-    daoId: string
+    ouId: string
     assetId: bigint
     amount: bigint
   },
 ): TransactionObjectArgument {
   const [balance] = tx.moveCall({
-    target: `${args.armatureVault}::dao_receipt_vault::withdraw_receipt`,
+    target: `${args.armatureVault}::${MODULE}::withdraw_receipt`,
     arguments: [
       tx.object(args.vaultId),
-      tx.object(args.daoId),
+      tx.object(args.ouId),
       tx.pure.u64(args.assetId),
       tx.pure.u64(args.amount),
     ],
@@ -351,21 +421,24 @@ export function withdrawReceiptTx(
   return balance
 }
 
-/** Grant (role, principal) pairs. Parallel vectors, same length. */
+/**
+ * Grant (role, principal) pairs. Parallel vectors, same length. Any role —
+ * `edit` included — may go to any principal kind.
+ */
 export function grantTx(
   tx: Transaction,
   args: {
     armatureVault: string
     vaultId: string
-    editorDaoId: string
+    editorOuId: string
     grants: { role: VaultRole; principal: VaultPrincipal }[]
   },
 ): void {
   tx.moveCall({
-    target: `${args.armatureVault}::dao_receipt_vault::grant`,
+    target: `${args.armatureVault}::${MODULE}::grant`,
     arguments: [
       tx.object(args.vaultId),
-      tx.object(args.editorDaoId),
+      tx.object(args.editorOuId),
       roleVec(
         tx,
         args.armatureVault,
@@ -381,27 +454,27 @@ export function grantTx(
 }
 
 /**
- * Grant the `edit` role to an organization.
+ * Grant the `edit` role to an organization through a live `&OU` witness.
  *
- * The ONLY path that can add an `ou` editor: it requires a live `&DAO` witness,
- * which is what stops a typo'd DAO id from becoming an unsatisfiable editor and
- * bricking the vault. `grantTx` rejects `edit` + `ou` for exactly that reason.
+ * `grantTx` accepts an `ou` editor too since cycle 7; this path additionally
+ * proves the id names a REAL organization (the PTB will not even resolve
+ * otherwise), so a typo cannot become an unsatisfiable editor.
  */
 export function grantEditOuTx(
   tx: Transaction,
   args: {
     armatureVault: string
     vaultId: string
-    editorDaoId: string
-    targetDaoId: string
+    editorOuId: string
+    targetOuId: string
   },
 ): void {
   tx.moveCall({
-    target: `${args.armatureVault}::dao_receipt_vault::grant_edit_ou`,
+    target: `${args.armatureVault}::${MODULE}::grant_edit_ou`,
     arguments: [
       tx.object(args.vaultId),
-      tx.object(args.editorDaoId),
-      tx.object(args.targetDaoId),
+      tx.object(args.editorOuId),
+      tx.object(args.targetOuId),
     ],
   })
 }
@@ -409,25 +482,25 @@ export function grantEditOuTx(
 /**
  * Revoke (role, principal) pairs.
  *
- * A batch that removes NOTHING aborts rather than succeeding quietly, so an
- * operator cannot come away believing access was cut when it was not. The usual
- * cause is a kind mismatch: `player(A)` and `machine(A)` are distinct principals
- * for the same address even though both satisfy the same checks.
+ * Aborts `ELastEditor` if `edit` would end up empty, and
+ * `EEditorWouldLockSelf` if the caller could no longer satisfy `edit` through
+ * `editorOuId` afterwards. Pairs that are not present are skipped silently —
+ * a `player(A)` revoke does NOT remove `machine(A)`, they are distinct values.
  */
 export function revokeTx(
   tx: Transaction,
   args: {
     armatureVault: string
     vaultId: string
-    editorDaoId: string
+    editorOuId: string
     revocations: { role: VaultRole; principal: VaultPrincipal }[]
   },
 ): void {
   tx.moveCall({
-    target: `${args.armatureVault}::dao_receipt_vault::revoke`,
+    target: `${args.armatureVault}::${MODULE}::revoke`,
     arguments: [
       tx.object(args.vaultId),
-      tx.object(args.editorDaoId),
+      tx.object(args.editorOuId),
       roleVec(
         tx,
         args.armatureVault,
@@ -442,22 +515,51 @@ export function revokeTx(
   })
 }
 
-/** Retire an EMPTY vault and free its registry slot. */
-export function deinitializeDaoVaultTx(
+/**
+ * Re-file a vault under a different registrant organization — after an OU
+ * migration, so `resolve()` finds it under the new unit. Does NOT touch the
+ * ACL. Aborts if the new key is already taken.
+ */
+export function updateRegistryKeyTx(
   tx: Transaction,
   args: {
     armatureVault: string
     registryId: string
     vaultId: string
-    editorDaoId: string
+    editorOuId: string
+    newRegistrantOrgId: string
   },
 ): void {
   tx.moveCall({
-    target: `${args.armatureVault}::dao_receipt_vault::deinitialize_dao_vault`,
+    target: `${args.armatureVault}::${MODULE}::update_registry_key`,
     arguments: [
       tx.object(args.registryId),
       tx.object(args.vaultId),
-      tx.object(args.editorDaoId),
+      tx.object(args.editorOuId),
+      tx.object(args.newRegistrantOrgId),
+    ],
+  })
+}
+
+/**
+ * Retire an EMPTY vault (`deinitialize_ou_vault`): frees its registry slot and
+ * wipes its ACL. The shared object itself remains as an inert orphan.
+ */
+export function deinitializeOuVaultTx(
+  tx: Transaction,
+  args: {
+    armatureVault: string
+    registryId: string
+    vaultId: string
+    editorOuId: string
+  },
+): void {
+  tx.moveCall({
+    target: `${args.armatureVault}::${MODULE}::deinitialize_ou_vault`,
+    arguments: [
+      tx.object(args.registryId),
+      tx.object(args.vaultId),
+      tx.object(args.editorOuId),
     ],
   })
 }
