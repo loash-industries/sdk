@@ -456,6 +456,62 @@ export const readTools: ToolDef[] = [
       ok(await ctx.readClient().accountOwners(args)),
   },
   {
+    name: 'account_caps',
+    title: 'List trading account capabilities',
+    description:
+      'Capabilities around an address, read head-current from the fullnode: the cap ids on its own trading account’s allow-list (what prepare_revoke_account_cap can revoke), and the Trade/Deposit/WithdrawCaps it holds for any account. tradingAccountId is null and allowListed empty when the address has no trading account. Pair with prepare_mint_account_cap.',
+    kind: 'read',
+    sdkPath: 'account.caps',
+    inputShape: {
+      address: suiAddress.describe('Sui address whose caps to read.'),
+    },
+    handler: async (ctx, args) =>
+      ok(await ctx.writeClient(args.address).account.caps(args.address)),
+  },
+  {
+    name: 'orders_fees',
+    title: 'Read item-pool fees',
+    description:
+      'Live fee state of one item pool, from the on-chain FeePolicy: the active and staged fee ladders, entry taker/maker rates, cancel retention, and bidEscrowFeeRate — the rate a bid deposit must cover. With an address, also that account’s own tier, turnover and rates. Rates are 1e9-scaled (11000000 = 1.10%) as decimal strings. Identify the pool by poolId, or by storageUnitId + assetId. Use it to size quoteBudget for prepare_market_order, or to price a bid before prepare_limit_order.',
+    kind: 'read',
+    sdkPath: 'orders.fees',
+    inputShape: {
+      storageUnitId: objectId
+        .optional()
+        .describe('Trade hub / storage unit object id; pair with assetId.'),
+      assetId: z
+        .string()
+        .optional()
+        .describe('EVE Frontier item asset id; pair with storageUnitId.'),
+      poolId: objectId
+        .optional()
+        .describe('Item pool id; use instead of storageUnitId + assetId.'),
+      address: suiAddress
+        .optional()
+        .describe('Also resolve this address’s fee tier and rates.'),
+    },
+    handler: async (ctx, args) => {
+      // The SDK branches on `'poolId' in params`, so an undefined key would
+      // pick the wrong selector — build the params from what was given.
+      const selector = args.poolId
+        ? { poolId: args.poolId }
+        : args.storageUnitId && args.assetId
+          ? { storageUnitId: args.storageUnitId, assetId: args.assetId }
+          : null
+      if (!selector) {
+        throw new Error(
+          'Identify the pool by poolId, or by storageUnitId together with assetId.',
+        )
+      }
+      return ok(
+        await ctx.writeClient(args.address).orders.fees({
+          ...selector,
+          ...(args.address ? { address: args.address } : {}),
+        }),
+      )
+    },
+  },
+  {
     name: 'orders_open',
     title: 'List open orders',
     description: 'Resting orders for a trading account.',
