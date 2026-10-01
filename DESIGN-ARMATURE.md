@@ -98,17 +98,19 @@ equivalent to do here (§13.1).
 | C1 | Fund the org treasury | WRITE | `treasury_vault::deposit<T>` — **permissionless**, no governance |
 | C2 | Read treasury balances | READ | **fullnode** — `Balance<T>` + `MultiCoinBalance` dynamic fields |
 | C3 | Pay out of the treasury | WRITE | `SendCoin<T>` (to an address) / `SendCoinToDao<T>` (to another org) |
-| D1 | Give the org a trading account | WRITE | `SetupTradingAccount` → `trading_ops::execute_setup_trading_account` |
-| D2 | Place / cancel an org limit order | WRITE | `PlaceLimitOrder<Q>` / `PlaceLimitOrderCoin<B,Q>`, `CancelOrder<Q>` / `CancelOrderCoin<B,Q>` |
+| D1 | Give the org a trading account | WRITE | `SetupTradingAccount` → `trading_ops::execute_setup_trading_account` (shares a `TradingCustody` + custody-owned `TradingAccount`) |
+| D2 | Place / cancel an org order | WRITE | `PlaceLimitOrder<Q>` / `PlaceMarketOrder<Q>` / `PlaceLimitOrderCoin<B,Q>`, `CancelOrder<Q>` / `CancelOrderCoin<B,Q>` |
 | D3 | Buy using treasury funds | WRITE | composed PTB: `DepositCoinToBook<Q>` → `PlaceLimitOrder<Q>(isBid=true)` |
-| D4 | Sell items held in shared storage | WRITE | composed PTB: `DepositFromDaoVaultToBook` → `PlaceLimitOrder<Q>(isBid=false)` |
-| D5 | Sweep proceeds home | WRITE | `SweepCoinToTreasury<Q>` / `SweepMulticoinToTreasury` / `SweepMulticoinToDaoVault` |
+| D4 | Sell items held in shared storage | WRITE | composed PTB: `DepositFromOuVaultToBook` → `PlaceLimitOrder<Q>(isBid=false)` |
+| D5 | Sweep proceeds home | WRITE | `SweepCoinToTreasury<T>` / `SweepMulticoinToOuVault` |
 | D6 | Sweep everything in one signature | WRITE | claim settled → park each item stack in its per-SSU vault → CRED to treasury |
+| D7 | Open a new item market | WRITE | `CreateMulticoinPool<Q>` (CRED fee from the treasury) |
 | E1 | List shared storage at a hub | READ | `GET /v1/hubs/{hub_id}/dao-vaults` (vault + grant/revoke-netted ACL per role) |
-| E2 | Resolve one org's vault at an SSU | READ | **fullnode** — `DaoReceiptVaultRegistry` keyed by `VaultKey { storage_unit_id, registrant_dao_id }` |
-| E3 | Open shared storage for an org | WRITE | `dao_receipt_vault::initialize_dao_vault_v2` |
-| E4 | Deposit / withdraw receipts | WRITE | `dao_receipt_vault::{deposit_receipt, withdraw_receipt}` |
-| E5 | Grant / revoke vault access | WRITE | `dao_receipt_vault::{grant, grant_edit_ou, revoke}` |
+| E2 | Resolve one org's vault at an SSU | READ | **fullnode** — `OuReceiptVaultRegistry` keyed by `VaultKey { storage_unit_id, registrant_ou_id }` |
+| E3 | Open shared storage for an org | WRITE | `ou_receipt_vault::initialize_ou_vault` |
+| E4 | Deposit / withdraw receipts | WRITE | `ou_receipt_vault::{deposit_receipt, withdraw_receipt}` |
+| E5 | Grant / revoke vault access | WRITE | `ou_receipt_vault::{grant, grant_edit_ou, revoke}` |
+| E6 | Re-key / retire a vault | WRITE | `ou_receipt_vault::{update_registry_key, deinitialize_ou_vault}` |
 
 **Not on the critical path but adjacent and currently unwrapped:** `GET /v1/stats` (carries
 `StatsOrganizations` + `StatsTopOrg`) and `GET /v1/world/tribes/{tribe_id}` (game-world
@@ -175,7 +177,7 @@ sdk/src/
 │   ├── actions.ts       # OuProposalAction catalog, one factory per governance action (§13.2)
 │   ├── transactions.ts  # raw PTB builders: framework + armature_proposals + create_tribe + treasury deposit
 │   ├── trading.ts       # armature_trading builders (org-acting order flow)
-│   ├── vault.ts         # DaoReceiptVault: registry resolve, balances, init/deposit/withdraw/grant/revoke
+│   ├── vault.ts         # OuReceiptVault: registry resolve, balances, init/deposit/withdraw/grant/revoke/rekey
 │   ├── bcs.ts           # VaultKey / MultiCoinBalance / Balance dynamic-field key encoders
 │   └── types.ts         # Org, OrgNode, Seat, ProposalConfig, ExecutionPlan, RunOutcome, …
 ├── OrgClient.ts         # the OrgHandle returned by client.org(id)          [Phase B]
@@ -277,23 +279,31 @@ org.treasury.send({ coinType, amount, to }): Promise<RunOutcome>       // C3
 org.treasury.sendToDao({ coinType, amount, daoId }): Promise<RunOutcome>  // C3
 
 // ── handle: trading as the org (mirrors client.orders / client.account) ─────
-org.orders.ensureAccount(): Promise<RunOutcome>                        // D1
+// Orders act through the unit that OWNS the trading account (its custody only
+// accepts that unit's tickets), whatever seat the handle defaults to.
+org.orders.ensureAccount(): Promise<RunOutcome & { tradingAccountId?, tradingCustodyId? }>  // D1
 org.orders.limit({ storageUnitId, assetId, side, price, quantity, expireAt? })  // D2
-org.orders.cancel({ storageUnitId, assetId, orderId })                 // D2
-org.orders.buyFromTreasury({ ...limit, depositAmount? })               // D3  deficit-only by default
-org.orders.sellFromDaoVault({ ...limit, vaultQuantity? })              // D4
-org.orders.sweep({ pools?, items?, cred? })                            // D5
-org.orders.sweepAll(): Promise<RunOutcome>                             // D6  claim + park + treasury, one PTB
-org.orders.openOrders() / fills() / trades() / sweepable()             // reuse the trading module, org BM id
+org.orders.market({ storageUnitId, assetId, side, quantity })          // D2  IOC
+org.orders.cancel({ storageUnitId, assetId, orderId })                 // D2  orderId is u128
+org.orders.limitCoin({ poolId, baseType, side, price, quantity, depositAmount? })  // D2 coin pools
+org.orders.cancelCoin({ poolId, baseType, orderId })                   // D2
+org.orders.enableCoinPair({ baseType, quoteType? })                    // D2 prerequisite, per pair
+org.orders.buyFromTreasury({ ...limit, depositAmount? })               // D3
+org.orders.sellFromVault({ ...limit, vaultQuantity?, vaultId? })       // D4
+org.orders.deposit({ amount, coinType? })                              // treasury → account
+org.orders.sweepCoin({ amount, coinType?, claimFromPool?, claimFromCoinPool? })  // D5
+org.orders.sweepItems({ storageUnitId, assetId, amount, vaultId? })    // D5
+org.orders.sweepAll(): Promise<RunOutcome & { skipped }>               // D6  claim + park + treasury, one PTB
+org.orders.createPool({ assetId, storageUnitId? | collectionId? })     // D7
 
-// ── handle: shared storage (DaoReceiptVault) ────────────────────────────────
+// ── handle: shared storage (OuReceiptVault) ─────────────────────────────────
 org.vault.atHub(hubId): Promise<HubDaoVault[]>                         // E1  indexer
 org.vault.resolve({ storageUnitId }): Promise<string | null>           // E2  registry lookup
-org.vault.balances(vaultId): Promise<AssetBalance[]>                   // fullnode
-org.vault.init({ storageUnitId, editorDaoId? }): Promise<TxResult>     // E3
+org.vault.info(vaultId) / balance(vaultId, assetId)                    // fullnode
+org.vault.init({ storageUnitId, editPrincipals? }): Promise<TxResult>  // E3
 org.vault.deposit({ storageUnitId, items }) / withdraw({ ... })        // E4
-org.vault.grant({ vaultId, role, principal }) / revoke({ ... })        // E5
-org.vault.deinit({ vaultId })
+org.vault.grant({ vaultId, grants }) / revoke({ vaultId, revocations })  // E5
+org.vault.rekey({ vaultId, newRegistrantOrgId }) / deinit({ vaultId }) // E6
 ```
 
 **`RunOutcome` is the module's characteristic return type.** A governance write does not
@@ -351,56 +361,91 @@ Not raw builders: each is an `OuProposalAction` carrying an `own` adapter (paylo
 `execute_*`) and, where the app wires one, a `control` adapter the parent uses via its
 `SubDAOControl` cap. The resolver picks between them. Full catalog in §13.2.
 
-### 6.3 Trading (`armature_trading`) — `armature/trading.ts`
+### 6.3 Trading (`armature_trading`, cycle 7) — `armature/trading.ts`
 
 Each is a governance-wrapped counterpart of a personal-trading builder from DESIGN.md §6:
 payload `new` → `submit_vote_execute` → `trading_ops::execute_*`.
 
-| Builder | Payload type | Notes |
+**Custody (TRIEX-158).** The org's triex `TradingAccount` is owned by a shared
+`trading_custody::TradingCustody` — the account's `owner` *is* the custody's address — and
+the custody holds the Deposit/Withdraw/Trade caps where only `armature_trading` can borrow
+them. Nothing comes out of the CapabilityVault any more. Every handler takes the custody and
+asserts `custody.ou_id == ticket OU`, so **an org trades only through the unit that ran
+`SetupTradingAccount`**: `org.orders.*` resolves that unit from the custody and acts through
+it (throwing if the caller holds no seat there). The custody is found from the account alone
+(`fetchTradingCustody`: account BCS bytes 32..64 → custody object) — the indexer serves only
+`OrgResponse.trading_account_id` per unit and does not index `TradingCustodyCreated`.
+
+| Builder | Payload type (fields) | Handler objects |
 |---|---|---|
-| `setupTradingAccount` | `setup_trading_account::SetupTradingAccount` | Creates the org BM; stored on the trading node |
-| `depositCoinToBook` | `deposit_coin_to_book::DepositCoinToBook<Q>` | Treasury → BM quote funding |
-| `depositMulticoinToBook` | `deposit_multicoin_to_book::DepositMulticoinToBook` | Treasury items → BM |
-| `depositFromDaoVaultToBook` | `deposit_from_dao_vault_to_book::DepositFromDaoVaultToBook` | Shared storage → BM |
-| `placeLimitOrder` | `place_limit_order::PlaceLimitOrder<Q>` | Item↔CRED (`multicoin_pool`) |
-| `placeLimitOrderCoin` | `place_limit_order_coin::PlaceLimitOrderCoin<B,Q>` | Coin pools |
-| `cancelOrder` / `cancelOrderCoin` | `cancel_order::CancelOrder<Q>` / `cancel_order_coin::CancelOrderCoin<B,Q>` | |
-| `sweepCoinToTreasury` | `sweep_coin_to_treasury::SweepCoinToTreasury<Q>` | BM CRED → treasury |
-| `sweepMulticoinToTreasury` | `sweep_multicoin_to_treasury::SweepMulticoinToTreasury` | BM items → treasury |
-| `sweepMulticoinToDaoVault` | `sweep_multicoin_to_dao_vault::SweepMulticoinToDaoVault` | BM items → shared storage |
+| `setupTradingAccountAction` | `SetupTradingAccount` (empty) | `(ticket)` |
+| `depositCoinToBookAction` | `DepositCoinToBook<T>(account, amount)` | `(treasury, custody, account, ticket)` — **TREASURY_WITHDRAW** |
+| `depositFromOuVaultToBookAction` | `DepositFromOuVaultToBook(vault, account, asset, amount)` | `(vault, &OU, custody, account, ticket)` |
+| `createMulticoinPoolAction` | `CreateMulticoinPool<Q>(collection, asset)` | `(registry, FeePolicy, collection, treasury, ticket)` — **TREASURY_WITHDRAW** |
+| `placeLimitOrderAction` | `PlaceLimitOrder<Q>(account, pool, price, qty, is_bid, type, smo, expire)` | `(pool, FeePolicy, custody, account, clock, ticket)` |
+| `placeMarketOrderAction` | `PlaceMarketOrder<Q>(account, pool, qty, is_bid, smo)` | `(pool, FeePolicy, custody, account, clock, ticket)` |
+| `cancelOrderAction` | `CancelOrder<Q>(account, pool, order_id: u128)` | `(pool, FeePolicy, custody, account, clock, ticket)` |
+| `placeLimitOrderCoinAction` | `PlaceLimitOrderCoin<B,Q>` (same fields as limit) | `(pool, FeePolicy, custody, account, clock, ticket)` |
+| `cancelOrderCoinAction` | `CancelOrderCoin<B,Q>(account, pool, order_id: u128)` | `(pool, custody, account, clock, ticket)` — **no FeePolicy** |
+| `sweepCoinToTreasuryAction` | `SweepCoinToTreasury<T>(account, amount)` | `(treasury, custody, account, ticket)` |
+| `sweepMulticoinToOuVaultAction` | `SweepMulticoinToOuVault(account, vault, collection, asset, amount)` | `(vault, &OU, custody, account, ticket)` |
 
-**Composed PTBs** (the ones worth having as first-class methods, all ported from the app):
+`FeePolicy` is `ids.triexFeePolicy`; `appendClaimSettled` / `appendClaimSettledCoin` are the
+permissionless `multicoin_pool::` / `pool::withdraw_settled_amounts_permissionless` fragments.
+Cycle 7 dropped `DepositMulticoinToBook` and `SweepMulticoinToTreasury`.
 
-- `buyFromTreasury` — `DepositCoinToBook` then `PlaceLimitOrder(isBid=true)`. Deposit only
-  the shortfall (required quote − current BM quote balance); if placement aborts, PTB
-  semantics roll the deposit back.
-- `sellFromDaoVault` — `DepositFromDaoVaultToBook` then `PlaceLimitOrder(isBid=false)`.
-  `vaultQuantity` is separate from `quantity` precisely because the BM may already hold
-  part of the stack.
+**Type catalog and display keys.** A cycle-7 slot is keyed by the concrete payload Move type;
+the display key is just a per-OU label. `tradingProposalTypes(pkg, quote)` lists the
+multicoin types under generics-free display keys (the app's convention at org creation);
+`coinPairProposalTypes(pkg, base, quote)` keys each coin pair by its full type so pairs
+coexist (`orders.enableCoinPair`) — this retires OQ-A4's one-base-forever footgun;
+`createMulticoinPoolProposalType` covers pool creation. Each entry carries the
+`trading_permissions.move` bits — only `DepositCoinToBook` and `CreateMulticoinPool` need
+`TREASURY_WITHDRAW`, which also carries the 80% approval floor. Before resolving, the handle
+rewrites each action's key to whatever key the OU's `typeBindings` actually bind its payload
+type to (`withEnabledTypeKey`), so OUs enabled under other labels still resolve.
+
+**Composed PTBs** (one transaction each; `runAtomic` resolves EVERY step and blocks the bundle
+unless all land on the same immediate strategy — resolving only the first would sign a
+transaction that aborts on a later, un-enabled step):
+
+- `buyFromTreasury` — `DepositCoinToBook` then `PlaceLimitOrder(isBid=true)`.
+- `sellFromVault` — `DepositFromOuVaultToBook` then `PlaceLimitOrder(isBid=false)`.
+  `vaultQuantity` is separate from `quantity` because the account may already hold part.
+- `limitCoin({ depositAmount })` — `DepositCoinToBook<quote|base>` then `PlaceLimitOrderCoin`.
 - `sweepAll` — claim settled per pool → park each item stack in its resolved per-SSU
-  `DaoReceiptVault` → aggregate CRED to the treasury. One signature. Item stacks whose vault
-  does not resolve must be **reported as skipped**, never silently dropped.
+  `OuReceiptVault` → aggregate CRED to the treasury. Unresolvable stacks are **reported as
+  skipped**, never silently dropped.
 
-`armature_trading` also ships `place_market_order.move`, which the app never wires — §13.3.
+`ensureAccount()` returns the new custody/account ids from the transaction's effects and
+remembers them for the handle's life, so a second call inside the indexer's lag window refuses
+instead of opening an orphan account (the chain allows several per OU).
 
-### 6.4 Shared storage (`armature_vault`) — `armature/vault.ts`
+### 6.4 Shared storage (`armature_vault::ou_receipt_vault`, cycle 7) — `armature/vault.ts`
 
 | Builder | Move target | Notes |
 |---|---|---|
-| `initializeDaoVault` | `dao_receipt_vault::initialize_dao_vault_v2` | Registry + SSU + registrant DAO + vault config + three principal vectors |
-| `depositReceipt` / `withdrawReceipt` | `dao_receipt_vault::{deposit_receipt, withdraw_receipt}` | |
-| `grant` / `grantEditOu` / `revoke` | `dao_receipt_vault::{grant, grant_edit_ou, revoke}` | Roles: `deposit` / `withdraw` / `edit` |
-| `updateRegistryKey` / `deinitializeDaoVault` | `dao_receipt_vault::{update_registry_key, deinitialize_dao_vault}` | |
+| `initializeOuVaultTx` | `ou_receipt_vault::initialize_ou_vault` | Registry + SSU + registrant OU + `VaultConfig` + three principal vectors. Board-member gate only — the OwnerCap-gated variant is gone and `_v2` was renamed |
+| `depositReceiptTx` / `withdrawReceiptTx` | `ou_receipt_vault::{deposit_receipt, withdraw_receipt}` | `(vault, &OU, …)` — the OU is the caller's role context |
+| `grantTx` / `grantEditOuTx` / `revokeTx` | `ou_receipt_vault::{grant, grant_edit_ou, revoke}` | Roles `deposit` / `withdraw` / `edit`; **any** principal may hold any role |
+| `updateRegistryKeyTx` / `deinitializeOuVaultTx` | `ou_receipt_vault::{update_registry_key, deinitialize_ou_vault}` | Re-file under a migrated OU / retire an empty vault |
 
-> **`Principal` cannot cross as `tx.pure()`.** It is a Move enum (`copy, drop, store`), so a
-> `vector<Principal>` must be assembled inside the PTB: call `acl::ou(id)` or
-> `acl::player(addr)` per element, then `tx.makeMoveVec({ type: '${armatureVault}::acl::Principal', … })`.
-> The app hits this at `OrgVaultPanel.tsx:274`. Ship
-> `principalVec(tx, principals)` as a helper so no caller ever meets this.
+> **`Principal` cannot cross as `tx.pure()`.** It is a Move enum
+> (`Player { addr } | Ou { ou_id } | Machine { addr }`), so a `vector<Principal>` is
+> assembled inside the PTB with `acl::player` / `acl::ou` / `acl::machine` per element, then
+> `makeMoveVec`. `principalVec(tx, pkg, principals)` does it. `machine` is a service/bot key:
+> checked exactly like `player`, but a distinct value, so revoke the kind you granted.
 
-Editor semantics from the app: a tier's vault is governed by the tier **above** it — admin
-and officer vaults are edited by the root DAO, the member vault by the officers DAO.
-`init()` should default `editorDaoId` that way rather than making every caller decide.
+Editor semantics from the app: a tier's vault is governed by the tier **above** it. `init()`
+defaults `edit` to the acting unit's TREE parent (itself at the root). Since cycle 7 the chain
+only requires a non-empty edit set (`EEmptyEditPrincipals`) — an all-`player`/`machine`
+editor set is legal. `grant()` still routes an `ou` editor through `grant_edit_ou`, whose
+live `&OU` argument makes a mistyped org id fail to resolve instead of becoming an
+unsatisfiable editor. `revoke` aborts only on `ELastEditor` / `EEditorWouldLockSelf`;
+absent pairs are skipped silently.
+
+Out of scope: `armature_vault::keyspace` (Seal ACL keyspaces — ships as
+`@trinaryex/keyspace`, §1.2); it administers keyspace roles, not vault ACLs.
 
 ---
 
@@ -462,7 +507,8 @@ than the HTTP layer and has no swagger to check against.
 |---|---|---|
 | `governance.ts` | `enabled_proposal_types` (VecSet), `proposal_configs` (VecMap), `type_bindings` (VecMap) | Not exposed by any route; the resolver needs it head-current, since a config change and an action can land in the same session |
 | `proposals.ts` | Snapshot weight, votes cast per address, decoded payload fields, composite `frameId` + per-step Move types, wall-clock-derived status | `GET /v1/orgs/{id}/proposals` is explicitly discovery-only — its own description says to read the live object when hydrating one proposal |
-| `vault.ts` | `DaoReceiptVaultRegistry` → `Table<VaultKey, ID>` dynamic field; per-asset vault balances | Registry lookup is a BCS-keyed dynamic field; `/v1/hubs/{id}/dao-vaults` gives ACLs, not balances |
+| `vault.ts` | `OuReceiptVaultRegistry` → `Table<VaultKey, ID>` dynamic field; per-asset balances (dynamic OBJECT fields keyed by the `u64` asset id → `getDynamicObjectField`); live ACL (Move enums: `@variant` in gRPC JSON, `variant`/`fields` in JSON-RPC) | Registry lookup is a BCS-keyed dynamic field; `/v1/hubs/{id}/dao-vaults` gives ACLs (`principal_kind` ∈ `player`/`machine`/`ou`), not balances |
+| `trading.ts` | `TradingAccount.owner` → `TradingCustody { ou_id, trading_account_id }` | The indexer does not index `TradingCustodyCreated`; the custody resolves from the account alone |
 | `treasury.ts` | `Balance<T>` and `MultiCoinBalance` dynamic fields on the `TreasuryVault` | No treasury-balance route exists |
 
 **Transport shape gotcha, and it bites every parser here:** Move structs cross in two
@@ -472,24 +518,28 @@ both parse identically. Port that helper first and route every parser through it
 
 **Original vs current package id:** dynamic-field key types and `StructType` filters must use
 the **original** package id (objects keep the type tag of the package version that created
-them), while `moveCall` targets use the **current** one. On `stillness`,
-`armature_trading` and `armature_vault` have already diverged (§9), so this is live today,
-not hypothetical.
+them), while `moveCall` targets use the **current** one. The cycle-7 packages are fresh
+publishes, so the two are equal on `stillness` today — the code still keys `VaultKey` by
+`armatureVaultOriginal` so the first upgrade does not silently break resolution (the vault
+tests pin that with an override).
 
 ---
 
 ## 9. Configuration & package IDs
 
-`PackageIds` gains six ids plus a shared object. Source of truth is the `stillness` tenant in
-`triex-app-api` (`src/constants/tenants.ts:149-172`), same as DESIGN.md §8.
+`PackageIds` gains eight ids plus a shared object. Source of truth is each package's
+`Published.toml` → `testnet_stillness` (cycle 7) and the `stillness` tenant in `triex-app-api`
+(`src/constants/tenants.ts`), same as DESIGN.md §8. Cycle 7 is a fresh publish of
+`armature`, `armature_proposals`, `armature_vault` and `armature_trading`, so every
+`*Original` currently equals its current id. Org trading also uses triex's `triexRegistry`
+(pool creation) and `triexFeePolicy` (every order handler) shared objects.
 
 ```ts
 armature, armatureOriginal
 armatureProposals, armatureProposalsOriginal
-armatureTrading, armatureTradingOriginal          // ← already diverged on stillness
-armatureVault, armatureVaultOriginal              // ← already diverged on stillness
-armatureWorldBridge
-daoReceiptVaultRegistry                           // shared object, not a package
+armatureTrading, armatureTradingOriginal          // equal after the cycle-7 fresh publish
+armatureVault, armatureVaultOriginal              // equal after the cycle-7 fresh publish
+ouReceiptVaultRegistry                            // shared object, not a package
 ```
 
 This introduces a config concept the current `PackageIds` does not model — an
@@ -602,6 +652,15 @@ needed: every org route in §2 is already live (§13.1).
   spurious ones; and `sweepAll`'s `RunOutcome & { skipped }` classified as a READ because
   the write check matched the type text exactly rather than structurally — which would have
   let a read tool cover a write.
+- **Cycle 7 — shared storage & org trading port.** `armature_vault` →
+  `ou_receipt_vault` (`initialize_ou_vault`, `registrant_ou_id`, `Machine` principals, edit
+  for any principal, `update_registry_key` wrapped as `vault.rekey`); `armature_trading` →
+  TRIEX-158 custody (§6.3), FeePolicy on every order handler, u128 order ids, and the
+  previously deferred market / coin-pool / pool-creation types. Breaking renames:
+  `*DaoVault*` builders → `*OuVault*`, `orders.sellFromDaoVault` → `sellFromVault`,
+  `daoVaultId` → `vaultId`, `editorDaoId` → `editorOuId`, `sweepCoin({ quoteType })` →
+  `{ coinType }`. Also fixed: `vault.balance()` read a plain dynamic field where the chain
+  stores a dynamic OBJECT field, so it always returned 0.
 
 > The parity test walks the SDK's public client surface and fails on anything neither
 > wrapped by a tool nor listed in `EXCLUDED_SDK_PATHS`. Every phase therefore needs either a
@@ -649,7 +708,7 @@ needed: every org route in §2 is already live (§13.1).
   union in the public types (§5.1). The app calls its own flat shim temporary; do not
   re-export a temporary shape into a published package.
 - **D-A4 — Keyspace stays in `@trinaryex/keyspace`.** Wrap only the discovery read (§1.2).
-- **D-A5 — `place_market_order` and friends stay out** until the app wires them (§13.3).
+- **D-A5 — superseded (cycle 7).** `place_market_order` is wrapped (`orders.market`), as are the coin-pool order types and `CreateMulticoinPool`; every `armature_trading` payload module now has a builder.
 - **D-A6 — OQ-A1 resolved: flat sibling package-id fields** (`armature` /
   `armatureOriginal`). Rationale in §9.
 - **D-A8 — `RunOutcome` returns `blocked`; it does not throw.** Implemented as designed
@@ -837,7 +896,6 @@ treasury/   send_batch_multicoin_to_address, send_batch_multicoin_to_dao,
 admin/      disable_proposal_type
 upgrade/    propose_upgrade, upgrade_ops
 framework/  external_execution, encrypted_entry, spend_guard
-trading/    place_market_order
 ```
 
 `pause_execution` is the odd one out — the app enables `PauseSubDAOExecution` at org
