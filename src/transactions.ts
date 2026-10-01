@@ -14,17 +14,17 @@ import type { PackageIds } from './types'
  *
  * Every target and argument list is verified against the cycle-7 contract
  * (trinary-exchange `packages/triex/sources`: `trading_account.move`,
- * `multicoin_pool.move`). Cycle 7 renamed the `balance_manager` module to
+ * `multicoin_pool.move`). Cycle 7 renamed the `trading_account` module to
  * `trading_account` (`BalanceManager` → `TradingAccount`), made order ids
  * `u128`, and added a shared `&FeePolicy` argument to order placement,
- * cancel, cancel-all and modify. The SDK keeps its "balance manager" naming
+ * cancel, cancel-all and modify. The SDK keeps its "trading account" naming
  * for the TypeScript API; only the Move-facing strings changed.
  */
 
 // ─── Trading account lifecycle ───────────────────────────────────────────────
 
 /** `trading_account::new()` → the new TradingAccount (transfer to self after). */
-export function newBalanceManager(
+export function newTradingAccount(
   tx: Transaction,
   ids: PackageIds,
 ): TransactionResult {
@@ -169,7 +169,7 @@ export interface HangarSourceArgs {
 }
 
 /**
- * Pull items out of a hangar/SSU and deposit them into the balance manager, in
+ * Pull items out of a hangar/SSU and deposit them into the trading account, in
  * one PTB fragment:
  *   borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap
  *   → trading_account::deposit_multicoin
@@ -382,7 +382,7 @@ export function modifyOrderItem(
 
 /**
  * `multicoin_pool::withdraw_settled_amounts<Quote>(pool, account, proof)` — claim
- * settled (post-fill) proceeds from a pool into the balance manager. Fill
+ * settled (post-fill) proceeds from a pool into the trading account. Fill
  * proceeds sit "settled" in the pool until claimed; bots must call this (or
  * `account.claimSettled`) before withdrawing.
  */

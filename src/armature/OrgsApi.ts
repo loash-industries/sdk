@@ -119,7 +119,7 @@ export class OrgsApi {
   /**
    * The organization's control tree flattened into nodes, depth-first from the
    * root. Address units by `daoId`; find the trading account by
-   * `balanceManagerId`, not by role label.
+   * `tradingAccountId`, not by role label.
    */
   async nodes(orgId: string): Promise<OrgNode[]> {
     return flattenOrg(await this.get(orgId))
@@ -151,17 +151,17 @@ export class OrgsApi {
   }
 
   /**
-   * The organization's trading account (`balanceManagerId`) and the unit that
+   * The organization's trading account (`tradingAccountId`) and the unit that
    * holds it, or null when trading was never set up. Feed the id straight to
    * the order-status reads — `openOrders`, `fills`, `trades`, `sweepable` all
-   * take a balance manager id and do not care who owns it.
+   * take a trading account id and do not care who owns it.
    */
   async tradingAccount(
     orgId: string,
-  ): Promise<{ balanceManagerId: string; node: OrgNode } | null> {
+  ): Promise<{ tradingAccountId: string; node: OrgNode } | null> {
     const node = tradingNode(await this.nodes(orgId))
-    return node?.balanceManagerId
-      ? { balanceManagerId: node.balanceManagerId, node }
+    return node?.tradingAccountId
+      ? { tradingAccountId: node.tradingAccountId, node }
       : null
   }
 }

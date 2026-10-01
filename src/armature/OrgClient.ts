@@ -82,7 +82,7 @@ import {
   type TreasuryCoinBalance,
 } from './treasury'
 import { computeBidQuoteDeposit, GTC_EXPIRE } from '../money'
-import { getBalanceManagerCurrencyBalance } from '../onchain'
+import { getTradingAccountCurrencyBalance } from '../onchain'
 import type { OrderSide } from '../types'
 import { execContextFor, flattenOrg, resolveSeat, seatsFor } from './tree'
 import type {
@@ -281,16 +281,16 @@ export class OrgHandle {
   /**
    * @internal — everything a trading action needs.
    *
-   * The BalanceManager is found by CAPABILITY across the whole tree (whichever
+   * The TradingAccount is found by CAPABILITY across the whole tree (whichever
    * unit holds one), while the CapabilityVault must be the ACTING seat's: the
    * TradeCap the handlers borrow lives with the board that votes.
    */
   tradingContext(): TradingContext {
     const seat = this.requireSeat()
-    const bm = this.nodes.find((n) => n.balanceManagerId)?.balanceManagerId
+    const bm = this.nodes.find((n) => n.tradingAccountId)?.tradingAccountId
     if (!bm) {
       throw new TriexClientError(
-        TriexError.BalanceManagerNotFound,
+        TriexError.TradingAccountNotFound,
         `Organization ${this.orgId} has no trading account — run orders.ensureAccount() first.`,
       )
     }
@@ -303,7 +303,7 @@ export class OrgHandle {
     return {
       armatureTrading: this.deps.ids.armatureTrading,
       capVaultId: seat.capabilityVaultId,
-      balanceManagerId: bm,
+      tradingAccountId: bm,
     }
   }
 
@@ -898,9 +898,9 @@ export interface OrgLimitOrderParams extends OrderFlags {
 class OrgOrdersApi {
   constructor(private readonly h: OrgHandle) {}
 
-  /** Give the organization a shared trading account (`BalanceManager`). */
+  /** Give the organization a shared trading account (`TradingAccount`). */
   async ensureAccount(): Promise<RunOutcome> {
-    const existing = this.h.nodes.find((n) => n.balanceManagerId)
+    const existing = this.h.nodes.find((n) => n.tradingAccountId)
     if (existing) {
       throw new TriexClientError(
         TriexError.ValidationFailed,
@@ -995,9 +995,9 @@ class OrgOrdersApi {
    * Fund a bid from the treasury and place it, ATOMICALLY.
    *
    * `depositAmount` defaults to the full cost of the order including fees, not
-   * to a shortfall — the balance manager's current balance is not read, so pass
+   * to a shortfall — the trading account's current balance is not read, so pass
    * the deficit yourself when it already holds some quote. Over-depositing is
-   * safe (the funds stay in the balance manager, usable by the next order);
+   * safe (the funds stay in the trading account, usable by the next order);
    * under-depositing aborts the whole transaction, deposit included.
    */
   async buyFromTreasury(
@@ -1046,7 +1046,7 @@ class OrgOrdersApi {
    * Unpark items from shared storage and sell them, ATOMICALLY.
    *
    * `vaultQuantity` is how much to pull from the vault, which is not always the
-   * order quantity — the balance manager may already hold part of the stack.
+   * order quantity — the trading account may already hold part of the stack.
    * It defaults to the full quantity.
    *
    * The vault is resolved from the storage unit and this organization; pass
@@ -1088,7 +1088,7 @@ class OrgOrdersApi {
   }
 
   /**
-   * Sweep quote coin out of the balance manager and back into the treasury.
+   * Sweep quote coin out of the trading account and back into the treasury.
    *
    * `claimFromPool` first claims that pool's settled balances into the balance
    * manager, in the same transaction — a resting maker order that filled leaves
@@ -1114,14 +1114,14 @@ class OrgOrdersApi {
           triex: this.h.deps.ids.triex,
           quoteType,
           poolId: params.claimFromPool,
-          balanceManagerId: ctx.balanceManagerId,
+          tradingAccountId: ctx.tradingAccountId,
         })
       }
     })
   }
 
   /**
-   * Park items from the balance manager into shared storage.
+   * Park items from the trading account into shared storage.
    *
    * As with {@link sweepCoin}, `claimFromPool` claims settled balances first so
    * `amount` may include them.
@@ -1153,7 +1153,7 @@ class OrgOrdersApi {
           triex: this.h.deps.ids.triex,
           quoteType: params.quoteType ?? this.h.deps.ids.credCoinType,
           poolId: params.claimFromPool,
-          balanceManagerId: ctx.balanceManagerId,
+          tradingAccountId: ctx.tradingAccountId,
         })
       }
     })
@@ -1161,7 +1161,7 @@ class OrgOrdersApi {
 
   /**
    * Park everything the organization is idly holding, in ONE signature: claim
-   * each pool's settled proceeds into the balance manager, move every item
+   * each pool's settled proceeds into the trading account, move every item
    * stack into its shared storage, and send the aggregate quote coin to the
    * treasury.
    *
@@ -1181,7 +1181,7 @@ class OrgOrdersApi {
   }): Promise<RunOutcome & { skipped: OrgSweepSkip[] }> {
     const quoteType = params?.quoteType ?? this.h.deps.ids.credCoinType
     const ctx = this.h.tradingContext()
-    const manifest = await this.h.deps.indexer.sweepable(ctx.balanceManagerId)
+    const manifest = await this.h.deps.indexer.sweepable(ctx.tradingAccountId)
 
     const claimPools = manifest.pools
       .filter(
@@ -1220,13 +1220,13 @@ class OrgOrdersApi {
     }
 
     // The manifest carries no top-level currency figure, so the CRED leg is the
-    // balance manager's LIVE holding plus whatever the claims above are about to
+    // trading account's LIVE holding plus whatever the claims above are about to
     // add — the claims run first in this same PTB, so a pre-claim read alone
     // would leave the just-claimed proceeds behind.
-    const liveCred = await getBalanceManagerCurrencyBalance(
+    const liveCred = await getTradingAccountCurrencyBalance(
       this.h.deps.suiClient,
       this.h.deps.ids,
-      ctx.balanceManagerId,
+      ctx.tradingAccountId,
     )
     const claimedCred = manifest.pools.reduce(
       (sum, p) => sum + p.settled.cred + p.settled.quote,
@@ -1248,7 +1248,7 @@ class OrgOrdersApi {
         TriexError.ValidationFailed,
         skipped.length > 0
           ? `Nothing could be swept: ${skipped.length} item stack(s) have no shared storage registered by this organization.`
-          : 'Nothing to sweep — the balance manager is idle.',
+          : 'Nothing to sweep — the trading account is idle.',
       )
     }
 
@@ -1258,7 +1258,7 @@ class OrgOrdersApi {
           triex: this.h.deps.ids.triex,
           quoteType: pool.quoteType,
           poolId: pool.poolId,
-          balanceManagerId: ctx.balanceManagerId,
+          tradingAccountId: ctx.tradingAccountId,
         })
       }
     })
@@ -1423,7 +1423,7 @@ class OrgVaultApi {
     const tx = new SuiTransaction()
     initializeDaoVaultTx(tx, {
       armatureVault: this.h.deps.ids.armatureVault,
-      registryId: this.h.deps.ids.daoReceiptVaultRegistry,
+      registryId: this.h.deps.ids.ouReceiptVaultRegistry,
       storageUnitId: params.storageUnitId,
       registrantOrgId: seat.daoId,
       vaultConfigId,
@@ -1641,7 +1641,7 @@ class OrgVaultApi {
     const tx = new SuiTransaction()
     deinitializeDaoVaultTx(tx, {
       armatureVault: this.h.deps.ids.armatureVault,
-      registryId: this.h.deps.ids.daoReceiptVaultRegistry,
+      registryId: this.h.deps.ids.ouReceiptVaultRegistry,
       vaultId: params.vaultId,
       editorDaoId: params.editorDaoId ?? this.h.requireSeat().daoId,
     })

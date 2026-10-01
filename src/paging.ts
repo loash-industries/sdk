@@ -45,10 +45,10 @@ export async function* iterateDiscovery(
   }
 }
 
-/** Stream fills (newest first) for a balance manager across pages. */
+/** Stream fills (newest first) for a trading account across pages. */
 export async function* iterateFills(
   indexer: IndexerClient,
-  balanceManagerId: string,
+  tradingAccountId: string,
   params?: FillsParams,
   options?: IterateOptions,
 ): AsyncGenerator<Fill> {
@@ -56,7 +56,7 @@ export async function* iterateFills(
   let before = params?.before
   let yielded = 0
   for (;;) {
-    const page = await indexer.fills(balanceManagerId, { ...params, before })
+    const page = await indexer.fills(tradingAccountId, { ...params, before })
     if (page.fills.length === 0) return
     for (const fill of page.fills) {
       yield fill
@@ -67,10 +67,10 @@ export async function* iterateFills(
   }
 }
 
-/** Stream trades (newest first) for a balance manager across pages. */
+/** Stream trades (newest first) for a trading account across pages. */
 export async function* iterateTrades(
   indexer: IndexerClient,
-  balanceManagerId: string,
+  tradingAccountId: string,
   params?: TradesParams,
   options?: IterateOptions,
 ): AsyncGenerator<Trade> {
@@ -78,7 +78,7 @@ export async function* iterateTrades(
   let before = params?.before
   let yielded = 0
   for (;;) {
-    const page = await indexer.trades(balanceManagerId, { ...params, before })
+    const page = await indexer.trades(tradingAccountId, { ...params, before })
     if (page.trades.length === 0) return
     for (const trade of page.trades) {
       yield trade

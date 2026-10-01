@@ -392,8 +392,8 @@ export const readTools: ToolDef[] = [
     handler: async (ctx, args) => {
       const id = await ctx
         .writeClient(args.address)
-        .resolveBalanceManagerId(args.address)
-      return ok({ address: args.address, balanceManagerId: id, exists: !!id })
+        .resolveTradingAccountId(args.address)
+      return ok({ address: args.address, tradingAccountId: id, exists: !!id })
     },
   },
   {
@@ -404,21 +404,21 @@ export const readTools: ToolDef[] = [
     kind: 'read',
     sdkPath: 'balances.atHub',
     inputShape: {
-      balanceManagerId: objectId,
+      tradingAccountId: objectId,
       storageUnitId: objectId,
     },
     handler: async (ctx, args) =>
       ok(
         await ctx
           .readClient()
-          .balancesAtHub(args.balanceManagerId, args.storageUnitId),
+          .balancesAtHub(args.tradingAccountId, args.storageUnitId),
       ),
   },
   {
     name: 'account_currency_balances',
     title: 'Check CRED balances',
     description:
-      'CRED held by an address: loose in the wallet, and deposited inside its trading account. Works for an address that has no trading account yet — that answers with the wallet total, a zero deposited balance, and a null balanceManagerId, which is the signal to call prepare_create_account. Read head-current from the fullnode, so it reflects transactions the indexer has not caught up with yet. Amounts are base units as decimal strings.',
+      'CRED held by an address: loose in the wallet, and deposited inside its trading account. Works for an address that has no trading account yet — that answers with the wallet total, a zero deposited balance, and a null tradingAccountId, which is the signal to call prepare_create_account. Read head-current from the fullnode, so it reflects transactions the indexer has not caught up with yet. Amounts are base units as decimal strings.',
     kind: 'read',
     sdkPath: 'balances.currency',
     inputShape: {
@@ -434,9 +434,9 @@ export const readTools: ToolDef[] = [
       'Unclaimed proceeds and settled balances that can be claimed or withdrawn.',
     kind: 'read',
     sdkPath: 'account.sweepable',
-    inputShape: { balanceManagerId: objectId },
+    inputShape: { tradingAccountId: objectId },
     handler: async (ctx, args) =>
-      ok(await ctx.readClient().sweepable(args.balanceManagerId)),
+      ok(await ctx.readClient().sweepable(args.tradingAccountId)),
   },
   {
     name: 'account_owners',
@@ -446,7 +446,7 @@ export const readTools: ToolDef[] = [
     kind: 'read',
     sdkPath: 'account.owners',
     inputShape: {
-      balanceManagerIds: z
+      tradingAccountIds: z
         .array(objectId)
         .min(1)
         .max(200)
@@ -461,10 +461,10 @@ export const readTools: ToolDef[] = [
     description: 'Resting orders for a trading account.',
     kind: 'read',
     sdkPath: 'orders.openOrders',
-    inputShape: { balanceManagerId: objectId, ...historyPagingShape },
+    inputShape: { tradingAccountId: objectId, ...historyPagingShape },
     handler: async (ctx, args) => {
-      const { balanceManagerId, ...rest } = args
-      return ok(await ctx.readClient().openOrders(balanceManagerId, rest))
+      const { tradingAccountId, ...rest } = args
+      return ok(await ctx.readClient().openOrders(tradingAccountId, rest))
     },
   },
   {
@@ -473,10 +473,10 @@ export const readTools: ToolDef[] = [
     description: "This account's side of each match, most recent first.",
     kind: 'read',
     sdkPath: 'orders.fills',
-    inputShape: { balanceManagerId: objectId, ...historyPagingShape },
+    inputShape: { tradingAccountId: objectId, ...historyPagingShape },
     handler: async (ctx, args) => {
-      const { balanceManagerId, ...rest } = args
-      return ok(await ctx.readClient().fills(balanceManagerId, rest))
+      const { tradingAccountId, ...rest } = args
+      return ok(await ctx.readClient().fills(tradingAccountId, rest))
     },
   },
   {
@@ -485,10 +485,10 @@ export const readTools: ToolDef[] = [
     description: 'Completed trades for a trading account.',
     kind: 'read',
     sdkPath: 'orders.trades',
-    inputShape: { balanceManagerId: objectId, ...historyPagingShape },
+    inputShape: { tradingAccountId: objectId, ...historyPagingShape },
     handler: async (ctx, args) => {
-      const { balanceManagerId, ...rest } = args
-      return ok(await ctx.readClient().trades(balanceManagerId, rest))
+      const { tradingAccountId, ...rest } = args
+      return ok(await ctx.readClient().trades(tradingAccountId, rest))
     },
   },
 ]

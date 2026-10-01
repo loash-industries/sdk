@@ -12,13 +12,13 @@ import {
   fetchInventorySlotQuantity,
   fetchSsuOwnerInfo,
   findOwnedItemReceipts,
-  getBalanceManagerCurrencyBalance,
-  getBalanceManagerItemBalance,
+  getTradingAccountCurrencyBalance,
+  getTradingAccountItemBalance,
   getObjectRef,
   getRegistryMulticoinCollectionId,
   getWalletCurrencyBalance,
 } from '../src/onchain'
-import { sourceItemsIntoBalanceManager } from '../src/funding'
+import { sourceItemsIntoTradingAccount } from '../src/funding'
 import { TriexError } from '../src/errors'
 import { STILLNESS_PACKAGE_IDS } from '../src/config'
 
@@ -76,7 +76,7 @@ describe('trading account balance reads', () => {
         }
       },
     })
-    expect(await getBalanceManagerCurrencyBalance(sui as any, IDS, '0x1')).toBe(
+    expect(await getTradingAccountCurrencyBalance(sui as any, IDS, '0x1')).toBe(
       77n,
     )
     expect(seen[0].parentId).toBe(BAG)
@@ -103,7 +103,7 @@ describe('trading account balance reads', () => {
       },
     })
     expect(
-      await getBalanceManagerItemBalance(
+      await getTradingAccountItemBalance(
         sui as any,
         IDS,
         '0x1',
@@ -351,14 +351,14 @@ function hangarCore(opts: {
   })
 }
 
-describe('sourceItemsIntoBalanceManager — hangar paths', () => {
+describe('sourceItemsIntoTradingAccount — hangar paths', () => {
   const base = {
     owner: OWNER,
     ssuObjectId: SSU,
     vaultConfigId: VAULT_CFG,
     vaultCollectionId: COLLECTION,
     assetId: 70810n,
-    balanceManagerId: null,
+    tradingAccountId: null,
     deficitMode: false as const,
   }
 
@@ -366,7 +366,7 @@ describe('sourceItemsIntoBalanceManager — hangar paths', () => {
     const sui = hangarCore({ ssuOwner: false, slotQty: { [CHAR_CAP]: 50n } })
     const tx = new Transaction()
     const bm = tx.object('0x' + 'b1'.repeat(32))
-    await sourceItemsIntoBalanceManager(sui as any, tx, IDS, bm, {
+    await sourceItemsIntoTradingAccount(sui as any, tx, IDS, bm, {
       ...base,
       amount: 5n,
     })
@@ -385,7 +385,7 @@ describe('sourceItemsIntoBalanceManager — hangar paths', () => {
     })
     const tx = new Transaction()
     const bm = tx.object('0x' + 'b1'.repeat(32))
-    await sourceItemsIntoBalanceManager(sui as any, tx, IDS, bm, {
+    await sourceItemsIntoTradingAccount(sui as any, tx, IDS, bm, {
       ...base,
       amount: 5n, // 3 from SSU slot + 2 from character slot
     })
@@ -409,7 +409,7 @@ describe('sourceItemsIntoBalanceManager — hangar paths', () => {
     const tx = new Transaction()
     const bm = tx.object('0x' + 'b1'.repeat(32))
     await expect(
-      sourceItemsIntoBalanceManager(sui as any, tx, IDS, bm, {
+      sourceItemsIntoTradingAccount(sui as any, tx, IDS, bm, {
         ...base,
         amount: 5n,
       }),

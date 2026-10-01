@@ -30,7 +30,7 @@ function unit(orgId: string, over: Partial<Org> = {}): Org {
     metadata: {},
     members: [],
     ous: [],
-    balanceManagerId: null,
+    tradingAccountId: null,
     subdaoControlCapId: null,
     ...over,
   }
@@ -47,7 +47,7 @@ function fullTree(): Org {
         emergencyFreezeId: `${OFFICERS}-freeze`,
         capabilityVaultId: `${OFFICERS}-caps`,
         members: [ALICE, BOB],
-        balanceManagerId: '0xbm',
+        tradingAccountId: '0xbm',
         subdaoControlCapId: '0xcap-root-officers',
         ous: [
           unit(MEMBERS, {

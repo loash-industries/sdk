@@ -107,9 +107,9 @@ describe('location tools reach the endpoint their inputs describe', () => {
     },
     {
       tool: 'account_owners',
-      args: { balanceManagerIds: [HEX] },
+      args: { tradingAccountIds: [HEX] },
       payload: [],
-      path: '/v1/balance-managers/owners',
+      path: '/v1/trading-accounts/owners',
       query: { ids: HEX },
     },
   ]

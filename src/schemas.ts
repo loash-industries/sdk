@@ -39,7 +39,7 @@ export const DiscoveryOrderSchema = z
     order_id: z.string(),
     price: bigintString,
     is_bid: z.boolean(),
-    balance_manager_id: z.string(),
+    trading_account_id: z.string(),
     remaining_quantity: bigintString,
     filled_quantity: bigintString,
     expires_at: z.number().nullable(),
@@ -60,7 +60,7 @@ export const DiscoveryOrderSchema = z
     orderId: v.order_id,
     price: v.price,
     isBid: v.is_bid,
-    balanceManagerId: v.balance_manager_id,
+    tradingAccountId: v.trading_account_id,
     remainingQuantity: v.remaining_quantity,
     filledQuantity: v.filled_quantity,
     /** Epoch ms; null = good-til-cancelled. */
@@ -347,18 +347,18 @@ export const AssemblyEnrichedSchema = z
     assemblyName: v.assembly_name,
   }))
 
-export const BalanceManagerOwnerSchema = z
+export const TradingAccountOwnerSchema = z
   .object({
-    balance_manager_id: z.string(),
+    trading_account_id: z.string(),
     owner: z.string().nullable(),
     owner_name: z.string().nullable(),
     root_ou_id: z.string().nullable(),
   })
   .transform((v) => ({
-    balanceManagerId: v.balance_manager_id,
+    tradingAccountId: v.trading_account_id,
     /**
      * TAGGED, not a bare address: `player:<wallet>` for a character-owned
-     * balance manager, `ou:<org_id>` for an organization-owned one. Null when
+     * trading account, `ou:<org_id>` for an organization-owned one. Null when
      * the indexer could not resolve it.
      */
     owner: v.owner,
@@ -558,7 +558,7 @@ export const InventoryBalancesSchema = z
     collectionId: v.collection_id,
     /** Wallet-held receipt balances for `ownerAddress`. */
     warehouse: v.warehouse,
-    /** Balance-manager-held balances for `balanceManagerId`. */
+    /** Balance-manager-held balances for `tradingAccountId`. */
     marketplace: v.marketplace,
     /** Hangar contents for `inventoryKey` (an owner_cap_id). */
     hangar: v.hangar,
@@ -612,7 +612,7 @@ export const FillSchema = z
     event_digest: z.string(),
     pool_id: z.string(),
     order_id: z.string(),
-    counterparty_balance_manager_id: z.string(),
+    counterparty_trading_account_id: z.string(),
     price: bigintString,
     base_quantity: bigintString,
     quote_quantity: bigintString,
@@ -625,7 +625,7 @@ export const FillSchema = z
     eventDigest: v.event_digest,
     poolId: v.pool_id,
     orderId: v.order_id,
-    counterpartyBalanceManagerId: v.counterparty_balance_manager_id,
+    counterpartyTradingAccountId: v.counterparty_trading_account_id,
     price: v.price,
     baseQuantity: v.base_quantity,
     quoteQuantity: v.quote_quantity,
@@ -648,7 +648,7 @@ export const TradeSchema = z
     event_digest: z.string(),
     pool_id: z.string(),
     order_id: z.string(),
-    counterparty_balance_manager_id: z.string(),
+    counterparty_trading_account_id: z.string(),
     price: bigintString,
     base_quantity: bigintString,
     quote_quantity: bigintString,
@@ -663,7 +663,7 @@ export const TradeSchema = z
     eventDigest: v.event_digest,
     poolId: v.pool_id,
     orderId: v.order_id,
-    counterpartyBalanceManagerId: v.counterparty_balance_manager_id,
+    counterpartyTradingAccountId: v.counterparty_trading_account_id,
     price: v.price,
     baseQuantity: v.base_quantity,
     quoteQuantity: v.quote_quantity,
@@ -708,7 +708,7 @@ export const SweepablePoolSchema = z
     quoteAssetId: v.quote_asset_id,
     storageUnitId: v.storage_unit_id,
     vaultConfigId: v.vault_config_id,
-    /** Claimable into the balance manager. */
+    /** Claimable into the trading account. */
     settled: v.settled,
     /** Informational: currently owed by the account. */
     owed: v.owed,
@@ -732,20 +732,20 @@ export const SweepableItemSchema = z
   }))
 
 /**
- * `GET /v1/balance-managers/{bm}/sweepable` — everything claimable /
+ * `GET /v1/trading-accounts/{bm}/sweepable` — everything claimable /
  * withdrawable: per-pool settled (post-fill) proceeds and idle item balances
- * already sitting in the balance manager. Note: BM-resident CRED is
+ * already sitting in the trading account. Note: BM-resident CRED is
  * deliberately NOT in this manifest — read it via `balances.currency()`.
  */
 export const SweepableSchema = z
   .object({
-    balance_manager_id: z.string(),
+    trading_account_id: z.string(),
     as_of_checkpoint: z.string().nullable(),
     pools: z.array(SweepablePoolSchema),
     items: z.array(SweepableItemSchema),
   })
   .transform((v) => ({
-    balanceManagerId: v.balance_manager_id,
+    tradingAccountId: v.trading_account_id,
     asOfCheckpoint: v.as_of_checkpoint,
     pools: v.pools,
     items: v.items,

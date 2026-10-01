@@ -6,7 +6,7 @@ import type {
   AssemblyEnriched,
   AssemblyOwner,
   AutocompleteSystems,
-  BalanceManagerOwner,
+  TradingAccountOwner,
   BatchSystems,
   BatchSystemsParams,
   CoordinateSearch,
@@ -46,14 +46,14 @@ import type {
 /**
  * Indexer-only client — no `executor`, no signing, no fullnode. For
  * dashboards, market scanners, and bots that only observe. Identity params
- * (address, balance manager id) are always explicit here since there is no
+ * (address, trading account id) are always explicit here since there is no
  * configured player. Currency (CRED) balances are fullnode reads and live on
  * `TriexClient.balances.currency()` only.
  *
  * ERRORS — every method throws `TriexClientError` with a stable `code`:
  * `Unauthorized` (bad/missing key), `RateLimited` (CU budget; carries
  * `retryAfterMs`), `IndexerError`, `UnexpectedResponse`, plus per-target
- * `HubNotFound` / `PoolNotFound` / `BalanceManagerNotFound` on unknown ids.
+ * `HubNotFound` / `PoolNotFound` / `TradingAccountNotFound` on unknown ids.
  */
 export class ReadOnlyClient {
   readonly ids: PackageIds
@@ -226,9 +226,9 @@ export class ReadOnlyClient {
    * organization rather than a character.
    */
   accountOwners(params: {
-    balanceManagerIds: string[]
-  }): Promise<BalanceManagerOwner[]> {
-    return this.indexer.balanceManagerOwners(params.balanceManagerIds)
+    tradingAccountIds: string[]
+  }): Promise<TradingAccountOwner[]> {
+    return this.indexer.tradingAccountOwners(params.tradingAccountIds)
   }
 
   // ─── Spatial: the star map ────────────────────────────────────────────────
@@ -280,31 +280,31 @@ export class ReadOnlyClient {
 
   /** #2 — hub-scoped item balances for an explicit address / BM / hangar key. */
   balancesAtHub(
-    params: BalancesAtHubParams & { balanceManagerId?: string },
+    params: BalancesAtHubParams & { tradingAccountId?: string },
   ): Promise<InventoryBalances> {
     return this.indexer.inventoryBalances(params)
   }
 
-  /** #14 — open orders for an explicit balance manager. */
+  /** #14 — open orders for an explicit trading account. */
   openOrders(
-    balanceManagerId: string,
+    tradingAccountId: string,
     params?: HistoryPageParams,
   ): Promise<OpenOrdersPage> {
-    return this.indexer.openOrders(balanceManagerId, params)
+    return this.indexer.openOrders(tradingAccountId, params)
   }
 
-  /** #14 — fills for an explicit balance manager. */
-  fills(balanceManagerId: string, params?: FillsParams): Promise<FillsPage> {
-    return this.indexer.fills(balanceManagerId, params)
+  /** #14 — fills for an explicit trading account. */
+  fills(tradingAccountId: string, params?: FillsParams): Promise<FillsPage> {
+    return this.indexer.fills(tradingAccountId, params)
   }
 
-  /** #14 — trades for an explicit balance manager. */
-  trades(balanceManagerId: string, params?: TradesParams): Promise<TradesPage> {
-    return this.indexer.trades(balanceManagerId, params)
+  /** #14 — trades for an explicit trading account. */
+  trades(tradingAccountId: string, params?: TradesParams): Promise<TradesPage> {
+    return this.indexer.trades(tradingAccountId, params)
   }
 
-  /** Claimable proceeds + idle BM items for an explicit balance manager. */
-  sweepable(balanceManagerId: string): Promise<Sweepable> {
-    return this.indexer.sweepable(balanceManagerId)
+  /** Claimable proceeds + idle BM items for an explicit trading account. */
+  sweepable(tradingAccountId: string): Promise<Sweepable> {
+    return this.indexer.sweepable(tradingAccountId)
   }
 }

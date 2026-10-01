@@ -41,7 +41,7 @@ const ctx: OuExecContext = {
 const tctx = {
   armatureTrading: TRADING,
   capVaultId: CAPS,
-  balanceManagerId: BM,
+  tradingAccountId: BM,
 }
 
 function commandNames(tx: Transaction): string[] {
@@ -202,7 +202,7 @@ function unit(orgId: string, over: Partial<Org> = {}): Org {
     metadata: {},
     members: [],
     ous: [],
-    balanceManagerId: null,
+    tradingAccountId: null,
     subdaoControlCapId: null,
     ...over,
   }
@@ -277,7 +277,7 @@ function harness(opts: { quorum?: number; hasBm?: boolean } = {}) {
           treasuryId: TREASURY,
           members: [ALICE],
           subdaoControlCapId: hex('e7'),
-          balanceManagerId: opts.hasBm === false ? null : BM,
+          tradingAccountId: opts.hasBm === false ? null : BM,
         }),
       ],
     }),
@@ -407,7 +407,7 @@ describe('orders through the handle', () => {
         price: 1n,
         quantity: 1n,
       }),
-    ).rejects.toMatchObject({ code: TriexError.BalanceManagerNotFound })
+    ).rejects.toMatchObject({ code: TriexError.TradingAccountNotFound })
   })
 
   it('ensureAccount refuses when one already exists', async () => {

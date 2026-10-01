@@ -567,7 +567,7 @@ export const orgPrepareTools: ToolDef[] = [
     name: 'prepare_org_setup_trading',
     title: 'Prepare: give an organization a trading account',
     description:
-      'Create the organization’s shared BalanceManager. Refused when one already exists — check org_trading_account first.' +
+      'Create the organization’s shared TradingAccount. Refused when one already exists — check org_trading_account first.' +
       PREPARE_SUFFIX,
     kind: 'prepare',
     sdkPath: 'org.orders.ensureAccount',
@@ -586,7 +586,7 @@ export const orgPrepareTools: ToolDef[] = [
     name: 'prepare_org_limit_order',
     title: 'Prepare: place an organization limit order',
     description:
-      'Place a limit order using funds ALREADY in the organization’s balance manager. To fund it from the treasury or from shared storage in the same transaction, use prepare_org_buy_from_treasury or prepare_org_sell_from_vault instead. Trading actions never degrade into proposals — if a single vote cannot pass it, the result is prepared:false.' +
+      'Place a limit order using funds ALREADY in the organization’s trading account. To fund it from the treasury or from shared storage in the same transaction, use prepare_org_buy_from_treasury or prepare_org_sell_from_vault instead. Trading actions never degrade into proposals — if a single vote cannot pass it, the result is prepared:false.' +
       PREPARE_SUFFIX,
     kind: 'prepare',
     sdkPath: 'org.orders.limit',
@@ -660,7 +660,7 @@ export const orgPrepareTools: ToolDef[] = [
     name: 'prepare_org_buy_from_treasury',
     title: 'Prepare: fund a bid from the treasury and place it',
     description:
-      'Move quote coin from the treasury into the balance manager and place the bid, ATOMICALLY — if the order aborts the deposit rolls back. depositAmount defaults to the full cost including fees, NOT to a shortfall: pass the deficit yourself when the balance manager already holds some quote. Over-depositing is safe; under-depositing aborts the whole transaction.' +
+      'Move quote coin from the treasury into the trading account and place the bid, ATOMICALLY — if the order aborts the deposit rolls back. depositAmount defaults to the full cost including fees, NOT to a shortfall: pass the deficit yourself when the trading account already holds some quote. Over-depositing is safe; under-depositing aborts the whole transaction.' +
       PREPARE_SUFFIX,
     kind: 'prepare',
     sdkPath: 'org.orders.buyFromTreasury',
@@ -701,7 +701,7 @@ export const orgPrepareTools: ToolDef[] = [
     name: 'prepare_org_sell_from_vault',
     title: 'Prepare: unpark from shared storage and sell',
     description:
-      'Take items out of the organization’s shared storage and place the ask, ATOMICALLY. vaultQuantity is how much to pull from the vault, which is not always the order quantity — the balance manager may already hold part of the stack. The vault is resolved from the storage unit and this organization.' +
+      'Take items out of the organization’s shared storage and place the ask, ATOMICALLY. vaultQuantity is how much to pull from the vault, which is not always the order quantity — the trading account may already hold part of the stack. The vault is resolved from the storage unit and this organization.' +
       PREPARE_SUFFIX,
     kind: 'prepare',
     sdkPath: 'org.orders.sellFromDaoVault',
@@ -742,7 +742,7 @@ export const orgPrepareTools: ToolDef[] = [
     name: 'prepare_org_sweep_coin',
     title: 'Prepare: sweep quote coin to the treasury',
     description:
-      'Move quote coin out of the balance manager back into the treasury. claimFromPool first claims that pool’s settled balances in the same transaction — a resting maker order that filled leaves its proceeds IN the pool, so sweeping without claiming quietly moves less than expected.' +
+      'Move quote coin out of the trading account back into the treasury. claimFromPool first claims that pool’s settled balances in the same transaction — a resting maker order that filled leaves its proceeds IN the pool, so sweeping without claiming quietly moves less than expected.' +
       PREPARE_SUFFIX,
     kind: 'prepare',
     sdkPath: 'org.orders.sweepCoin',
@@ -773,7 +773,7 @@ export const orgPrepareTools: ToolDef[] = [
     name: 'prepare_org_sweep_items',
     title: 'Prepare: park items in shared storage',
     description:
-      'Move an item stack out of the balance manager into the organization’s shared storage at a hub. As with the coin sweep, claimFromPool claims settled balances first so the amount may include them.' +
+      'Move an item stack out of the trading account into the organization’s shared storage at a hub. As with the coin sweep, claimFromPool claims settled balances first so the amount may include them.' +
       PREPARE_SUFFIX,
     kind: 'prepare',
     sdkPath: 'org.orders.sweepItems',
@@ -882,7 +882,7 @@ export const orgPrepareTools: ToolDef[] = [
     name: 'prepare_org_vault_deposit',
     title: 'Prepare: move wallet items into shared storage',
     description:
-      'Deposit items from the CALLER’S WALLET receipts into the organization’s shared storage. Not governance — the vault’s deposit role is checked against the caller directly. To move items out of the organization’s balance manager instead, use prepare_org_sweep_items.' +
+      'Deposit items from the CALLER’S WALLET receipts into the organization’s shared storage. Not governance — the vault’s deposit role is checked against the caller directly. To move items out of the organization’s trading account instead, use prepare_org_sweep_items.' +
       PREPARE_SUFFIX,
     kind: 'prepare',
     sdkPath: 'org.vault.deposit',

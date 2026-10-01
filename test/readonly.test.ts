@@ -55,7 +55,7 @@ describe('ReadOnlyClient', () => {
       [
         '/sweepable',
         {
-          balance_manager_id: HEX,
+          trading_account_id: HEX,
           as_of_checkpoint: '9',
           pools: [],
           items: [
@@ -96,14 +96,14 @@ describe('IndexerClient remaining param mappings', () => {
     await client.inventoryBalances({
       storageUnitId: HEX,
       address: '0xowner',
-      balanceManagerId: '0xbm',
+      tradingAccountId: '0xbm',
       inventoryKey: '0xcap',
       vaultIds: ['0xv1', '0xv2'],
     })
     const url = fetchMock.mock.calls[0][0] as URL
     expect(url.searchParams.get('storage_unit_id')).toBe(HEX)
     expect(url.searchParams.get('owner_address')).toBe('0xowner')
-    expect(url.searchParams.get('balance_manager_id')).toBe('0xbm')
+    expect(url.searchParams.get('trading_account_id')).toBe('0xbm')
     expect(url.searchParams.get('inventory_key')).toBe('0xcap')
     expect(url.searchParams.get('vault_ids')).toBe('0xv1,0xv2')
   })
@@ -171,8 +171,8 @@ describe('ReadOnlyClient location reads', () => {
         [],
       ],
       [
-        () => ro.accountOwners({ balanceManagerIds: [HEX] }),
-        '/v1/balance-managers/owners',
+        () => ro.accountOwners({ tradingAccountIds: [HEX] }),
+        '/v1/trading-accounts/owners',
         [],
       ],
     ]

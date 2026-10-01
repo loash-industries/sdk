@@ -7,7 +7,7 @@ import {
   AssemblyEnrichedSchema,
   AssemblyOwnerSchema,
   AutocompleteSystemsSchema,
-  BalanceManagerOwnerSchema,
+  TradingAccountOwnerSchema,
   BatchSystemsSchema,
   CoordinateSearchSchema,
   CollectionHubSchema,
@@ -38,7 +38,7 @@ import type {
   AssemblyEnriched,
   AssemblyOwner,
   AutocompleteSystems,
-  BalanceManagerOwner,
+  TradingAccountOwner,
   BatchSystems,
   BatchSystemsParams,
   CoordinateSearch,
@@ -119,7 +119,7 @@ export class IndexerClient {
     const data = await this.get('/v1/discovery', {
       storage_unit_ids: filters?.storageUnitIds?.join(','),
       asset_id: filters?.assetId,
-      balance_manager_id: filters?.balanceManagerId,
+      trading_account_id: filters?.tradingAccountId,
       side: filters?.side,
       public_only: filters?.publicOnly,
       cursor: filters?.cursor,
@@ -364,20 +364,20 @@ export class IndexerClient {
   }
 
   /**
-   * Owner for each balance manager id, tagged `player:<wallet>` or
+   * Owner for each trading account id, tagged `player:<wallet>` or
    * `ou:<org_id>` — how a counterparty on the book is put to a name.
    */
-  async balanceManagerOwners(
-    balanceManagerIds: string[],
-  ): Promise<BalanceManagerOwner[]> {
-    if (balanceManagerIds.length === 0) return []
-    const data = await this.get('/v1/balance-managers/owners', {
-      ids: balanceManagerIds.join(','),
+  async tradingAccountOwners(
+    tradingAccountIds: string[],
+  ): Promise<TradingAccountOwner[]> {
+    if (tradingAccountIds.length === 0) return []
+    const data = await this.get('/v1/trading-accounts/owners', {
+      ids: tradingAccountIds.join(','),
     })
     return parseWith(
-      z.array(BalanceManagerOwnerSchema),
+      z.array(TradingAccountOwnerSchema),
       data,
-      'balanceManagerOwners',
+      'tradingAccountOwners',
     )
   }
 
@@ -484,18 +484,18 @@ export class IndexerClient {
 
   /**
    * Hub-scoped item balances. Sections come back empty unless their selecting
-   * parameter is passed: `address` → warehouse, `balanceManagerId` →
+   * parameter is passed: `address` → warehouse, `tradingAccountId` →
    * marketplace, `inventoryKey` → hangar, `vaultIds` → orgVaults.
    */
   async inventoryBalances(
-    params: BalancesAtHubParams & { balanceManagerId?: string },
+    params: BalancesAtHubParams & { tradingAccountId?: string },
   ): Promise<InventoryBalances> {
     const data = await this.get(
       '/v1/inventory/balances',
       {
         storage_unit_id: params.storageUnitId,
         owner_address: params.address,
-        balance_manager_id: params.balanceManagerId,
+        trading_account_id: params.tradingAccountId,
         inventory_key: params.inventoryKey,
         vault_ids: params.vaultIds?.join(','),
       },
@@ -507,23 +507,23 @@ export class IndexerClient {
   // ─── Order status (#14) ───────────────────────────────────────────────────
 
   async openOrders(
-    balanceManagerId: string,
+    tradingAccountId: string,
     params?: HistoryPageParams,
   ): Promise<OpenOrdersPage> {
     const data = await this.get(
-      `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/open-orders`,
+      `/v1/trading-accounts/${encodeURIComponent(tradingAccountId)}/open-orders`,
       { before: params?.before, after: params?.after, limit: params?.limit },
-      TriexError.BalanceManagerNotFound,
+      TriexError.TradingAccountNotFound,
     )
     return parseWith(OpenOrdersPageSchema, data, 'openOrders')
   }
 
   async fills(
-    balanceManagerId: string,
+    tradingAccountId: string,
     params?: FillsParams,
   ): Promise<FillsPage> {
     const data = await this.get(
-      `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/fills`,
+      `/v1/trading-accounts/${encodeURIComponent(tradingAccountId)}/fills`,
       {
         before: params?.before,
         after: params?.after,
@@ -531,31 +531,31 @@ export class IndexerClient {
         pool_id: params?.poolId,
         side: params?.side,
       },
-      TriexError.BalanceManagerNotFound,
+      TriexError.TradingAccountNotFound,
     )
     return parseWith(FillsPageSchema, data, 'fills')
   }
 
   /**
-   * Everything claimable / withdrawable for a balance manager: per-pool
+   * Everything claimable / withdrawable for a trading account: per-pool
    * settled proceeds + idle BM item balances. (BM-resident CRED is deliberately
    * not in this manifest — read it via `balances.currency()`.)
    */
-  async sweepable(balanceManagerId: string): Promise<Sweepable> {
+  async sweepable(tradingAccountId: string): Promise<Sweepable> {
     const data = await this.get(
-      `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/sweepable`,
+      `/v1/trading-accounts/${encodeURIComponent(tradingAccountId)}/sweepable`,
       undefined,
-      TriexError.BalanceManagerNotFound,
+      TriexError.TradingAccountNotFound,
     )
     return parseWith(SweepableSchema, data, 'sweepable')
   }
 
   async trades(
-    balanceManagerId: string,
+    tradingAccountId: string,
     params?: TradesParams,
   ): Promise<TradesPage> {
     const data = await this.get(
-      `/v1/balance-managers/${encodeURIComponent(balanceManagerId)}/trades`,
+      `/v1/trading-accounts/${encodeURIComponent(tradingAccountId)}/trades`,
       {
         before: params?.before,
         after: params?.after,
@@ -563,7 +563,7 @@ export class IndexerClient {
         side: params?.side,
         asset_id: params?.assetId,
       },
-      TriexError.BalanceManagerNotFound,
+      TriexError.TradingAccountNotFound,
     )
     return parseWith(TradesPageSchema, data, 'trades')
   }

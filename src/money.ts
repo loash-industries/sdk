@@ -59,7 +59,7 @@ export function computeItemQuote(price: bigint, quantity: bigint): bigint {
 }
 
 /**
- * Total quote (CRED base units) a **bid** must deposit into the balance manager
+ * Total quote (CRED base units) a **bid** must deposit into the trading account
  * to place a limit buy of `quantity` at `price`: the quote notional plus the
  * v1 quote-denominated fee (only buyers pay fees; asks are fee-free).
  *

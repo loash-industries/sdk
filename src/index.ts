@@ -57,8 +57,8 @@ export { IndexerClient } from './queries'
 export * as transactions from './transactions'
 export {
   getWalletCurrencyBalance,
-  getBalanceManagerCurrencyBalance,
-  getBalanceManagerItemBalance,
+  getTradingAccountCurrencyBalance,
+  getTradingAccountItemBalance,
   getRegistryMulticoinCollectionId,
   findOwnedItemReceipts,
   fetchCharacterInfo,
@@ -69,7 +69,7 @@ export {
 } from './onchain'
 export {
   prepareWalletCoinInput,
-  sourceItemsIntoBalanceManager,
+  sourceItemsIntoTradingAccount,
 } from './funding'
 export {
   normalizeExecuteResult,
@@ -124,7 +124,7 @@ export type {
   HubEnriched,
   AssemblyOwner,
   AssemblyEnriched,
-  BalanceManagerOwner,
+  TradingAccountOwner,
   SolarSystemName,
   Coordinates,
   SolarSystem,

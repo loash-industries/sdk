@@ -35,15 +35,17 @@ export enum TriexError {
   UnexpectedResponse = 'TRIEX_UNEXPECTED_RESPONSE',
   /** Local input validation failed. */
   ValidationFailed = 'TRIEX_VALIDATION_FAILED',
-  /** Not enough wallet / hangar / balance-manager funds to build the PTB. */
+  /** Not enough wallet / hangar / trading-account funds to build the PTB. */
   InsufficientBalance = 'TRIEX_INSUFFICIENT_BALANCE',
   /**
    * Owned item receipts exist but in a different MultiCoin collection than
    * the market trades (wrong deployment/network, or re-initialized registry).
    */
   CollectionMismatch = 'TRIEX_COLLECTION_MISMATCH',
-  /** No balance manager found for the player (and one was expected). */
-  BalanceManagerNotFound = 'TRIEX_BALANCE_MANAGER_NOT_FOUND',
+  /** No trading account found for the player (and one was expected). */
+  TradingAccountNotFound = 'TRIEX_TRADING_ACCOUNT_NOT_FOUND',
+  /** @deprecated Renamed to {@link TriexError.TradingAccountNotFound}; same value. */
+  BalanceManagerNotFound = 'TRIEX_TRADING_ACCOUNT_NOT_FOUND',
   /** No pool exists for the requested item + storage unit. */
   PoolNotFound = 'TRIEX_POOL_NOT_FOUND',
   /** The requested trade hub / storage unit could not be resolved. */

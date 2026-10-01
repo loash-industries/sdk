@@ -9,7 +9,7 @@ import { ALL_TOOLS, toolsForMode } from '../src/registry.js'
  *
  * An address with no trading account is not an error case — it is where every
  * account starts, and the tool has to say so rather than throw, because the
- * null `balanceManagerId` is the thing that tells an agent to prepare one.
+ * null `tradingAccountId` is the thing that tells an agent to prepare one.
  */
 const config = loadConfig({
   TRIEX_MCP_MODE: 'read',
@@ -59,8 +59,8 @@ describe('account_currency_balances', () => {
     expect(res.isError).toBeFalsy()
     expect(body(res)).toEqual({
       wallet: '750',
-      balanceManager: '0',
-      balanceManagerId: null,
+      tradingAccount: '0',
+      tradingAccountId: null,
     })
   })
 
@@ -88,8 +88,8 @@ describe('account_currency_balances', () => {
 
     expect(body(res)).toEqual({
       wallet: '100',
-      balanceManager: '4200',
-      balanceManagerId: BM_ID,
+      tradingAccount: '4200',
+      tradingAccountId: BM_ID,
     })
   })
 

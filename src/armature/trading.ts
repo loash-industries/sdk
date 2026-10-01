@@ -26,8 +26,8 @@ export interface TradingContext {
   armatureTrading: string
   /** The unit's CapabilityVault — holds the TradeCap the handlers borrow. */
   capVaultId: string
-  /** The organization's shared BalanceManager. */
-  balanceManagerId: string
+  /** The organization's shared TradingAccount. */
+  tradingAccountId: string
 }
 
 /** Order flags shared by the limit-order builders. */
@@ -41,7 +41,7 @@ export interface OrderFlags {
 const single = 'single-vote-only' as const
 
 /**
- * Give the organization a trading account (a shared `BalanceManager`).
+ * Give the organization a trading account (a shared `TradingAccount`).
  *
  * Idempotent only in the sense that a second call aborts on-chain — check
  * `orgs.tradingAccount()` first rather than relying on the abort.
@@ -73,7 +73,7 @@ export function setupTradingAccountAction(
   }
 }
 
-/** Move quote coin (CRED) from the treasury into the balance manager. */
+/** Move quote coin (CRED) from the treasury into the trading account. */
 export function depositCoinToBookAction(
   ctx: TradingContext,
   params: { quoteType: string; amount: bigint; treasuryVaultId: string },
@@ -97,7 +97,7 @@ export function depositCoinToBookAction(
           typeArguments: [params.quoteType],
           arguments: [
             tx.object(params.treasuryVaultId),
-            tx.object(ctx.balanceManagerId),
+            tx.object(ctx.tradingAccountId),
             tx.object(ctx.capVaultId),
             ticket,
           ],
@@ -141,7 +141,7 @@ export function depositFromDaoVaultToBookAction(
           target: `${pkg}::trading_ops::execute_deposit_from_dao_vault_to_book`,
           arguments: [
             tx.object(params.daoVaultId),
-            tx.object(ctx.balanceManagerId),
+            tx.object(ctx.tradingAccountId),
             tx.object(ctx.capVaultId),
             tx.object(ownDaoId),
             ticket,
@@ -177,7 +177,7 @@ export function placeLimitOrderAction(
           target: `${pkg}::place_limit_order::new`,
           typeArguments: [params.quoteType],
           arguments: [
-            tx.pure.id(ctx.balanceManagerId),
+            tx.pure.id(ctx.tradingAccountId),
             tx.pure.id(params.poolId),
             tx.pure.u64(params.price),
             tx.pure.u64(params.quantity),
@@ -193,7 +193,7 @@ export function placeLimitOrderAction(
           typeArguments: [params.quoteType],
           arguments: [
             tx.object(params.poolId),
-            tx.object(ctx.balanceManagerId),
+            tx.object(ctx.tradingAccountId),
             tx.object(ctx.capVaultId),
             tx.object(CLOCK_ID),
             ticket,
@@ -222,7 +222,7 @@ export function cancelOrderAction(
           target: `${pkg}::cancel_order::new`,
           typeArguments: [params.quoteType],
           arguments: [
-            tx.pure.id(ctx.balanceManagerId),
+            tx.pure.id(ctx.tradingAccountId),
             tx.pure.id(params.poolId),
             tx.pure.u64(params.orderId),
           ],
@@ -233,7 +233,7 @@ export function cancelOrderAction(
           typeArguments: [params.quoteType],
           arguments: [
             tx.object(params.poolId),
-            tx.object(ctx.balanceManagerId),
+            tx.object(ctx.tradingAccountId),
             tx.object(ctx.capVaultId),
             tx.object(CLOCK_ID),
             ticket,
@@ -245,7 +245,7 @@ export function cancelOrderAction(
   }
 }
 
-/** Sweep quote coin (CRED) from the balance manager back into the treasury. */
+/** Sweep quote coin (CRED) from the trading account back into the treasury. */
 export function sweepCoinToTreasuryAction(
   ctx: TradingContext,
   params: { quoteType: string; amount: bigint; treasuryVaultId: string },
@@ -262,7 +262,7 @@ export function sweepCoinToTreasuryAction(
           target: `${pkg}::sweep_coin_to_treasury::new`,
           typeArguments: [params.quoteType],
           arguments: [
-            tx.pure.id(ctx.balanceManagerId),
+            tx.pure.id(ctx.tradingAccountId),
             tx.pure.u64(params.amount),
           ],
         }),
@@ -272,7 +272,7 @@ export function sweepCoinToTreasuryAction(
           typeArguments: [params.quoteType],
           arguments: [
             tx.object(params.treasuryVaultId),
-            tx.object(ctx.balanceManagerId),
+            tx.object(ctx.tradingAccountId),
             tx.object(ctx.capVaultId),
             ticket,
           ],
@@ -283,7 +283,7 @@ export function sweepCoinToTreasuryAction(
   }
 }
 
-/** Park items from the balance manager into shared storage. */
+/** Park items from the trading account into shared storage. */
 export function sweepMulticoinToDaoVaultAction(
   ctx: TradingContext,
   params: {
@@ -304,7 +304,7 @@ export function sweepMulticoinToDaoVaultAction(
         tx.moveCall({
           target: `${pkg}::sweep_multicoin_to_dao_vault::new`,
           arguments: [
-            tx.pure.id(ctx.balanceManagerId),
+            tx.pure.id(ctx.tradingAccountId),
             tx.pure.id(params.daoVaultId),
             tx.pure.id(params.collectionId),
             tx.pure.u64(params.assetId),
@@ -316,7 +316,7 @@ export function sweepMulticoinToDaoVaultAction(
           target: `${pkg}::trading_ops::execute_sweep_multicoin_to_dao_vault`,
           arguments: [
             tx.object(params.daoVaultId),
-            tx.object(ctx.balanceManagerId),
+            tx.object(ctx.tradingAccountId),
             tx.object(ctx.capVaultId),
             tx.object(ownDaoId),
             ticket,
@@ -329,14 +329,14 @@ export function sweepMulticoinToDaoVaultAction(
 }
 
 /**
- * Claim a pool's settled balances into the balance manager, appended to an
+ * Claim a pool's settled balances into the trading account, appended to an
  * existing PTB.
  *
  * NOT governance and NOT an action: `withdraw_settled_amounts_permissionless`
- * only ever moves funds pool → balance manager, so it needs no `TradeCap` and
+ * only ever moves funds pool → trading account, so it needs no `TradeCap` and
  * no vote. It exists as a fragment because it belongs in FRONT of a sweep — a
  * resting maker order that filled leaves its proceeds in the pool, not the
- * balance manager, so sweeping without claiming first silently moves less than
+ * trading account, so sweeping without claiming first silently moves less than
  * the caller expects.
  */
 export function appendClaimSettled(
@@ -345,12 +345,12 @@ export function appendClaimSettled(
     triex: string
     quoteType: string
     poolId: string
-    balanceManagerId: string
+    tradingAccountId: string
   },
 ): void {
   tx.moveCall({
     target: `${args.triex}::multicoin_pool::withdraw_settled_amounts_permissionless`,
     typeArguments: [args.quoteType],
-    arguments: [tx.object(args.poolId), tx.object(args.balanceManagerId)],
+    arguments: [tx.object(args.poolId), tx.object(args.tradingAccountId)],
   })
 }

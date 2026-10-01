@@ -28,7 +28,7 @@ function unit(orgId: string, over: Partial<Org> = {}): Org {
     metadata: {},
     members: [],
     ous: [],
-    balanceManagerId: null,
+    tradingAccountId: null,
     subdaoControlCapId: null,
     ...over,
   }

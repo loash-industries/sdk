@@ -6,13 +6,13 @@
  *
  * Walks the real read surface end-to-end: discovery → hub detail → items →
  * pool resolve → orderbook → metadata → hub balances → order status, then the
- * fullnode currency read for a discovered balance manager. Exits non-zero if
+ * fullnode currency read for a discovered trading account. Exits non-zero if
  * any step fails.
  */
 import { SuiGrpcClient } from '@mysten/sui/grpc'
 import {
   ReadOnlyClient,
-  getBalanceManagerCurrencyBalance,
+  getTradingAccountCurrencyBalance,
   getWalletCurrencyBalance,
   STILLNESS_PACKAGE_IDS,
 } from '../dist/index.js'
@@ -99,8 +99,8 @@ await step('poolMetadata', async () => {
   return `"${meta.poolName}" feeRateScaled=${meta.feeRateScaled} feeRate=${meta.feeRate} baseDecimals=${meta.baseAssetDecimals} quoteDecimals=${meta.quoteAssetDecimals}`
 })
 
-// ── 6. order status for the discovered balance manager ───────────────────────
-const bm = order.balanceManagerId
+// ── 6. order status for the discovered trading account ───────────────────────
+const bm = order.tradingAccountId
 await step('openOrders', async () => {
   const page = await ro.openOrders(bm, { limit: 5 })
   return `${page.orders.length} open (first: ${show(page.orders[0] ?? null)})`
@@ -116,7 +116,7 @@ await step('trades', async () => {
 
 // ── 7. fullnode currency reads (no API key involved) ─────────────────────────
 await step('onchain: BM CRED balance (BalanceKey dynamic field)', async () => {
-  const bal = await getBalanceManagerCurrencyBalance(
+  const bal = await getTradingAccountCurrencyBalance(
     sui,
     STILLNESS_PACKAGE_IDS,
     bm,

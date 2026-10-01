@@ -10,7 +10,7 @@ import {
   fetchInventorySlotQuantity,
   fetchSsuOwnerInfo,
   findOwnedItemReceipts,
-  getBalanceManagerItemBalance,
+  getTradingAccountItemBalance,
   getObjectRef,
   getRegistryMulticoinCollectionId,
 } from './onchain'
@@ -88,10 +88,10 @@ export interface SourceItemsParams {
   vaultConfigId: string
   vaultCollectionId: string
   assetId: bigint
-  /** Total amount that must newly arrive in the balance manager. */
+  /** Total amount that must newly arrive in the trading account. */
   amount: bigint
   /** Resolved BM id, or null when the BM is being created in this PTB. */
-  balanceManagerId: string | null
+  tradingAccountId: string | null
   /**
    * When true, the target is "BM holds ≥ amount" (sell funding): the current
    * BM item balance counts toward it. When false (plain deposit), the full
@@ -101,7 +101,7 @@ export interface SourceItemsParams {
 }
 
 /**
- * Ensure the balance manager receives `amount` of `assetId`, sourcing in
+ * Ensure the trading account receives `amount` of `assetId`, sourcing in
  * priority order (exactly the app's sell-funding flow):
  *   1. Wallet-held `multicoin::Balance` receipts in the market's collection.
  *   2. SSU hangar slot (via SSU OwnerCap) — only when the player owns the hub.
@@ -110,7 +110,7 @@ export interface SourceItemsParams {
  * Appends moves to `tx` in place; nothing is submitted. Throws typed
  * `InsufficientBalance` / `CollectionMismatch` / `CharacterNotFound` errors.
  */
-export async function sourceItemsIntoBalanceManager(
+export async function sourceItemsIntoTradingAccount(
   suiClient: ClientWithCoreApi,
   tx: Transaction,
   ids: PackageIds,
@@ -126,11 +126,11 @@ export async function sourceItemsIntoBalanceManager(
   }
 
   const bmState =
-    params.deficitMode && params.balanceManagerId
-      ? await getBalanceManagerItemBalance(
+    params.deficitMode && params.tradingAccountId
+      ? await getTradingAccountItemBalance(
           suiClient,
           ids,
-          params.balanceManagerId,
+          params.tradingAccountId,
           params.vaultCollectionId,
           assetId,
         )

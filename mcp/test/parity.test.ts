@@ -135,7 +135,7 @@ describe('lock-step arguments', () => {
     // Read tools call ReadOnlyClient, whose methods take identity explicitly.
     // Without it, every account-scoped read would look like a violation.
     const openOrders = surface.find((m) => m.path === 'orders.openOrders')
-    expect(openOrders?.params.map((p) => p.name)).toContain('balanceManagerId')
+    expect(openOrders?.params.map((p) => p.name)).toContain('tradingAccountId')
   })
 
   it('expands object parameters without expanding primitives', () => {

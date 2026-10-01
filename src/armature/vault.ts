@@ -67,7 +67,7 @@ export async function resolveDaoVaultId(
 ): Promise<string | null> {
   const registry = await suiClient.core
     .getObject({
-      objectId: ids.daoReceiptVaultRegistry,
+      objectId: ids.ouReceiptVaultRegistry,
       include: { json: true },
     })
     .catch(() => null)

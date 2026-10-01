@@ -63,7 +63,7 @@ export interface OrgSearchParams {
  * Capabilities live on the node, so callers address by identity + capability
  * rather than a hardcoded role name — `roleKey` is a LABEL derived from depth,
  * not a taxonomy to branch on (DESIGN-ARMATURE.md D-A3). Find the trading
- * account with `balanceManagerId`, not with `roleKey === 'officer'`.
+ * account with `tradingAccountId`, not with `roleKey === 'officer'`.
  */
 export interface OrgNode {
   daoId: string
@@ -78,7 +78,7 @@ export interface OrgNode {
   emergencyFreezeId: string | null
   /** This unit's own governance board. */
   members: string[]
-  balanceManagerId: string | null
+  tradingAccountId: string | null
   /** The parent's `SubDAOControl` cap pointing here. Null at the root. */
   subdaoControlCapId: string | null
   /**

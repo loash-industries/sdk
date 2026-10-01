@@ -167,7 +167,7 @@ export const orgTools: ToolDef[] = [
     name: 'org_trading_account',
     title: 'An organization’s trading account',
     description:
-      'The organization’s shared BalanceManager and the unit that holds it, or null when trading was never set up. Feed the id to orders_open / orders_fills / orders_trades / account_sweepable — those take a balance manager id and do not care who owns it.',
+      'The organization’s shared TradingAccount and the unit that holds it, or null when trading was never set up. Feed the id to orders_open / orders_fills / orders_trades / account_sweepable — those take a trading account id and do not care who owns it.',
     kind: 'read',
     sdkPath: 'orgs.tradingAccount',
     inputShape: { ...orgIdShape },

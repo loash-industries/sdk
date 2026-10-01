@@ -56,7 +56,7 @@ export function flattenOrg(org: Org): OrgNode[] {
       capabilityVaultId: unit.capabilityVaultId,
       emergencyFreezeId: unit.emergencyFreezeId,
       members: unit.members,
-      balanceManagerId: unit.balanceManagerId,
+      tradingAccountId: unit.tradingAccountId,
       subdaoControlCapId: unit.subdaoControlCapId,
       roleKey: role.key,
       roleLabel: role.label,
@@ -85,12 +85,12 @@ export function rootNode(nodes: readonly OrgNode[]): OrgNode | null {
 /**
  * The unit carrying the organization's shared trading account.
  *
- * Defined by CAPABILITY — the first node holding a `balanceManagerId` — not by
+ * Defined by CAPABILITY — the first node holding a `tradingAccountId` — not by
  * a role label, so an organization that seats trading somewhere unusual still
  * resolves. Null when the organization has never set up trading.
  */
 export function tradingNode(nodes: readonly OrgNode[]): OrgNode | null {
-  return nodes.find((n) => n.balanceManagerId) ?? null
+  return nodes.find((n) => n.tradingAccountId) ?? null
 }
 
 /**

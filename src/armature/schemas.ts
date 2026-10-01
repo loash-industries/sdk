@@ -76,8 +76,8 @@ export interface Org {
    * Present on the top-level organization only; unresolved addresses omitted.
    */
   actors?: Record<string, OrgActor>
-  /** The unit's trading BalanceManager. Null when it has no trading account. */
-  balanceManagerId: string | null
+  /** The unit's trading TradingAccount. Null when it has no trading account. */
+  tradingAccountId: string | null
   /**
    * The `SubDAOControl` cap on the PARENT that points at this unit — what the
    * `control-*` strategies consume. Null for a top-level organization.
@@ -99,7 +99,7 @@ export const OrgSchema: z.ZodType<Org, unknown> = z.lazy(() =>
       members: z.array(z.string()),
       ous: z.array(OrgSchema),
       actors: z.record(z.string(), OrgActorSchema).optional(),
-      balance_manager_id: z.string().nullable(),
+      trading_account_id: z.string().nullable(),
       subdao_control_cap_id: z.string().nullable(),
     })
     .transform((v): Org => ({
@@ -114,7 +114,7 @@ export const OrgSchema: z.ZodType<Org, unknown> = z.lazy(() =>
       members: v.members,
       ous: v.ous,
       actors: v.actors,
-      balanceManagerId: v.balance_manager_id,
+      tradingAccountId: v.trading_account_id,
       subdaoControlCapId: v.subdao_control_cap_id,
     })),
 )

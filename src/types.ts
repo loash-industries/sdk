@@ -8,7 +8,7 @@ import type {
   AssemblyOwnerSchema,
   AssetBalanceSchema,
   AutocompleteSystemsSchema,
-  BalanceManagerOwnerSchema,
+  TradingAccountOwnerSchema,
   BatchSystemsSchema,
   CoordinateSearchSchema,
   CoordinatesSchema,
@@ -118,10 +118,10 @@ export interface PackageIds {
   // Each upgraded package carries a `*Original` sibling. `moveCall` targets use
   // the CURRENT id; dynamic-field key types and `StructType` filters must use
   // the ORIGINAL, because objects keep the type tag of the package version that
-  // created them. On `stillness` these have already diverged for
-  // `armatureTrading` and `armatureVault`, so it is not a hypothetical.
+  // created them. Cycle 7 fresh-published every package, so on `stillness` each
+  // pair is currently equal — they diverge again on the first upgrade.
 
-  /** armature_framework: dao, board_voting, proposal, composite, treasury_vault, tribe. */
+  /** armature_framework: ou, board_voting, proposal, composite, treasury_vault, controller. */
   armature: string
   armatureOriginal: string
   /** armature_proposals: the governance payload types and their `execute_*` dispatchers. */
@@ -130,13 +130,11 @@ export interface PackageIds {
   /** armature_trading: governance-wrapped CLOB operations. */
   armatureTrading: string
   armatureTradingOriginal: string
-  /** armature_vault: `dao_receipt_vault` (shared storage) + `acl` principals. */
+  /** armature_vault: `ou_receipt_vault` (shared storage) + `acl` principals. */
   armatureVault: string
   armatureVaultOriginal: string
-  /** armature_world_bridge: tribe allowlist / autojoin. */
-  armatureWorldBridge: string
-  /** `DaoReceiptVaultRegistry` shared object (not a package). */
-  daoReceiptVaultRegistry: string
+  /** `ou_receipt_vault::OuReceiptVaultRegistry` shared object (not a package). */
+  ouReceiptVaultRegistry: string
 }
 
 // ─── Client config ──────────────────────────────────────────────────────────
@@ -184,7 +182,7 @@ export type NearbyHub = z.output<typeof NearbyHubSchema>
 export type HubEnriched = z.output<typeof HubEnrichedSchema>
 export type AssemblyOwner = z.output<typeof AssemblyOwnerSchema>
 export type AssemblyEnriched = z.output<typeof AssemblyEnrichedSchema>
-export type BalanceManagerOwner = z.output<typeof BalanceManagerOwnerSchema>
+export type TradingAccountOwner = z.output<typeof TradingAccountOwnerSchema>
 export type SolarSystemName = z.output<typeof SolarSystemNameSchema>
 export type Coordinates = z.output<typeof CoordinatesSchema>
 export type SolarSystem = z.output<typeof SolarSystemSchema>
@@ -259,7 +257,7 @@ export interface TradeHubDetail {
 
 /** The player's on-chain trading account. */
 export interface TradingAccount {
-  balanceManagerId: string
+  tradingAccountId: string
   owner: string
 }
 
@@ -270,16 +268,16 @@ export interface TradingAccount {
 export interface CurrencyBalances {
   /** CRED held as wallet coins (base units). */
   wallet: bigint
-  /** CRED held inside the balance manager (base units); 0n when no BM. */
-  balanceManager: bigint
-  /** Resolved balance manager, when one exists. */
-  balanceManagerId: string | null
+  /** CRED held inside the trading account (base units); 0n when no BM. */
+  tradingAccount: bigint
+  /** Resolved trading account, when one exists. */
+  tradingAccountId: string | null
 }
 
 // ─── Method params ──────────────────────────────────────────────────────────
 
 export interface EnsureAccountResult {
-  balanceManagerId: string
+  tradingAccountId: string
   created: boolean
 }
 
@@ -288,8 +286,8 @@ export interface DiscoveryFilters {
   storageUnitIds?: string[]
   /** Numeric item type / asset id. */
   assetId?: string
-  /** Only orders owned by this balance manager ("my orders"). */
-  balanceManagerId?: string
+  /** Only orders owned by this trading account ("my orders"). */
+  tradingAccountId?: string
   /** Default `both`. */
   side?: 'buy' | 'sell' | 'both'
   /** Restrict to location-revealed (public) hubs. */

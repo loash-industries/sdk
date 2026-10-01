@@ -223,7 +223,7 @@ describe('account.depositCurrency', () => {
     ])
     // The created BM id was captured from objectChanges (read-your-writes).
     expect(await c.account.get()).toEqual({
-      balanceManagerId: BM_ID,
+      tradingAccountId: BM_ID,
       owner: OWNER,
     })
   })
@@ -276,12 +276,12 @@ describe('account.withdrawCurrency', () => {
     ])
   })
 
-  it('fails typed when no balance manager exists', async () => {
+  it('fails typed when no trading account exists', async () => {
     const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(null) })
     const { executor } = captureExecutor()
     await expect(
       client(sui, executor).account.withdrawCurrency(),
-    ).rejects.toMatchObject({ code: TriexError.BalanceManagerNotFound })
+    ).rejects.toMatchObject({ code: TriexError.TradingAccountNotFound })
   })
 })
 
@@ -654,7 +654,7 @@ describe('orders.cancel family', () => {
     ])
   })
 
-  it('cancel without a balance manager fails typed', async () => {
+  it('cancel without a trading account fails typed', async () => {
     const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(null) })
     const { executor } = captureExecutor()
     await expect(
@@ -663,7 +663,7 @@ describe('orders.cancel family', () => {
         assetId: '70810',
         orderId: 1n,
       }),
-    ).rejects.toMatchObject({ code: TriexError.BalanceManagerNotFound })
+    ).rejects.toMatchObject({ code: TriexError.TradingAccountNotFound })
   })
 })
 
@@ -675,7 +675,7 @@ describe('account.claimSettled', () => {
       [
         '/sweepable',
         {
-          balance_manager_id: BM_ID,
+          trading_account_id: BM_ID,
           as_of_checkpoint: '123',
           pools: [
             {
@@ -723,7 +723,7 @@ describe('account.claimSettled', () => {
       [
         '/sweepable',
         {
-          balance_manager_id: BM_ID,
+          trading_account_id: BM_ID,
           as_of_checkpoint: null,
           pools: [],
           items: [],
@@ -856,18 +856,18 @@ describe('explainMoveAbort', () => {
  * The branch that matters most is the one a new player is in: a wallet with
  * CRED and no trading account at all. That has to answer, not throw — it is
  * the state every account starts in, and the answer ("you hold X, none of it
- * is deposited, you have no balance manager") is exactly what tells a caller
+ * is deposited, you have no trading account") is exactly what tells a caller
  * to create one.
  */
 describe('balances.currency', () => {
   const credBalance = (amount: bigint) => bcs.u64().serialize(amount).toBytes()
 
-  it('reports wallet CRED and a null balance manager when none exists', async () => {
+  it('reports wallet CRED and a null trading account when none exists', async () => {
     const sui = fakeSuiClient({
       listCoins: () => ({ objects: [{ balance: '700' }, { balance: '50' }] }),
       listOwnedObjects: () => bmPage(null),
       getObject: () => {
-        throw new Error('must not read a balance manager that does not exist')
+        throw new Error('must not read a trading account that does not exist')
       },
     })
 
@@ -875,12 +875,12 @@ describe('balances.currency', () => {
 
     expect(balances).toEqual({
       wallet: 750n,
-      balanceManager: 0n,
-      balanceManagerId: null,
+      tradingAccount: 0n,
+      tradingAccountId: null,
     })
   })
 
-  it('adds the balance manager holding once one exists', async () => {
+  it('adds the trading account holding once one exists', async () => {
     const sui = fakeSuiClient({
       listCoins: () => ({ objects: [{ balance: '100' }] }),
       listOwnedObjects: () => bmPage(BM_ID),
@@ -896,8 +896,8 @@ describe('balances.currency', () => {
 
     expect(balances).toEqual({
       wallet: 100n,
-      balanceManager: 4200n,
-      balanceManagerId: BM_ID,
+      tradingAccount: 4200n,
+      tradingAccountId: BM_ID,
     })
   })
 
@@ -909,12 +909,12 @@ describe('balances.currency', () => {
 
     expect(await client(sui, jest.fn()).balances.currency()).toEqual({
       wallet: 0n,
-      balanceManager: 0n,
-      balanceManagerId: null,
+      tradingAccount: 0n,
+      tradingAccountId: null,
     })
   })
 
-  it('treats a balance manager with no CRED entry as zero, not an error', async () => {
+  it('treats a trading account with no CRED entry as zero, not an error', async () => {
     const sui = fakeSuiClient({
       listCoins: () => ({ objects: [{ balance: '9' }] }),
       listOwnedObjects: () => bmPage(BM_ID),
@@ -928,8 +928,8 @@ describe('balances.currency', () => {
     })
 
     const balances = await client(sui, jest.fn()).balances.currency()
-    expect(balances.balanceManager).toBe(0n)
-    expect(balances.balanceManagerId).toBe(BM_ID)
+    expect(balances.tradingAccount).toBe(0n)
+    expect(balances.tradingAccountId).toBe(BM_ID)
   })
 
   it('reads an explicit address without needing a configured one', async () => {

@@ -47,7 +47,7 @@ function wireOrg(over: Record<string, unknown> = {}): Record<string, unknown> {
     metadata: {},
     members: [],
     ous: [],
-    balance_manager_id: null,
+    trading_account_id: null,
     subdao_control_cap_id: null,
     ...over,
   }
@@ -75,7 +75,7 @@ describe('OrgQueries request building', () => {
               name: 'Northwind — Officers',
               emergency_freeze_id: OFFICERS,
               members: [ADDR],
-              balance_manager_id: OFFICERS,
+              trading_account_id: OFFICERS,
               subdao_control_cap_id: OFFICERS,
             }),
           },
@@ -89,7 +89,7 @@ describe('OrgQueries request building', () => {
     expect(org.metadata.imageUrl).toBe('ipfs://icon')
     expect(org.actors?.[ADDR].name).toBe('Rin Farshot')
     // Recursion carries the transform into children.
-    expect(org.ous[0].balanceManagerId).toBe(OFFICERS)
+    expect(org.ous[0].tradingAccountId).toBe(OFFICERS)
     expect(org.ous[0].subdaoControlCapId).toBe(OFFICERS)
   })
 
@@ -308,7 +308,7 @@ describe('ReadOnlyClient.orgs', () => {
           name: 'Officers',
           emergency_freeze_id: OFFICERS,
           members: [ADDR],
-          balance_manager_id: '0xbm',
+          trading_account_id: '0xbm',
         }),
       ],
     })
@@ -321,7 +321,7 @@ describe('ReadOnlyClient.orgs', () => {
     expect(seats[0].rank).toBe(0)
 
     const trading = await client.orgs.tradingAccount(ORG)
-    expect(trading?.balanceManagerId).toBe('0xbm')
+    expect(trading?.tradingAccountId).toBe('0xbm')
     expect(trading?.node.daoId).toBe(OFFICERS)
   })
 })

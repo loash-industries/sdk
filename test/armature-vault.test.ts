@@ -264,7 +264,7 @@ describe('vault write PTBs', () => {
     const tx = new Transaction()
     initializeDaoVaultTx(tx, {
       armatureVault: ids.armatureVault,
-      registryId: ids.daoReceiptVaultRegistry,
+      registryId: ids.ouReceiptVaultRegistry,
       storageUnitId: SSU,
       registrantOrgId: OFFICERS,
       vaultConfigId: hex('53'),
@@ -320,7 +320,7 @@ describe('vault write PTBs', () => {
     const tx2 = new Transaction()
     deinitializeDaoVaultTx(tx2, {
       armatureVault: ids.armatureVault,
-      registryId: ids.daoReceiptVaultRegistry,
+      registryId: ids.ouReceiptVaultRegistry,
       vaultId: VAULT,
       editorDaoId: ROOT,
     })
@@ -434,7 +434,7 @@ function unit(orgId: string, over: Partial<Org> = {}): Org {
     metadata: {},
     members: [],
     ous: [],
-    balanceManagerId: null,
+    tradingAccountId: null,
     subdaoControlCapId: null,
     ...over,
   }
@@ -476,7 +476,7 @@ function harness(
     return { digest: 'D1', objectChanges: [] }
   })
   const getObject = jest.fn(async ({ objectId }: any) => {
-    if (objectId === ids.daoReceiptVaultRegistry) {
+    if (objectId === ids.ouReceiptVaultRegistry) {
       return { object: { json: { vaults: { id: { id: TABLE } } } } }
     }
     return { object: { json: daoJson() } }
@@ -514,7 +514,7 @@ function harness(
           vaultConfigId: hex('53'),
         }),
         sweepable: async () =>
-          opts.sweepable ?? { balanceManagerId: BM, pools: [], items: [] },
+          opts.sweepable ?? { tradingAccountId: BM, pools: [], items: [] },
         orgs: {},
       } as never,
       ids,
@@ -531,7 +531,7 @@ function harness(
           treasuryId: TREASURY,
           members: [ALICE],
           subdaoControlCapId: hex('e7'),
-          balanceManagerId: BM,
+          tradingAccountId: BM,
         }),
       ],
     }),
@@ -626,7 +626,7 @@ describe('sweepAll', () => {
     const { handle, captured } = harness({
       vaultFor: { [`${SSU}|${OFFICERS}`]: VAULT },
       sweepable: {
-        balanceManagerId: BM,
+        tradingAccountId: BM,
         pools: [
           {
             poolId: hex('60'),
@@ -655,7 +655,7 @@ describe('sweepAll', () => {
       // A vault at SSU only — the stack at OTHER_SSU has nowhere to go.
       vaultFor: { [`${SSU}|${OFFICERS}`]: VAULT },
       sweepable: {
-        balanceManagerId: BM,
+        tradingAccountId: BM,
         pools: [],
         items: [item(SSU, '70810', 4n), item(OTHER_SSU, '999', 2n)],
       },
@@ -680,7 +680,7 @@ describe('sweepAll', () => {
 
   it('refuses when there is nothing to sweep at all', async () => {
     const { handle } = harness({
-      sweepable: { balanceManagerId: BM, pools: [], items: [] },
+      sweepable: { tradingAccountId: BM, pools: [], items: [] },
     })
     await expect(handle.orders.sweepAll()).rejects.toMatchObject({
       code: TriexError.ValidationFailed,
@@ -691,7 +691,7 @@ describe('sweepAll', () => {
   it('explains when every stack was skipped for want of a vault', async () => {
     const { handle } = harness({
       sweepable: {
-        balanceManagerId: BM,
+        tradingAccountId: BM,
         pools: [],
         items: [item(SSU, '70810', 4n)],
       },

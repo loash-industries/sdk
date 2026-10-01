@@ -145,17 +145,17 @@ export async function getWalletCurrencyBalance(
 }
 
 /**
- * CRED held inside a balance manager, read via the BM's `balances` Bag:
+ * CRED held inside a trading account, read via the BM's `balances` Bag:
  * `BalanceKey<CRED>` → `sui::balance::Balance<CRED>` (bare u64). Returns 0n
  * when the BM has no CRED entry (or the object cannot be read).
  */
-export async function getBalanceManagerCurrencyBalance(
+export async function getTradingAccountCurrencyBalance(
   suiClient: ClientWithCoreApi,
   ids: PackageIds,
-  balanceManagerId: string,
+  tradingAccountId: string,
 ): Promise<bigint> {
   const bmObj = await core(suiClient)
-    .getObject({ objectId: balanceManagerId, include: { json: true } })
+    .getObject({ objectId: tradingAccountId, include: { json: true } })
     .catch(() => null)
 
   const bmFields = bmObj?.object?.json
@@ -178,21 +178,21 @@ export async function getBalanceManagerCurrencyBalance(
 // ─── Item balances ───────────────────────────────────────────────────────────
 
 /**
- * Item balance held inside a balance manager for one (collection, asset).
+ * Item balance held inside a trading account for one (collection, asset).
  * `MultiCoinBalanceKey → multicoin::Balance` is a dynamic *object* field; the
  * child's content is BCS-decoded (mirrors the app / server).
  */
-export async function getBalanceManagerItemBalance(
+export async function getTradingAccountItemBalance(
   suiClient: ClientWithCoreApi,
   ids: PackageIds,
-  balanceManagerId: string,
+  tradingAccountId: string,
   collectionId: string,
   assetId: bigint,
 ): Promise<{ hasKey: boolean; balance: bigint }> {
   const keyType = `${ids.triex}::trading_account::MultiCoinBalanceKey`
   const resp = await core(suiClient)
     .getDynamicObjectField({
-      parentId: balanceManagerId,
+      parentId: tradingAccountId,
       name: {
         type: keyType,
         bcs: serializeMultiCoinBalanceKey(collectionId, assetId),

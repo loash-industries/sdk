@@ -35,28 +35,26 @@ export const STILLNESS_PACKAGE_IDS: PackageIds = {
     '0x7be18d6294e533bedd9a5d70a96ce8d9d4b87a7c74188ba65d3fe966bbed9d92',
   clock: CLOCK_ID,
 
-  // Armature. `*Original` differs from the current id wherever the package has
-  // been upgraded — see the PackageIds doc comment for which id goes where.
+  // Armature — cycle 7 fresh publishes (armature/armature-vault/armature-trading
+  // `Published.toml` → `testnet_stillness`), so every `*Original` equals its id.
   armature:
-    '0xee0b501592a5696d2ce284086c054e9e6bc9321e5e468ab4b8bd0ce70570c048',
+    '0x0a9eee47251a9f8a264a18804b1d5e553514720c4f4f765a481d1f12b492624c',
   armatureOriginal:
-    '0xee0b501592a5696d2ce284086c054e9e6bc9321e5e468ab4b8bd0ce70570c048',
+    '0x0a9eee47251a9f8a264a18804b1d5e553514720c4f4f765a481d1f12b492624c',
   armatureProposals:
-    '0x6e5df7cf66e083181bc59d169a59e4f99ff493e9aded6fdabff71978e344f93d',
+    '0x19ccd64e194ed97a07c929459be44a06357f2eeef774d2800626f51d7ed0b599',
   armatureProposalsOriginal:
-    '0x6e5df7cf66e083181bc59d169a59e4f99ff493e9aded6fdabff71978e344f93d',
+    '0x19ccd64e194ed97a07c929459be44a06357f2eeef774d2800626f51d7ed0b599',
   armatureTrading:
-    '0xf9ea45362bc1b2b07de91fd5f5fbad952d2ec5a5add3a87816bb76145031defd',
+    '0xe7060901772310333cfe7ca055ce5bb06a067e4209b5db3fe684ac3e6b2a0fce',
   armatureTradingOriginal:
-    '0x0493e8ccbf9477e1b37b0332f3be7abefe4b5fda3731cfe48bf5d6e7fccda1f6',
+    '0xe7060901772310333cfe7ca055ce5bb06a067e4209b5db3fe684ac3e6b2a0fce',
   armatureVault:
-    '0x299e2dce9e586ef1554fe292146cbdeafce894a1d743996e1104e8643d908df8',
+    '0xf447556abd7a92cc8690d626e1dd85dd40510c4a4dd75dcb5671f88ddfaec87e',
   armatureVaultOriginal:
-    '0x3af6edb64f575cb65a89f1c8f445a2e2aad05324a1586aad9e2651191bf4f99b',
-  armatureWorldBridge:
-    '0x0b341844de4bac0dc824f2dd0bc6820c1dee8c7bd83ed23a827d0a859759e087',
-  daoReceiptVaultRegistry:
-    '0x647c96dd2cd1f84ae441e68b867d9ec48c9be06fd99357a0d3653250e2542623',
+    '0xf447556abd7a92cc8690d626e1dd85dd40510c4a4dd75dcb5671f88ddfaec87e',
+  ouReceiptVaultRegistry:
+    '0x1013b7921bae7623ec066ae9d328cad2e72c47b3325239e93b20c45156794ddf',
 }
 
 export const NETWORK_PRESETS: Record<TriexNetwork, PackageIds> = {
