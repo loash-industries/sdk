@@ -35,6 +35,25 @@ describe('normalizeExecuteResult', () => {
     )
   })
 
+  it('normalizes a simulateTransaction result (digest only in the effects)', () => {
+    const res = normalizeExecuteResult({
+      $kind: 'Transaction',
+      Transaction: {
+        status: { success: true, error: null },
+        effects: {
+          transactionDigest: 'SimDigest',
+          changedObjects: [{ objectId: '0x1', idOperation: 'Created' }],
+        },
+        objectTypes: { '0x1': BM_TYPE },
+      },
+      commandResults: [],
+    })
+    expect(res.digest).toBe('SimDigest')
+    expect(res.createdObjects).toEqual([
+      { objectId: '0x1', objectType: BM_TYPE },
+    ])
+  })
+
   it('falls back to the objectTypes map when effects are not included', () => {
     const res = normalizeExecuteResult({
       $kind: 'Transaction',

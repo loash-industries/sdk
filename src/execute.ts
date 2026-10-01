@@ -61,9 +61,13 @@ export async function executeAndNormalize<T>(
 export function normalizeExecuteResult(raw: unknown): NormalizedExecution {
   const r = raw as any
 
-  // v2 core-client TransactionResult (Transaction | FailedTransaction).
+  // v2 core-client TransactionResult (Transaction | FailedTransaction). A
+  // `simulateTransaction` result has the same shape but no top-level digest —
+  // only the effects carry it — so a simulate-only executor (a dry run that
+  // previews any write without signing) normalizes too.
   const node = r?.Transaction ?? r?.FailedTransaction
-  if (node && typeof node.digest === 'string') {
+  const digest = node?.digest ?? node?.effects?.transactionDigest
+  if (node && typeof digest === 'string') {
     const failed =
       r?.$kind === 'FailedTransaction' ||
       r?.FailedTransaction !== undefined ||
@@ -73,7 +77,7 @@ export function normalizeExecuteResult(raw: unknown): NormalizedExecution {
       const explained = explainMoveAbort(errorText)
       throw new TriexClientError(
         TriexError.TransactionFailed,
-        `Transaction ${node.digest} failed on-chain${explained ? `: ${explained}` : ''} (${errorText}).`,
+        `Transaction ${digest} failed on-chain${explained ? `: ${explained}` : ''} (${errorText}).`,
         node.status?.error,
       )
     }
@@ -96,7 +100,7 @@ export function normalizeExecuteResult(raw: unknown): NormalizedExecution {
         createdObjects.push({ objectId, objectType })
       }
     }
-    return { digest: node.digest, createdObjects, raw }
+    return { digest, createdObjects, raw }
   }
 
   // Legacy shape: digest at the top level, optional objectChanges.
