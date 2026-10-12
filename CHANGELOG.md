@@ -1,3 +1,16 @@
+## 5.0.0 (2026-10-12)
+
+* feat(world)!: read recipes as multi-output blueprints ([c5a9956](https://github.com/loash-industries/sdk/commit/c5a9956))
+
+### BREAKING CHANGE
+
+* recipes() and recipesFor() return the blueprint shapes
+above, recipesFor takes any item's assetId, and the Recipe and
+RecipeMaterial types are gone. SDK 4.x cannot parse the gateway's current
+recipe responses.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+
 ## 4.0.0 (2026-10-01)
 
 * feat!: Cycle 7 SDK ([dffa2d4](https://github.com/loash-industries/sdk/commit/dffa2d4)), closes [#171](https://github.com/loash-industries/sdk/issues/171)
