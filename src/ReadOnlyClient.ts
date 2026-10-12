@@ -50,13 +50,14 @@ import type {
   FillDetail,
   HubEconomics,
   ItemInfo,
+  ItemBlueprints,
+  Blueprint,
   OrderDetail,
   OrderLookupParams,
   PlatformStats,
   PoolFees,
   RecentTradesPage,
   RecentTradesParams,
-  Recipe,
   Route,
   RouteComparison,
   RouteParams,
@@ -481,14 +482,17 @@ export class ReadOnlyClient {
     return this.indexer.worldItem(assetId)
   }
 
-  /** Every crafting recipe — static, cache it. 20 CU. */
-  recipes(): Promise<Recipe[]> {
+  /** Every crafting recipe, as blueprints — static, cache it. 20 CU. */
+  recipes(): Promise<Blueprint[]> {
     return this.indexer.recipes()
   }
 
-  /** Recipes producing one item; `[]` when it is not craftable. 20 CU. */
-  recipesFor(productAssetId: string): Promise<Recipe[]> {
-    return this.indexer.recipesFor(productAssetId)
+  /**
+   * Blueprints producing (`producedBy`) and consuming (`usedIn`) one item;
+   * both empty when no blueprint touches it. 20 CU.
+   */
+  recipesFor(assetId: string): Promise<ItemBlueprints> {
+    return this.indexer.recipesFor(assetId)
   }
 
   // ─── Routing ──────────────────────────────────────────────────────────────

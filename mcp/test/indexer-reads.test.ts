@@ -241,8 +241,8 @@ describe('indexer reads reach the endpoint their inputs describe', () => {
     },
     {
       tool: 'world_recipes_for',
-      args: { productAssetId: '77753' },
-      payload: [],
+      args: { assetId: '77753' },
+      payload: { typeId: 77753, name: 'Embark', producedBy: [], usedIn: [] },
       path: '/v1/world/recipes/77753',
     },
   ]
@@ -269,12 +269,17 @@ describe('indexer reads reach the endpoint their inputs describe', () => {
     )
   })
 
-  it('answers "not craftable" with [] rather than an error', async () => {
+  it('answers "no blueprint touches it" with empty lists rather than an error', async () => {
     captureFetch(undefined, 404)
     const res = await tool('world_recipes_for').handler(ctx(), {
-      productAssetId: '1',
+      assetId: '1',
     })
-    expect(JSON.parse(res.content[0]!.text)).toEqual([])
+    expect(JSON.parse(res.content[0]!.text)).toEqual({
+      assetId: '1',
+      name: null,
+      producedBy: [],
+      usedIn: [],
+    })
   })
 
   it('takes order ids as u128 decimal strings, never numbers', () => {

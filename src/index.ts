@@ -114,6 +114,7 @@ export { untilIndexed } from './wait'
 // Known values of the open enumerations in gateway responses (a value outside
 // these still parses — see `openEnum` in schemas.ts).
 export {
+  BLUEPRINT_KINDS,
   DISPLAY_PRICE_TIERS,
   JUMP_TYPES,
   ORDER_STATUSES,
@@ -239,8 +240,10 @@ export type {
   // World reference data
   WorldItem,
   ItemInfo,
-  Recipe,
-  RecipeMaterial,
+  Blueprint,
+  BlueprintItem,
+  BlueprintFacility,
+  ItemBlueprints,
   // Routing
   Route,
   RouteComparison,

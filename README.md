@@ -258,7 +258,9 @@ const [who] = await client.characters.batch({ addresses: [wallet] })
 
 // Static reference data — fetch once, cache.
 const items = await client.world.items()            // assetId strings
-const bom = await client.world.recipesFor('77753')  // [] if not craftable
+const { producedBy, usedIn } = await client.world.recipesFor('77753')
+// producedBy: the blueprints that make it (inputs, outputs, kind, facilities)
+// usedIn: the blueprints that consume it — both [] if no blueprint touches it
 
 // Routes take system NAMES — see the note below.
 const route = await client.routing.route({

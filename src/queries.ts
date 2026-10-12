@@ -39,12 +39,13 @@ import {
   DisplayPricesSchema,
   FillDetailSchema,
   HubEconomicsSchema,
+  ItemBlueprintsSchema,
   ItemInfoSchema,
+  BlueprintSchema,
   OrderDetailSchema,
   PlatformStatsSchema,
   PoolFeesSchema,
   RecentTradesPageSchema,
-  RecipeSchema,
   RouteComparisonSchema,
   RouteSchema,
   RoutingStatsSchema,
@@ -100,13 +101,14 @@ import type {
   FillDetail,
   HubEconomics,
   ItemInfo,
+  ItemBlueprints,
+  Blueprint,
   OrderDetail,
   OrderLookupParams,
   PlatformStats,
   PoolFees,
   RecentTradesPage,
   RecentTradesParams,
-  Recipe,
   Route,
   RouteComparison,
   RouteParams,
@@ -918,27 +920,35 @@ export class IndexerClient {
     return parseWith(ItemInfoSchema, data, 'worldItem')
   }
 
-  /** Every crafting recipe (static data — fetch once and cache). 20 CU. */
-  async recipes(): Promise<Recipe[]> {
+  /**
+   * Every crafting recipe, as blueprints: inputs, outputs (often several for
+   * refining), `kind` and the facilities that run it. Includes `reverse`
+   * blueprints; skip those when costing an item. Static data — fetch once
+   * and cache. 20 CU.
+   */
+  async recipes(): Promise<Blueprint[]> {
     const data = await this.get('/v1/world/recipes')
-    return parseWith(z.array(RecipeSchema), data, 'recipes')
+    return parseWith(z.array(BlueprintSchema), data, 'recipes')
   }
 
   /**
-   * The recipes that produce one item (by product type id). `[]` when
-   * nothing crafts it — the CDN answers that with a 404, which is the
-   * ordinary "not craftable" answer rather than an error. 20 CU.
+   * Every blueprint that touches one item: `producedBy` (its recipes) and
+   * `usedIn` (what it is an input to). Both lists are empty when no blueprint
+   * touches it — the CDN answers that with a 404, which is the ordinary
+   * "not craftable, not an ingredient" answer rather than an error. 20 CU.
    */
-  async recipesFor(productAssetId: string): Promise<Recipe[]> {
+  async recipesFor(assetId: string): Promise<ItemBlueprints> {
     try {
       const data = await this.get(
-        `/v1/world/recipes/${encodeURIComponent(productAssetId)}`,
+        `/v1/world/recipes/${encodeURIComponent(assetId)}`,
         undefined,
         TriexError.ItemNotFound,
       )
-      return parseWith(z.array(RecipeSchema), data, 'recipesFor')
+      return parseWith(ItemBlueprintsSchema, data, 'recipesFor')
     } catch (e) {
-      if (e instanceof TriexClientError && e.status === 404) return []
+      if (e instanceof TriexClientError && e.status === 404) {
+        return { assetId, name: null, producedBy: [], usedIn: [] }
+      }
       throw e
     }
   }

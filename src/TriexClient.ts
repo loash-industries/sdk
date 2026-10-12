@@ -125,13 +125,14 @@ import type {
   FillDetail,
   HubEconomics,
   ItemInfo,
+  ItemBlueprints,
+  Blueprint,
   OrderDetail,
   OrderLookupParams,
   PlatformStats,
   PoolFees,
   RecentTradesPage,
   RecentTradesParams,
-  Recipe,
   Route,
   RouteComparison,
   RouteParams,
@@ -1361,14 +1362,17 @@ class WorldApi {
     return this.c.indexer.worldItem(assetId)
   }
 
-  /** Every crafting recipe. 20 CU. */
-  recipes(): Promise<Recipe[]> {
+  /** Every crafting recipe, as blueprints. 20 CU. */
+  recipes(): Promise<Blueprint[]> {
     return this.c.indexer.recipes()
   }
 
-  /** The recipes producing one item — `[]` when it is not craftable. 20 CU. */
-  recipesFor(productAssetId: string): Promise<Recipe[]> {
-    return this.c.indexer.recipesFor(productAssetId)
+  /**
+   * Blueprints producing (`producedBy`) and consuming (`usedIn`) one item —
+   * both empty when no blueprint touches it. 20 CU.
+   */
+  recipesFor(assetId: string): Promise<ItemBlueprints> {
+    return this.c.indexer.recipesFor(assetId)
   }
 }
 

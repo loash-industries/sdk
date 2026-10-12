@@ -1512,7 +1512,16 @@ export const ItemInfoSchema = z
     symbol: v.symbol,
   }))
 
-export const RecipeMaterialSchema = z
+/** Known blueprint kinds. */
+export const BLUEPRINT_KINDS = [
+  'manufacture',
+  'refine',
+  'construct',
+  'reverse',
+] as const
+
+/** One input or output line of a blueprint. */
+export const BlueprintItemSchema = z
   .object({
     id: z.number(),
     name: z.string().optional(),
@@ -1520,30 +1529,83 @@ export const RecipeMaterialSchema = z
   })
   .transform((v) => ({
     assetId: String(v.id),
-    name: v.name ?? null,
-    /** Units consumed per run. */
+    name: v.name || null,
+    /** Units consumed or produced per run. */
     quantity: v.quantity,
   }))
 
-/** One crafting recipe: a production run of a product item. */
-export const RecipeSchema = z
+/** A facility that can run a blueprint, with its per-job run limits. */
+export const BlueprintFacilitySchema = z
   .object({
-    productId: z.number(),
-    productName: z.string(),
-    outputQuantity: z.number(),
-    time: z.number(),
-    materials: z.array(RecipeMaterialSchema),
+    typeId: z.number(),
+    name: z.string(),
+    maxInputRuns: z.number(),
+    maxOutputRuns: z.number(),
   })
   .transform((v) => ({
-    /** The crafted item's type id, as a string (joins to `assetId`). */
-    productAssetId: String(v.productId),
-    productName: v.productName,
-    /** Units produced per run. */
-    outputQuantity: v.outputQuantity,
-    /** Craft time in seconds; null when unknown (wire `-1`). */
-    craftTimeSeconds: v.time < 0 ? null : v.time,
-    /** Bill of materials per run. */
-    materials: v.materials,
+    /** The facility's item type id (a Refinery, Printer, ...). */
+    assetId: String(v.typeId),
+    name: v.name || null,
+    maxInputRuns: v.maxInputRuns,
+    maxOutputRuns: v.maxOutputRuns,
+  }))
+
+/**
+ * One crafting recipe, as a blueprint decoded from the game client: a run
+ * consumes `inputs` and yields `outputs` (refining often yields several).
+ */
+export const BlueprintSchema = z
+  .object({
+    blueprintId: z.number().nullable(),
+    primaryTypeId: z.number(),
+    kind: openEnum(BLUEPRINT_KINDS),
+    runTime: z.number(),
+    inputs: z.array(BlueprintItemSchema),
+    outputs: z.array(BlueprintItemSchema),
+    facilities: z.array(BlueprintFacilitySchema),
+  })
+  .transform((v) => ({
+    /** Null for `construct` entries, which are not industry blueprints. */
+    blueprintId: v.blueprintId,
+    /**
+     * The item the blueprint is keyed by: its main output for `manufacture`
+     * and `construct`, the ore or salvage consumed for `refine`.
+     */
+    primaryAssetId: String(v.primaryTypeId),
+    /**
+     * `manufacture` builds from parts; `refine` breaks down ore, crude matter
+     * or salvage; `construct` is a construction-site structure; `reverse` is
+     * the backward half of a production loop (unpacking, D2 Fuel → Salt).
+     * Cost an item only from the first three, or it ends up priced from its
+     * own derivatives.
+     */
+    kind: v.kind,
+    /** Run time in seconds; null when unknown (wire `-1`). */
+    runTimeSeconds: v.runTime < 0 ? null : v.runTime,
+    inputs: v.inputs,
+    outputs: v.outputs,
+    /**
+     * Where it can run. Empty for `construct` entries, and for the few
+     * industry blueprints no facility can run (players cannot use those).
+     */
+    facilities: v.facilities,
+  }))
+
+/** Every blueprint that produces or consumes one item. */
+export const ItemBlueprintsSchema = z
+  .object({
+    typeId: z.number(),
+    name: z.string(),
+    producedBy: z.array(BlueprintSchema),
+    usedIn: z.array(BlueprintSchema),
+  })
+  .transform((v) => ({
+    assetId: String(v.typeId),
+    name: v.name || null,
+    /** Blueprints with this item among their outputs — its recipes. */
+    producedBy: v.producedBy,
+    /** Blueprints that consume this item as an input. */
+    usedIn: v.usedIn,
   }))
 
 // ─── Routing (location-api) ──────────────────────────────────────────────────

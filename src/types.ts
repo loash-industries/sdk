@@ -12,6 +12,9 @@ import type {
   AutocompleteSystemsSchema,
   TradingAccountOwnerSchema,
   BatchSystemsSchema,
+  BlueprintFacilitySchema,
+  BlueprintItemSchema,
+  BlueprintSchema,
   CoordinateSearchSchema,
   CoordinatesSchema,
   CollectionHubSchema,
@@ -25,6 +28,7 @@ import type {
   HubItemsPageSchema,
   HubLocationPageSchema,
   HubLocationSchema,
+  ItemBlueprintsSchema,
   ItemRecipeComponentSchema,
   ItemRecipeSchema,
   ItemSearchPageSchema,
@@ -63,8 +67,6 @@ import type {
   PoolFeesSchema,
   RecentTradeSchema,
   RecentTradesPageSchema,
-  RecipeMaterialSchema,
-  RecipeSchema,
   RouteComparisonSchema,
   RouteSchema,
   RoutingStatsSchema,
@@ -281,8 +283,10 @@ export type Tribe = z.output<typeof TribeSchema>
 // World reference data.
 export type WorldItem = z.output<typeof WorldItemSchema>
 export type ItemInfo = z.output<typeof ItemInfoSchema>
-export type Recipe = z.output<typeof RecipeSchema>
-export type RecipeMaterial = z.output<typeof RecipeMaterialSchema>
+export type Blueprint = z.output<typeof BlueprintSchema>
+export type BlueprintItem = z.output<typeof BlueprintItemSchema>
+export type BlueprintFacility = z.output<typeof BlueprintFacilitySchema>
+export type ItemBlueprints = z.output<typeof ItemBlueprintsSchema>
 
 // Routing.
 export type Route = z.output<typeof RouteSchema>

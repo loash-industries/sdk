@@ -3501,17 +3501,17 @@
         "tags": [
           "World | Recipes"
         ],
-        "summary": "List all crafting recipes",
-        "description": "**Cost:** 20 compute units per request.\n\nEvery known crafting recipe: the product item, output quantity, craft time, and the bill of materials. Static reference data extracted from the game client — regenerated and republished when the client data changes. Cache aggressively.",
+        "summary": "List all crafting recipes (blueprints)",
+        "description": "**Cost:** 20 compute units per request.\n\nEvery known crafting recipe, as blueprints decoded from the game client: each one consumes one or more inputs and yields one or more outputs (refining often yields several). `kind` says what the blueprint does: `manufacture`, `refine`, `construct` (construction-site structures, which have a null `blueprintId` and no facilities) or `reverse` (the backward half of a production loop, such as unpacking). An item can be produced by several blueprints. To estimate an item's price from its recipe, use only `manufacture`, `refine` and `construct` blueprints, and skip any with a non-null `blueprintId` but no `facilities` (no player can run those). Static reference data — regenerated and republished when the client data changes. Cache aggressively.",
         "responses": {
           "200": {
-            "description": "The complete recipe list.",
+            "description": "The complete blueprint list.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Recipe"
+                    "$ref": "#/components/schemas/Blueprint"
                   }
                 }
               }
@@ -3521,20 +3521,20 @@
         "x-cu-cost": 20
       }
     },
-    "/v1/world/recipes/{recipe_id}": {
+    "/v1/world/recipes/{item_id}": {
       "get": {
         "operationId": "getRecipe",
         "tags": [
           "World | Recipes"
         ],
-        "summary": "Get the recipes for one product item",
-        "description": "**Cost:** 20 compute units per request.\n\nThe crafting recipes that produce the given item, keyed by the product's item id (the `id` field from the item list / the `productId` field in recipes). Returns an array because a product can in principle have more than one recipe; today almost all products have exactly one.",
+        "summary": "Get the recipes (blueprints) for one item",
+        "description": "**Cost:** 20 compute units per request.\n\nEvery blueprint that touches the given item: `producedBy` lists the blueprints with the item among their outputs (its recipes), and `usedIn` lists the blueprints that consume it as an input. Both lists include every `kind`, `reverse` among them; filter on `kind` as needed.",
         "parameters": [
           {
-            "name": "recipe_id",
+            "name": "item_id",
             "in": "path",
             "required": true,
-            "description": "Product item id (the item-list `id` of the crafted item).",
+            "description": "Item type id (the item-list `id`).",
             "schema": {
               "type": "integer"
             }
@@ -3542,20 +3542,17 @@
         ],
         "responses": {
           "200": {
-            "description": "The recipes producing this item.",
+            "description": "The blueprints that produce and consume this item.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Recipe"
-                  }
+                  "$ref": "#/components/schemas/ItemBlueprints"
                 }
               }
             }
           },
           "404": {
-            "description": "No recipe produces this item id."
+            "description": "No blueprint produces or consumes this item id."
           }
         },
         "x-cu-cost": 20
@@ -6980,64 +6977,6 @@
           "created_ms"
         ]
       },
-      "Recipe": {
-        "type": "object",
-        "description": "A crafting recipe: one production run of a product item.",
-        "required": [
-          "productId",
-          "productName",
-          "outputQuantity",
-          "time",
-          "materials"
-        ],
-        "properties": {
-          "productId": {
-            "type": "integer",
-            "description": "Item id of the crafted product (joins to the item list `id`)."
-          },
-          "productName": {
-            "type": "string",
-            "description": "Display name of the crafted product."
-          },
-          "outputQuantity": {
-            "type": "integer",
-            "description": "Units produced per run."
-          },
-          "time": {
-            "type": "integer",
-            "description": "Craft time in seconds (raw game-client value); -1 when unknown."
-          },
-          "materials": {
-            "type": "array",
-            "description": "Bill of materials consumed per run.",
-            "items": {
-              "$ref": "#/components/schemas/RecipeMaterial"
-            }
-          }
-        }
-      },
-      "RecipeMaterial": {
-        "type": "object",
-        "description": "One input material line of a recipe.",
-        "required": [
-          "id",
-          "quantity"
-        ],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "description": "Item id of the input material."
-          },
-          "name": {
-            "type": "string",
-            "description": "Display name of the input material."
-          },
-          "quantity": {
-            "type": "integer",
-            "description": "Units consumed per run."
-          }
-        }
-      },
       "Route": {
         "type": "object",
         "description": "Complete route from source to destination",
@@ -7962,6 +7901,149 @@
             ],
             "description": "Human-readable solar system name, or `null` when unavailable.",
             "example": "EHK-KH7"
+          }
+        }
+      },
+      "Blueprint": {
+        "type": "object",
+        "description": "A crafting recipe: one run of a blueprint, consuming `inputs` and yielding `outputs`.",
+        "required": [
+          "blueprintId",
+          "primaryTypeId",
+          "kind",
+          "runTime",
+          "inputs",
+          "outputs",
+          "facilities"
+        ],
+        "properties": {
+          "blueprintId": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Game-client blueprint id; null for `construct` entries, which are not industry blueprints."
+          },
+          "primaryTypeId": {
+            "type": "integer",
+            "description": "The item the blueprint is keyed by: its main output for `manufacture`/`construct`, the ore or salvage consumed for `refine`."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "manufacture",
+              "refine",
+              "construct",
+              "reverse"
+            ],
+            "description": "`manufacture`: build an item from parts. `refine`: refine ore, crude matter or salvage, often into several outputs. `construct`: a construction-site structure (null `blueprintId`, no facilities). `reverse`: the backward half of a production loop (unpacking, D2 Fuel → Salt); do not price items from these."
+          },
+          "runTime": {
+            "type": "integer",
+            "description": "Run time in seconds (raw game-client value); -1 when unknown."
+          },
+          "inputs": {
+            "type": "array",
+            "description": "Items consumed per run.",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintItem"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "description": "Items produced per run. More than one for most `refine` blueprints and a few `manufacture` ones.",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintItem"
+            }
+          },
+          "facilities": {
+            "type": "array",
+            "description": "Facilities that can run the blueprint. Empty for `construct` entries, and for the few industry blueprints no facility can run.",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintFacility"
+            }
+          }
+        }
+      },
+      "BlueprintItem": {
+        "type": "object",
+        "description": "One input or output line of a blueprint.",
+        "required": [
+          "id",
+          "quantity"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Item type id (joins to the item list `id`)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name; may be empty."
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "Units consumed or produced per run."
+          }
+        }
+      },
+      "BlueprintFacility": {
+        "type": "object",
+        "description": "A facility that can run a blueprint, with its per-job run limits.",
+        "required": [
+          "typeId",
+          "name",
+          "maxInputRuns",
+          "maxOutputRuns"
+        ],
+        "properties": {
+          "typeId": {
+            "type": "integer",
+            "description": "Item type id of the facility (e.g. a Refinery or Printer)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Facility display name."
+          },
+          "maxInputRuns": {
+            "type": "integer",
+            "description": "Maximum input runs per job in this facility."
+          },
+          "maxOutputRuns": {
+            "type": "integer",
+            "description": "Maximum output runs per job in this facility."
+          }
+        }
+      },
+      "ItemBlueprints": {
+        "type": "object",
+        "description": "Every blueprint that produces or consumes one item.",
+        "required": [
+          "typeId",
+          "name",
+          "producedBy",
+          "usedIn"
+        ],
+        "properties": {
+          "typeId": {
+            "type": "integer",
+            "description": "The item's type id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The item's display name."
+          },
+          "producedBy": {
+            "type": "array",
+            "description": "Blueprints with this item among their outputs (its recipes). Empty when nothing produces it.",
+            "items": {
+              "$ref": "#/components/schemas/Blueprint"
+            }
+          },
+          "usedIn": {
+            "type": "array",
+            "description": "Blueprints that consume this item as an input. Empty when nothing consumes it.",
+            "items": {
+              "$ref": "#/components/schemas/Blueprint"
+            }
           }
         }
       }

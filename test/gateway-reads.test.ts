@@ -824,42 +824,99 @@ describe('world items & recipes', () => {
     })
   })
 
-  const recipe = {
-    productId: 77753,
-    productName: 'Embark',
-    outputQuantity: 1,
-    time: 89,
-    materials: [
-      { id: 84180, name: 'Printed Circuits', quantity: 2 },
-      { id: 88561, quantity: 4 },
+  // A refine blueprint: several outputs, one item name left blank upstream.
+  const blueprint = {
+    blueprintId: 1182,
+    primaryTypeId: 77800,
+    kind: 'refine',
+    runTime: 15,
+    inputs: [{ id: 77800, name: 'Crustal Anorthosite Crystals', quantity: 20 }],
+    outputs: [
+      { id: 89258, name: 'Hydrocarbon Residue', quantity: 10 },
+      { id: 89259, name: '', quantity: 9 },
+    ],
+    facilities: [
+      {
+        typeId: 87161,
+        name: 'Field Refinery',
+        maxInputRuns: 25,
+        maxOutputRuns: 25,
+      },
     ],
   }
+  const construct = {
+    blueprintId: null,
+    primaryTypeId: 91700,
+    kind: 'construct',
+    runTime: -1,
+    inputs: [{ id: 84180, name: 'Printed Circuits', quantity: 15 }],
+    outputs: [{ id: 91700, name: 'Mini Printer', quantity: 1 }],
+    facilities: [],
+  }
 
-  it('parses recipes with string ids and a nullable craft time', async () => {
-    const fetchMock = mockFetch([[recipe, { ...recipe, time: -1 }]])
+  it('parses blueprints with string ids and a nullable run time', async () => {
+    const fetchMock = mockFetch([[blueprint, construct]])
     const recipes = await client.recipes()
     expect(urlOf(fetchMock).pathname).toBe('/v1/world/recipes')
     expect(recipes[0]).toEqual({
-      productAssetId: '77753',
-      productName: 'Embark',
-      outputQuantity: 1,
-      craftTimeSeconds: 89,
-      materials: [
-        { assetId: '84180', name: 'Printed Circuits', quantity: 2 },
-        { assetId: '88561', name: null, quantity: 4 },
+      blueprintId: 1182,
+      primaryAssetId: '77800',
+      kind: 'refine',
+      runTimeSeconds: 15,
+      inputs: [
+        {
+          assetId: '77800',
+          name: 'Crustal Anorthosite Crystals',
+          quantity: 20,
+        },
+      ],
+      outputs: [
+        { assetId: '89258', name: 'Hydrocarbon Residue', quantity: 10 },
+        { assetId: '89259', name: null, quantity: 9 },
+      ],
+      facilities: [
+        {
+          assetId: '87161',
+          name: 'Field Refinery',
+          maxInputRuns: 25,
+          maxOutputRuns: 25,
+        },
       ],
     })
-    expect(recipes[1].craftTimeSeconds).toBeNull()
+    expect(recipes[1]).toMatchObject({
+      blueprintId: null,
+      kind: 'construct',
+      runTimeSeconds: null,
+      facilities: [],
+    })
   })
 
-  it('reads recipes for one product, and [] when nothing crafts it', async () => {
-    const fetchMock = mockFetch([[recipe]])
-    expect(await client.recipesFor('77753')).toHaveLength(1)
-    expect(urlOf(fetchMock).pathname).toBe('/v1/world/recipes/77753')
+  it('reads the blueprints touching one item, and empty lists when none do', async () => {
+    const fetchMock = mockFetch([
+      {
+        typeId: 89258,
+        name: 'Hydrocarbon Residue',
+        producedBy: [blueprint],
+        usedIn: [construct],
+      },
+    ])
+    const item = await client.recipesFor('89258')
+    expect(urlOf(fetchMock).pathname).toBe('/v1/world/recipes/89258')
+    expect(item).toMatchObject({
+      assetId: '89258',
+      name: 'Hydrocarbon Residue',
+      producedBy: [{ blueprintId: 1182 }],
+      usedIn: [{ blueprintId: null, kind: 'construct' }],
+    })
 
-    // The CDN answers "no recipe" with a 404 and an XML body.
+    // The CDN answers "no blueprint touches it" with a 404 and an XML body.
     mock404()
-    expect(await client.recipesFor('1')).toEqual([])
+    expect(await client.recipesFor('1')).toEqual({
+      assetId: '1',
+      name: null,
+      producedBy: [],
+      usedIn: [],
+    })
   })
 
   it('still surfaces non-404 failures from recipesFor', async () => {
@@ -1278,7 +1335,12 @@ describe('ReadOnlyClient reaches every new read', () => {
       { asset_id: '1', name: null, symbol: null },
     ],
     ['recipes', () => ro.recipes(), '/v1/world/recipes', []],
-    ['recipesFor', () => ro.recipesFor('1'), '/v1/world/recipes/1', []],
+    [
+      'recipesFor',
+      () => ro.recipesFor('1'),
+      '/v1/world/recipes/1',
+      { typeId: 1, name: 'X', producedBy: [], usedIn: [] },
+    ],
     [
       'route',
       () => ro.route({ origin: 'A', destination: 'B' }),
@@ -1400,7 +1462,7 @@ describe('TriexClient groups', () => {
       'world.recipesFor',
       (c) => c.world.recipesFor('1'),
       '/v1/world/recipes/1',
-      [],
+      { typeId: 1, name: 'X', producedBy: [], usedIn: [] },
     ],
     [
       'routing.route',

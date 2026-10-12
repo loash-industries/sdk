@@ -7384,14 +7384,14 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "productAssetId": {
-        "description": "Asset id of the item to craft, e.g. "77753".",
+      "assetId": {
+        "description": "Item asset id, e.g. "77753".",
         "minLength": 1,
         "type": "string",
       },
     },
     "required": [
-      "productAssetId",
+      "assetId",
     ],
     "type": "object",
   },

@@ -224,7 +224,7 @@ export const worldTools: ToolDef[] = [
     name: 'world_recipes',
     title: 'List crafting recipes',
     description:
-      'Every crafting recipe: product, output quantity, craft time in seconds (null when unknown) and the input materials with quantities. Static data — fetch once and cache; for one product use world_recipes_for. Costs 20 CU.',
+      'Every crafting recipe, as blueprints (~150 KB): kind, run time in seconds (null when unknown), input and output items with quantities, and the facilities that can run it. kind is manufacture, refine (often several outputs), construct (structures; no facilities) or reverse (unpacking loops — ignore these when costing an item). An item can have several blueprints. Static data — fetch once and cache; for one item use world_recipes_for. Costs 20 CU.',
     kind: 'read',
     sdkPath: 'world.recipes',
     inputShape: {},
@@ -234,16 +234,13 @@ export const worldTools: ToolDef[] = [
     name: 'world_recipes_for',
     title: 'Get recipes for an item',
     description:
-      'The recipes that produce one item — its bill of materials. [] means nothing crafts it, which is an answer, not an error. Pair with market_display_prices over the material ids to cost a build. Costs 20 CU.',
+      'Every blueprint touching one item: producedBy (its recipes — inputs, outputs, kind, facilities) and usedIn (blueprints that consume it). Both empty means no blueprint touches it, which is an answer, not an error. To cost a build, take the cheapest producedBy blueprint whose kind is not reverse and that has facilities (or is construct), price its inputs with market_display_prices, and subtract the market value of any other outputs. Costs 20 CU.',
     kind: 'read',
     sdkPath: 'world.recipesFor',
     inputShape: {
-      productAssetId: z
-        .string()
-        .min(1)
-        .describe('Asset id of the item to craft, e.g. "77753".'),
+      assetId: z.string().min(1).describe('Item asset id, e.g. "77753".'),
     },
     handler: async (ctx, args) =>
-      ok(await ctx.readClient().recipesFor(args.productAssetId)),
+      ok(await ctx.readClient().recipesFor(args.assetId)),
   },
 ]

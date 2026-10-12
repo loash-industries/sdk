@@ -115,7 +115,7 @@ throws on live data.
 | Platform aggregates | `GET /v1/stats` | `market.stats` | 50 |
 | Characters | `GET /v1/characters/{id}`, `/address/{a}`, `/name/{n}`, `/batch` | `characters.get` / `byAddress` / `byName` / `batch` | 20 / 20 / 20 / 50 |
 | Tribes | `GET /v1/world/tribes/{tribe_id}` | `characters.tribe` | 20 |
-| World items & recipes (CDN, static) | `GET /v1/world/items`, `/{asset_id}`, `/v1/world/recipes`, `/{recipe_id}` | `world.items` / `item` / `recipes` / `recipesFor` | 20 each |
+| World items & recipes (CDN, static) | `GET /v1/world/items`, `/{asset_id}`, `/v1/world/recipes`, `/{item_id}` | `world.items` / `item` / `recipes` / `recipesFor` | 20 each |
 | Routing (location-api) | `GET /v1/routing/route`, `/compare`, `/stats` | `routing.route` / `compare` / `stats` | 100 / 300 / 20 |
 
 Notes that change how results are read:
@@ -345,8 +345,8 @@ client.characters.tribe(tribeId): Promise<Tribe>
 // world reference data (static — cache it)
 client.world.items(): Promise<WorldItem[]>
 client.world.item(assetId): Promise<ItemInfo>
-client.world.recipes(): Promise<Recipe[]>
-client.world.recipesFor(productAssetId): Promise<Recipe[]>          // [] when not craftable
+client.world.recipes(): Promise<Blueprint[]>                        // includes `reverse` — skip when costing
+client.world.recipesFor(assetId): Promise<ItemBlueprints>           // { producedBy, usedIn }; both [] when untouched
 
 // orders (#10, #11) — each auto-ensures BM + deposits any deficit in one PTB
 client.orders.limit({ storageUnitId, assetId, side, price, quantity, expireAt? }): Promise<TxResult>   // #10
@@ -747,7 +747,7 @@ GET /v1/world/items                                   20 CU  world.items        
 GET /v1/world/items/{asset_id}                        20 CU  world.item
 GET /v1/world/items/search                            50 CU  market.searchItems
 GET /v1/world/recipes                                 20 CU  world.recipes         (CDN)
-GET /v1/world/recipes/{recipe_id}                     20 CU  world.recipesFor      (CDN)
+GET /v1/world/recipes/{item_id}                       20 CU  world.recipesFor      (CDN)
 # Star map & routing (location-api)
 GET /v1/spatial/systems/{solar_system}                20 CU  spatial.system
 GET /v1/spatial/systems                               50 CU  spatial.systems
