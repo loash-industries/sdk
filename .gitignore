@@ -26,3 +26,6 @@ coverage/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Claude Code agent worktrees (were committed as gitlinks, which broke actions/checkout with persist-credentials: false)
+.claude/worktrees/

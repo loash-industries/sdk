@@ -12,7 +12,7 @@ on: pull_request
 
 jobs:
   validate-code:
-    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@v0.1.0
+    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@7f3d345e01a92525698a5d6148497fa0e8e133e9 # v0.3.0
     with:
       node_version: "22"
       npm_client: npm
