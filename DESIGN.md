@@ -5,7 +5,8 @@ real deposits/withdrawals, resting bids picked up by the indexer, modify + cance
 recovery, a REAL market-buy fill (14,999 CRED + exactly 2% fee), taker trade visible in
 `/trades`, item held in the BM, settled claims, and a BM-funded limit sell — 12/12
 lifecycle + 11/11 integration + 91 unit tests. Schemas verified against the published
-swagger. Remaining: npm publish (CI release workflow ready; needs NPM_TOKEN + push).
+swagger. Releases: CI stages each one on npm with trusted publishing (OIDC, no token), and a
+maintainer approves it with 2FA.
 **Package:** `@trinaryex/sdk` (repo: `sdk/`) — an umbrella SDK; the trading surface is the
 first module, with room to grow into a higher-level, full-featured client.
 **Audience:** players and bots trading on Trinary Exchange via an API key.
