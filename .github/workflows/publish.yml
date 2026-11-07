@@ -33,13 +33,24 @@ jobs:
       node_version: "22"
       environment: prd
       npm_client: npm
-    secrets:
-      NPM_TOKEN: ${{ secrets.TRINARYEX_NPM_TOKEN }}
+      # No NPM_TOKEN: npm publishes via trusted publishing (OIDC). The trusted
+      # publisher on npmjs.com names this file (publish.yml) and environment
+      # prd, and `id-token: write` above is what lets the release job request it.
+      npm_trusted_publishing: true
+      # Each release is staged on npm and goes live only once a maintainer
+      # runs `npm stage approve <id>` (2FA). The trusted publisher grants
+      # "npm stage publish" only, and .releaserc sets npmPublish: false.
+      npm_staged_publishing: true
 
   # ── MCP server ─────────────────────────────────────────────────────────────
   # Published as a separate npm package and container image, but never as part
   # of the SDK tarball. Its version MIRRORS the SDK's exactly, so
   # @trinaryex/mcp@X.Y.Z always names the @trinaryex/sdk@X.Y.Z it wraps.
+  #
+  # Like the SDK, it is staged on npm through trusted publishing and goes live
+  # only after a maintainer approves it with 2FA. A release therefore takes two
+  # approvals, in order: the SDK first (this job waits for it, since the MCP
+  # pins that exact version), then the MCP.
 
   # Checked against the SDK at this commit — the one `release` is about to
   # publish — rather than the npm version it replaces (see mcp-validate.yml).
@@ -65,11 +76,12 @@ jobs:
           fetch-depth: 0 # tags, to find the release tag on this commit
           persist-credentials: false
 
+      # No registry-url: it writes an .npmrc that authenticates with
+      # NODE_AUTH_TOKEN, and this job publishes with OIDC instead of a token.
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-          registry-url: https://registry.npmjs.org
 
       # Releases are tag-only since DEVOPS-22: package.json on main keeps its old
       # version, and the released version is the vX.Y.Z tag that `release` put on
@@ -93,22 +105,24 @@ jobs:
             echo "Publishing @trinaryex/mcp@$VERSION to mirror the SDK."
           fi
 
-      # `release` has only just published the SDK; the registry can take a
-      # little while to serve the new version, and the pin below needs it.
-      - name: Wait for the SDK version to reach the registry
+      # `release` has only staged the SDK. It reaches the registry once a
+      # maintainer approves it (see that job's summary for the command), and the
+      # pin below needs it there.
+      - name: Wait for the SDK release to be approved
         if: steps.version.outputs.already_published == 'false'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          for i in $(seq 1 30); do
+          echo "::notice::Waiting up to 30 minutes for @trinaryex/sdk@$VERSION. Approve its staged release (npm stage approve, see the release job summary)."
+          for i in $(seq 1 60); do
             if npm view "@trinaryex/sdk@$VERSION" version >/dev/null 2>&1; then
               echo "@trinaryex/sdk@$VERSION is available."
               exit 0
             fi
-            echo "Waiting for @trinaryex/sdk@$VERSION ($i/30)…"
-            sleep 10
+            echo "Waiting for @trinaryex/sdk@$VERSION ($i/60)…"
+            sleep 30
           done
-          echo "@trinaryex/sdk@$VERSION never appeared on the registry." >&2
+          echo "::error::@trinaryex/sdk@$VERSION is still not on the registry after 30 minutes. Approve its staged release, then re-run this job."
           exit 1
 
       - name: Pin the MCP version and its SDK dependency
@@ -133,12 +147,45 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
 
-      - name: Publish to npm
+      # Trusted publishing (OIDC), staged for 2FA approval like the SDK. The
+      # trusted publisher for @trinaryex/mcp on npmjs.com names this file
+      # (publish.yml) and environment prd, and grants "npm stage publish" only.
+      # Trusted publishing adds the provenance attestation itself.
+      - name: Stage the release on npm
         if: steps.version.outputs.already_published == 'false'
         working-directory: mcp
-        run: npm publish --provenance --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.TRINARYEX_NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # npm needs the dist-tag spelled out for a prerelease (beta in 1.0.0-beta.2).
+          tag=latest
+          case "$VERSION" in
+            *-*) tag=${VERSION#*-}; tag=${tag%%.*} ;;
+          esac
+          # Node 22's npm predates `npm stage`.
+          npm install -g npm@^11.21.1
+          npm stage publish --access public --tag "$tag" > "$RUNNER_TEMP/stage.out"
+          cat "$RUNNER_TEMP/stage.out"
+
+          # npm prints "+ <name>@<version> (staged with id <id>)". If that
+          # changes, the summary falls back to `npm stage list`.
+          id=$(sed -n 's/.*(staged with id \([^)]*\)).*/\1/p' "$RUNNER_TEMP/stage.out" | tail -n 1)
+          if [ -n "$id" ]; then
+            approve="npm stage approve $id"
+          else
+            approve="npm stage list @trinaryex/mcp   # then: npm stage approve <id>"
+          fi
+          echo "::notice::Staged @trinaryex/mcp@$VERSION on npm. Approve it with 2FA to make it installable: $approve"
+          fence='```'
+          {
+            echo "### @trinaryex/mcp@$VERSION is staged on npm"
+            echo
+            echo "It isn't installable until a maintainer approves it with 2FA, with npm 11.21 or later or on [npmjs.com](https://www.npmjs.com/package/@trinaryex/mcp):"
+            echo
+            echo "${fence}sh"
+            echo "$approve"
+            echo "$fence"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # arm64 as well as amd64: this runs on mixed-architecture clusters and on
       # Apple silicon workstations. A single amd64 image means emulation there.
