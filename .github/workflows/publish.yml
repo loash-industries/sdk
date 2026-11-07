@@ -15,14 +15,14 @@ on:
 jobs:
   validate-code:
     if: github.actor != 'github-actions[bot]'
-    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@7f3d345e01a92525698a5d6148497fa0e8e133e9 # v0.3.0
+    uses: loash-industries/public-workflows/.github/workflows/js-validate-code.yml@07910f832a96bfc3557dba155356bd902eee47b6 # v0.3.1
     with:
       node_version: "22"
       npm_client: npm
       typecheck_command: run tscheck
 
   release:
-    uses: loash-industries/public-workflows/.github/workflows/js-semantic-release.yml@7f3d345e01a92525698a5d6148497fa0e8e133e9 # v0.3.0
+    uses: loash-industries/public-workflows/.github/workflows/js-semantic-release.yml@07910f832a96bfc3557dba155356bd902eee47b6 # v0.3.1
     permissions:  # tag + GitHub Release + npm, with the job's own token (DEVOPS-22)
       contents: write
       issues: write
