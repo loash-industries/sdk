@@ -2,6 +2,8 @@
 
 A **keyless, multi-tenant MCP server** for [Trinary Exchange](https://trinary.exchange) — market reads and unsigned transaction preparation for EVE Frontier trading agents.
 
+Documentation: [docs.trinary.exchange](https://docs.trinary.exchange) (the TriEx trading API and TypeScript SDK). For read-only EVE Frontier data at scale, see [Voidwire](https://voidwire.xyz).
+
 Released in lockstep with [`@trinaryex/sdk`](https://www.npmjs.com/package/@trinaryex/sdk): **the MCP version always equals the SDK version it wraps.**
 
 ## Two invariants

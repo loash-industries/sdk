@@ -114,6 +114,7 @@
     "trading-bot",
     "clob"
   ],
+  "homepage": "https://docs.trinary.exchange",
   "sideEffects": false,
   "repository": {
     "type": "git",
