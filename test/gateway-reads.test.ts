@@ -858,8 +858,18 @@ describe('world items & recipes', () => {
     const fetchMock = mockFetch([[blueprint, construct]])
     const recipes = await client.recipes()
     expect(urlOf(fetchMock).pathname).toBe('/v1/world/recipes')
+    const plain = {
+      slot: null,
+      traits: [],
+      candidates: [],
+      traitsGuaranteed: null,
+      yield: null,
+      yieldPropertyId: null,
+    }
     expect(recipes[0]).toEqual({
       blueprintId: 1182,
+      source: null,
+      name: null,
       primaryAssetId: '77800',
       kind: 'refine',
       runTimeSeconds: 15,
@@ -868,11 +878,17 @@ describe('world items & recipes', () => {
           assetId: '77800',
           name: 'Crustal Anorthosite Crystals',
           quantity: 20,
+          ...plain,
         },
       ],
       outputs: [
-        { assetId: '89258', name: 'Hydrocarbon Residue', quantity: 10 },
-        { assetId: '89259', name: null, quantity: 9 },
+        {
+          assetId: '89258',
+          name: 'Hydrocarbon Residue',
+          quantity: 10,
+          ...plain,
+        },
+        { assetId: '89259', name: null, quantity: 9, ...plain },
       ],
       facilities: [
         {
@@ -880,6 +896,7 @@ describe('world items & recipes', () => {
           name: 'Field Refinery',
           maxInputRuns: 25,
           maxOutputRuns: 25,
+          maxMultiplier: null,
         },
       ],
     })
@@ -888,6 +905,68 @@ describe('world items & recipes', () => {
       kind: 'construct',
       runTimeSeconds: null,
       facilities: [],
+    })
+  })
+
+  it('parses a digital chemistry recipe with a trait-only slot and a variable yield', async () => {
+    mockFetch([
+      [
+        {
+          blueprintId: 4021,
+          source: 'recipe',
+          name: 'Fuel synthesis',
+          primaryTypeId: 88001,
+          kind: 'manufacture',
+          runTime: 30,
+          inputs: [
+            {
+              id: null,
+              name: 'Volatile, Dense',
+              quantity: 2.5,
+              slot: 0,
+              traits: [
+                { id: 7, name: 'Volatile' },
+                { id: 9, name: 'Dense' },
+              ],
+              candidates: [{ id: 77800, name: 'Crude', guaranteed: false }],
+            },
+          ],
+          outputs: [
+            {
+              id: 88001,
+              name: 'Fuel',
+              quantity: 10,
+              slot: 0,
+              yield: 'breakpointTable',
+              yieldPropertyId: 3,
+            },
+          ],
+          facilities: [{ typeId: 87161, name: 'Lab', maxMultiplier: 5 }],
+        },
+      ],
+    ])
+    const [recipe] = await client.recipes()
+    expect(recipe).toMatchObject({
+      source: 'recipe',
+      name: 'Fuel synthesis',
+      inputs: [
+        {
+          assetId: null,
+          quantity: 2.5,
+          slot: 0,
+          traits: [
+            { traitId: '7', name: 'Volatile' },
+            { traitId: '9', name: 'Dense' },
+          ],
+          candidates: [{ assetId: '77800', name: 'Crude', guaranteed: false }],
+        },
+      ],
+      outputs: [
+        { assetId: '88001', yield: 'breakpointTable', yieldPropertyId: 3 },
+      ],
+      facilities: [
+        { maxInputRuns: null, maxOutputRuns: null, maxMultiplier: 5 },
+      ],
     })
   })
 
