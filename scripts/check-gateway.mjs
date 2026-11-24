@@ -3,6 +3,8 @@
 //
 //   npm run check:gateway          # against the vendored contract (hermetic)
 //   npm run check:gateway -- --live # against api.trinary.exchange right now
+//   npm run check:gateway -- --live --strict
+//                                   # …and fail if the vendored copy is stale
 //
 // The vendored copy makes the check deterministic and offline, which is what
 // unit tests need. The live mode is what catches the gateway moving underneath
@@ -18,6 +20,7 @@
 import { writeFileSync } from 'node:fs'
 import {
   SPEC_FIXTURE,
+  contractsDiffer,
   diffGateway,
   fetchSpec,
   loadSpec,
@@ -27,6 +30,10 @@ import {
 
 const live = process.argv.includes('--live')
 const refresh = process.argv.includes('--refresh')
+// Stale vendored copy → failure rather than a notice. The daily drift job runs
+// with this so nobody has to remember `refresh:gateway`; local runs keep the
+// softer notice.
+const strict = process.argv.includes('--strict')
 
 const spec = live || refresh ? await fetchSpec() : loadSpec()
 
@@ -43,7 +50,9 @@ if (refresh) {
 let staleFixture = false
 if (live && !refresh) {
   try {
-    staleFixture = JSON.stringify(loadSpec()) !== JSON.stringify(spec)
+    // Prose-only edits (descriptions, examples) do not count: the hermetic
+    // suite cannot be weakened by them.
+    staleFixture = contractsDiffer(loadSpec(), spec)
   } catch {
     staleFixture = true // missing or unreadable
   }
@@ -121,7 +130,14 @@ if (diff.unverifiable.length) {
   )
 }
 
-if (staleFixture) {
+if (staleFixture && strict) {
+  problems.push(
+    'The vendored contract (test/fixtures/gateway-openapi.json) is stale: the live\n' +
+      'gateway publishes different paths, parameters or schemas. The offline suite\n' +
+      'only checks the SDK against the vendored copy, so refresh it and fix what fails:\n' +
+      '\n  npm run refresh:gateway && npm test',
+  )
+} else if (staleFixture) {
   console.warn(
     '\nThe vendored contract differs from the live one. Nothing is broken —\n' +
       'the SDK was just checked against the live document and matched — but the\n' +

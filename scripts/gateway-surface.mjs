@@ -57,6 +57,39 @@ export function loadSpec(specPath = SPEC_FIXTURE) {
   return JSON.parse(readFileSync(specPath, 'utf8'))
 }
 
+/**
+ * Keys that document a contract without changing what goes over the wire.
+ * Dropped before comparing two documents, so rewording a description upstream
+ * does not count as drift.
+ */
+const PROSE_KEYS = new Set(['description', 'summary', 'example', 'examples'])
+
+/**
+ * The parts of an OpenAPI document that decide what a client may send and
+ * must accept: paths, operations, parameters and schemas, minus prose.
+ */
+export function contractShape(spec) {
+  const strip = (node) => {
+    if (Array.isArray(node)) return node.map(strip)
+    if (!node || typeof node !== 'object') return node
+    const out = {}
+    for (const key of Object.keys(node).sort()) {
+      if (PROSE_KEYS.has(key)) continue
+      out[key] = strip(node[key])
+    }
+    return out
+  }
+  return strip({
+    paths: spec.paths ?? {},
+    schemas: spec.components?.schemas ?? {},
+  })
+}
+
+/** Whether two documents differ in anything a client depends on. */
+export function contractsDiffer(a, b) {
+  return JSON.stringify(contractShape(a)) !== JSON.stringify(contractShape(b))
+}
+
 /** Load the live OpenAPI document. Used by the drift check, never by tests. */
 export async function fetchSpec(url = SPEC_URL) {
   const res = await fetch(url, { headers: { accept: 'application/json' } })
