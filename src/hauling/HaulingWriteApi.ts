@@ -4,7 +4,7 @@ import { Transaction } from '@mysten/sui/transactions'
 import { prepareCoinInput } from '../coins/funding'
 import { TriexClientError, TriexError } from '../errors'
 import { executeAndNormalize, findCreatedObject } from '../execute'
-import { sourceItemBalance } from '../funding'
+import { HangarCapBorrows, sourceItemBalance } from '../funding'
 import { toSsuObjectId } from '../onchain'
 import type { IndexerClient } from '../queries'
 import type { PackageIds, TransactionExecutor, TxResult } from '../types'
@@ -122,6 +122,8 @@ export class HaulingWriteApi extends HaulingApi {
     ])
 
     const tx = new Transaction()
+    // Every item drawn from the hangar shares one borrow of its cap.
+    const borrows = new HangarCapBorrows(this.d.suiClient, tx, this.d.ids)
     const cargo = []
     for (const item of params.cargo) {
       cargo.push(
@@ -137,9 +139,11 @@ export class HaulingWriteApi extends HaulingApi {
                   ssuObjectId: toSsuObjectId(params.pickupStorageUnitId),
                   vaultConfigId: pickup.vaultConfigId,
                 },
+          borrows,
         }),
       )
     }
+    borrows.returnAll()
 
     // The posting fee, exactly as configured: split off the reward funding
     // when it is in the job's currency, funded separately otherwise.
@@ -264,6 +268,7 @@ export class HaulingWriteApi extends HaulingApi {
     const a = await this.agreement({ agreementId: params.agreementId })
     requireStatus(a, ['accepted'], 'deliver')
     const tx = new Transaction()
+    const borrows = new HangarCapBorrows(this.d.suiClient, tx, this.d.ids)
     const delivered = []
     for (const w of a.want) {
       const hub =
@@ -283,9 +288,11 @@ export class HaulingWriteApi extends HaulingApi {
                   vaultConfigId: hub.vaultConfigId,
                 }
               : undefined,
+          borrows,
         }),
       )
     }
+    borrows.returnAll()
     deliverAgreement(tx, h, {
       agreementId: a.agreementId,
       currency: a.currency.coinType,

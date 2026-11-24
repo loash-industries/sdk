@@ -200,8 +200,13 @@ export interface PackageIds {
   agreements?: string
   /** `agreements`' ORIGINAL id, for type tags (`spec::Spec`). */
   agreementsOriginal?: string
-  /** `roles` (`acl::Principal`) — claim-gate principals. */
+  /** `roles` (`acl::Principal`) — claim-gate principals; CURRENT id, for calls. */
   roles?: string
+  /**
+   * `roles`' ORIGINAL id, for type tags (`acl::Principal`). Defaults to
+   * `roles`, which is right while `roles` has never been upgraded.
+   */
+  rolesOriginal?: string
   /** `agreement_roles` — claim gates (`claim::requirement` / `satisfy`). */
   agreementRoles?: string
 }

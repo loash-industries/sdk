@@ -28,6 +28,8 @@ export interface HaulingIds {
   agreements: string
   agreementsOriginal: string
   roles: string
+  /** `roles`' original id: `acl::Principal`'s type tag. */
+  rolesOriginal: string
   agreementRoles: string
   multicoin: string
 }
@@ -53,6 +55,7 @@ export function haulingIds(ids: PackageIds): HaulingIds {
     agreements,
     agreementsOriginal: ids.agreementsOriginal ?? agreements,
     roles,
+    rolesOriginal: ids.rolesOriginal ?? roles,
     agreementRoles,
     multicoin: ids.multicoin,
   }
@@ -201,7 +204,7 @@ export function postAgreement(
       target: `${h.agreementRoles}::claim::requirement`,
       arguments: [
         tx.makeMoveVec({
-          type: `${h.roles}::acl::Principal`,
+          type: `${h.rolesOriginal}::acl::Principal`,
           elements: principals,
         }),
       ],

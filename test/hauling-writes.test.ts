@@ -8,7 +8,7 @@ import { Transaction } from '@mysten/sui/transactions'
 
 import { STILLNESS_PACKAGE_IDS } from '../src/config'
 import { TriexError } from '../src/errors'
-import { sourceItemBalance } from '../src/funding'
+import { HangarCapBorrows, sourceItemBalance } from '../src/funding'
 import {
   acceptAgreement,
   cancelAgreement,
@@ -19,6 +19,7 @@ import {
   postAgreement,
 } from '../src/hauling/transactions'
 import { MultiCoinBalanceBcs } from '../src/onchain'
+import { depositForReceipt } from '../src/transactions'
 import { TriexClient } from '../src/TriexClient'
 
 const IDS = STILLNESS_PACKAGE_IDS
@@ -189,6 +190,34 @@ describe('hauling builders', () => {
     )
     expect(want.MakeMoveVec.type).toBe(`${H.agreementsOriginal}::spec::Spec`)
     expect(cmds(tx).find((c) => c.fn === 'spec::new')!.pkg).toBe(H.agreements)
+  })
+
+  it('tags acl::Principal with roles’ ORIGINAL id once roles is upgraded', () => {
+    const upgraded = haulingIds({
+      ...IDS,
+      roles: '0x' + '9e'.repeat(32),
+      rolesOriginal: IDS.roles,
+    })
+    const tx = new Transaction()
+    postAgreement(tx, upgraded, {
+      currency: CRED,
+      cargo: [tx.object(AGREEMENT)],
+      reward: zero(tx),
+      postFeeCoinType: CRED,
+      postFee: zero(tx),
+      want: [{ collectionId: DEST_COLLECTION, assetId: '1', quantity: 1n }],
+      collateral: 1n,
+      acceptWindowMs: 1,
+      haulDurationMs: 1,
+      principals: [{ kind: 'ou', orgId: ORG }],
+    })
+    const vecs = (tx.getData().commands as any[]).filter(
+      (c) => c.$kind === 'MakeMoveVec',
+    )
+    expect(vecs.at(-1).MakeMoveVec.type).toBe(`${IDS.roles}::acl::Principal`)
+    expect(cmds(tx).find((c) => c.fn === 'acl::ou')!.pkg).toBe(
+      '0x' + '9e'.repeat(32),
+    )
   })
 
   it('pays the cap holder and skips the gate when none is given', () => {
@@ -385,6 +414,82 @@ describe('sourceItemBalance', () => {
         },
       ),
     ).rejects.toMatchObject({ code: TriexError.InsufficientBalance })
+  })
+})
+
+describe('HangarCapBorrows — several hangar items in one transaction', () => {
+  // A PTB can receive an object once: a second `borrow_owner_cap` of the same
+  // cap fails on chain with ArgumentWithoutValue. Found simulating a
+  // three-item hauling post on testnet; the app borrows once per cap too.
+  const CHAR = '0x' + 'cc'.repeat(32)
+  const CHAR_CAP = '0x' + 'c1'.repeat(32)
+  const SSU_CAP = '0x' + 'c2'.repeat(32)
+  const sui = {
+    core: {
+      getObject: async ({ objectId }: { objectId: string }) => ({
+        object: {
+          objectId,
+          version: '7',
+          digest: '11111111111111111111111111111111',
+        },
+      }),
+    },
+  } as any
+  const deposit = (
+    tx: Transaction,
+    held: { character: any; cap: any },
+    capTypeArg: string,
+    assetId: bigint,
+  ) =>
+    depositForReceipt(tx, IDS, {
+      ssuObjectId: '0x' + '55'.repeat(32),
+      ...held,
+      capTypeArg,
+      vaultConfigId: '0x' + '56'.repeat(32),
+      vaultCollectionId: COLLECTION,
+      assetId,
+      amount: 1,
+    })
+
+  it('borrows each cap once, deposits every item under it, returns it once', async () => {
+    const tx = new Transaction()
+    const borrows = new HangarCapBorrows(sui, tx, IDS)
+    const charType = `${IDS.worldOriginal}::character::Character`
+    const ssuType = `${IDS.worldOriginal}::storage_unit::StorageUnit`
+    for (const asset of [1n, 2n, 3n]) {
+      deposit(tx, await borrows.cap(CHAR_CAP, charType, CHAR), charType, asset)
+    }
+    deposit(tx, await borrows.cap(SSU_CAP, ssuType, CHAR), ssuType, 4n)
+    borrows.returnAll()
+
+    expect(names(tx)).toEqual([
+      'character::borrow_owner_cap',
+      'receipt::deposit_for_receipt',
+      'receipt::deposit_for_receipt',
+      'receipt::deposit_for_receipt',
+      'character::borrow_owner_cap',
+      'receipt::deposit_for_receipt',
+      'character::return_owner_cap',
+      'character::return_owner_cap',
+    ])
+    // Each cap is a receiving input exactly once.
+    const receiving = (tx.getData().inputs as any[]).filter(
+      (i) => i.Object?.Receiving,
+    )
+    expect(receiving.map((i) => i.Object.Receiving.objectId)).toEqual([
+      CHAR_CAP,
+      SSU_CAP,
+    ])
+    // Returned with the type it was borrowed as.
+    const returns = cmds(tx).filter(
+      (c) => c.fn === 'character::return_owner_cap',
+    )
+    expect(returns.map((c) => c.typeArgs[0])).toEqual([charType, ssuType])
+    // returnAll is idempotent: nothing left to return.
+    borrows.returnAll()
+    expect(
+      names(tx).filter((n) => n.endsWith('return_owner_cap')),
+    ).toHaveLength(2)
   })
 })
 
