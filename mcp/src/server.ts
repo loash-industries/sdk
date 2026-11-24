@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { RequestContext } from './context.js'
+import { preparedOutputShape } from './prepare.js'
 import { fail } from './result.js'
 import { toolsForMode } from './registry.js'
 import { packageVersion } from './version.js'
@@ -24,6 +25,11 @@ export function createServer(ctx: RequestContext): McpServer {
         title: tool.title,
         description: tool.description,
         inputSchema: tool.inputShape,
+        // Prepare tools share one envelope, so they declare it; read tools
+        // return structuredContent without a declared schema.
+        ...(tool.kind === 'prepare'
+          ? { outputSchema: preparedOutputShape }
+          : {}),
         annotations: {
           title: tool.title,
           // Both kinds are read-only with respect to the world: prepare tools

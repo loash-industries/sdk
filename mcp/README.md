@@ -124,6 +124,16 @@ The **same call** resolves differently per caller. For an officer whose lone vot
 
 u64-ish values (prices, quantities, amounts) cross the MCP boundary as **decimal strings**, never JSON numbers.
 
+## Structured output
+
+Every successful tool result carries `structuredContent` alongside the JSON
+text: the same value, with u64-ish amounts as decimal strings, and arrays or
+primitives wrapped as `{ items }` / `{ value }` (structured content is always
+an object). The `prepare_*` tools also declare an `outputSchema`: the
+prepared-transaction envelope below, with `prepared: true`, or
+`prepared: false` and a `reason` when nothing needs preparing. The server
+validates every prepare result against it.
+
 ## The prepare contract
 
 Every `prepare_*` tool returns:

@@ -10,12 +10,29 @@ export function toJsonText(value: unknown): string {
 
 export interface ToolResponse {
   content: { type: 'text'; text: string }[]
+  /**
+   * The same result as a JSON object, for clients that read structured tool
+   * output. Arrays and primitives are wrapped as `{ items }` / `{ value }`,
+   * since structured content must be an object.
+   */
+  structuredContent?: Record<string, unknown>
   isError?: boolean
 }
 
-/** Wrap a value as a successful MCP tool result. */
+/** Wrap a value as a successful MCP tool result, as text and structured. */
 export function ok(value: unknown): ToolResponse {
-  return { content: [{ type: 'text', text: toJsonText(value) }] }
+  const text = toJsonText(value)
+  const json: unknown = text === undefined ? null : JSON.parse(text)
+  const structuredContent =
+    json !== null && typeof json === 'object' && !Array.isArray(json)
+      ? (json as Record<string, unknown>)
+      : Array.isArray(json)
+        ? { items: json }
+        : { value: json }
+  return {
+    content: [{ type: 'text', text: text ?? 'null' }],
+    structuredContent,
+  }
 }
 
 /**
