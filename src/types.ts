@@ -700,7 +700,10 @@ export interface ModifyOrderParams extends CancelOrderParams {
 }
 
 export interface ClaimSettledParams {
-  /** Pools to claim from; defaults to every pool the sweepable read reports. */
+  /**
+   * Item pools to claim from. Default: every item AND coin pool the sweepable
+   * read reports with settled balances or fee turnover to fold.
+   */
   poolIds?: string[]
 }
 

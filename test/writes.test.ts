@@ -834,11 +834,73 @@ describe('account.claimSettled', () => {
     expect(commandNames(captured.tx!)).toEqual([
       'trading_account::generate_proof_as_owner',
       'multicoin_pool::withdraw_settled_amounts',
+      'multicoin_pool::fold_pending_turnover',
     ])
+    // fold_pending_turnover(pool, account) — the claimed pool's fee credits
+    expect(
+      moveCallArgs(captured.tx!, 'multicoin_pool::fold_pending_turnover'),
+    ).toEqual([POOL, BM_ID])
     // withdraw_settled_amounts(pool, account, proof) — no FeePolicy
     expect(
       moveCallArgs(captured.tx!, 'multicoin_pool::withdraw_settled_amounts'),
     ).toEqual([POOL, BM_ID, 'result'])
+  })
+
+  it('folds turnover-only pools and claims coin pools by default', async () => {
+    const COIN_POOL = '0x' + '30'.repeat(32)
+    const BASE = '0x' + 'ba'.repeat(32) + '::base::BASE'
+    const zero = { base: '0', quote: '0', cred: '0' }
+    routeFetch([
+      [
+        '/sweepable',
+        {
+          trading_account_id: BM_ID,
+          as_of_checkpoint: '123',
+          pools: [
+            {
+              pool_id: POOL,
+              collection_id: HEX,
+              asset_id: '1',
+              quote_asset_id: IDS.credCoinType,
+              storage_unit_id: HEX,
+              vault_config_id: HEX,
+              settled: zero,
+              owed: zero,
+              open_order_count: 1,
+              pending_turnover: '2980000000',
+              pending_turnover_epoch: '1242',
+            },
+          ],
+          items: [],
+          coin_pools: [
+            {
+              pool_id: COIN_POOL,
+              base_asset_id: BASE,
+              quote_asset_id: IDS.credCoinType,
+              settled: { base: '7', quote: '0', cred: '0' },
+              owed: zero,
+              open_order_count: 0,
+              pending_turnover: '0',
+              pending_turnover_epoch: null,
+            },
+          ],
+        },
+      ],
+    ])
+    const sui = fakeSuiClient({ listOwnedObjects: () => bmPage(BM_ID) })
+    const { executor, captured } = captureExecutor()
+    await client(sui, executor).account.claimSettled()
+    expect(commandNames(captured.tx!)).toEqual([
+      'trading_account::generate_proof_as_owner',
+      // Nothing settled in the item pool, but turnover to fold: fold only.
+      'multicoin_pool::fold_pending_turnover',
+      // The coin pool has settled base: claim, then fold.
+      'pool::withdraw_settled_amounts',
+      'pool::fold_pending_turnover',
+    ])
+    expect(
+      moveCallArgs(captured.tx!, 'pool::withdraw_settled_amounts'),
+    ).toEqual([COIN_POOL, BM_ID, 'result'])
   })
 
   it('fails typed when nothing is settled', async () => {

@@ -52,6 +52,7 @@ import {
   placeCoinMarketOrder,
   swapExactBaseForQuote,
   swapExactQuoteForBase,
+  foldPendingCoinTurnover,
   withdrawSettledCoinAmounts,
   zeroCoin,
 } from './transactions'
@@ -738,7 +739,8 @@ export class CoinsApi extends CoinsReadApi {
 
   /**
    * Move settled balances (fills, cancels, refunds) from one or more pools
-   * into the trading account in one PTB — optionally sweeping coin types on
+   * into the trading account in one PTB, folding each pool's pending maker-fee
+   * turnover into the account's fee tier — optionally sweeping coin types on
    * to the wallet afterwards.
    * @throws `ValidationFailed` for no pools; `AddressRequired` |
    *   `ExecutorRequired`; `TradingAccountNotFound`; `PoolNotFound`;
@@ -763,6 +765,8 @@ export class CoinsApi extends CoinsReadApi {
     const proof = generateProofAsOwner(tx, this.c.ids, account)[0]
     for (const pool of pools) {
       withdrawSettledCoinAmounts(tx, this.c.ids, { ...pool, account, proof })
+      // Fold the pool's maker-fee credits into the account's fee tier.
+      foldPendingCoinTurnover(tx, this.c.ids, { ...pool, account })
     }
     for (const coinType of params.withdrawCoinTypes ?? []) {
       const coin = withdrawAllCoin(

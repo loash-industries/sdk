@@ -53,8 +53,13 @@ import {
   withdrawAllMulticoin,
   withdrawCoin,
   withdrawMulticoin,
+  foldPendingTurnover,
   withdrawSettledAmounts,
 } from './transactions'
+import {
+  foldPendingCoinTurnover,
+  withdrawSettledCoinAmounts,
+} from './coins/transactions'
 import type {
   AssemblyEnriched,
   AssemblyOwner,
@@ -786,14 +791,16 @@ class AccountApi {
   }
 
   /**
-   * Claim settled (post-fill) proceeds from pools into the trading account.
-   * Defaults to every pool the sweepable manifest reports as claimable; the
-   * proceeds then show up in `balances.currency()` / BM item balances and can
-   * be withdrawn.
-   */
-  /**
+   * Claim settled (post-fill) proceeds from pools into the trading account,
+   * and fold each pool's pending maker-fee turnover into the account's fee
+   * tier (`fold_pending_turnover`) so it trades at its real rate everywhere.
+   *
+   * By default this covers every item AND coin pool the sweepable manifest
+   * reports with settled balances or turnover to fold; `poolIds` limits it
+   * to those item pools. The proceeds then show up in `balances.currency()`
+   * / BM item balances and can be withdrawn.
    * @throws `AddressRequired` | `ExecutorRequired`; `TradingAccountNotFound`;
-   *   `ValidationFailed` when nothing is settled to claim;
+   *   `ValidationFailed` when there is nothing to claim or fold;
    *   `TransactionFailed` on-chain.
    */
   async claimSettled(params?: ClaimSettledParams): Promise<TxResult> {
@@ -801,25 +808,39 @@ class AccountApi {
     const tradingAccountId = await this.c.requireTradingAccountId(owner)
     const executor = this.c.requireExecutor()
 
-    let pools: { poolId: string; quoteCoinType?: string }[]
+    const hasSettled = (b: { base: bigint; quote: bigint; cred: bigint }) =>
+      b.base > 0n || b.quote > 0n || b.cred > 0n
+    let pools: { poolId: string; quoteCoinType?: string; claim: boolean }[]
+    let coinPools: {
+      poolId: string
+      baseCoinType: string
+      quoteCoinType: string
+      claim: boolean
+    }[] = []
     if (params?.poolIds?.length) {
-      pools = params.poolIds.map((poolId) => ({ poolId }))
+      pools = params.poolIds.map((poolId) => ({ poolId, claim: true }))
     } else {
       const manifest = await this.c.indexer.sweepable(tradingAccountId)
       pools = manifest.pools
-        .filter(
-          (p) =>
-            p.settled.base > 0n || p.settled.quote > 0n || p.settled.cred > 0n,
-        )
+        .filter((p) => hasSettled(p.settled) || p.pendingTurnover > 0n)
         .map((p) => ({
           poolId: p.poolId,
           quoteCoinType: p.quoteAssetId ?? undefined,
+          claim: hasSettled(p.settled),
+        }))
+      coinPools = manifest.coinPools
+        .filter((p) => hasSettled(p.settled) || p.pendingTurnover > 0n)
+        .map((p) => ({
+          poolId: p.poolId,
+          baseCoinType: p.baseCoinType,
+          quoteCoinType: p.quoteCoinType,
+          claim: hasSettled(p.settled),
         }))
     }
-    if (pools.length === 0) {
+    if (pools.length === 0 && coinPools.length === 0) {
       throw new TriexClientError(
         TriexError.ValidationFailed,
-        'Nothing settled to claim — no pools with claimable balances.',
+        'Nothing settled to claim — no pools with claimable balances or fee turnover to fold.',
       )
     }
 
@@ -827,12 +848,29 @@ class AccountApi {
     const bm = tx.object(tradingAccountId)
     const proof = generateProofAsOwner(tx, this.c.ids, bm)[0]
     for (const pool of pools) {
-      withdrawSettledAmounts(tx, this.c.ids, {
+      if (pool.claim) {
+        withdrawSettledAmounts(tx, this.c.ids, {
+          poolId: pool.poolId,
+          bm,
+          proof,
+          quoteCoinType: pool.quoteCoinType,
+        })
+      }
+      foldPendingTurnover(tx, this.c.ids, {
         poolId: pool.poolId,
         bm,
-        proof,
         quoteCoinType: pool.quoteCoinType,
       })
+    }
+    for (const pool of coinPools) {
+      if (pool.claim) {
+        withdrawSettledCoinAmounts(tx, this.c.ids, {
+          ...pool,
+          account: bm,
+          proof,
+        })
+      }
+      foldPendingCoinTurnover(tx, this.c.ids, { ...pool, account: bm })
     }
     return toTxResult(await executeAndNormalize(executor, tx))
   }

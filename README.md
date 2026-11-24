@@ -152,7 +152,11 @@ const { fills } = await client.orders.fills({ after: lastSeen })
 
 // 3. After fills: proceeds sit SETTLED in the pool until claimed.
 const claimable = await client.account.sweepable()
-if (claimable.pools.length) await client.account.claimSettled()
+if (claimable.pools.length || claimable.coinPools.length) {
+  // Claims every pool with settled balances and folds each pool's maker-fee
+  // turnover into the account's fee tier (claim regularly to keep your tier).
+  await client.account.claimSettled()
+}
 
 // 4. Withdraw to the wallet / hangar when done.
 await client.account.withdrawCurrency()

@@ -860,6 +860,8 @@ export const SweepablePoolSchema = z
     settled: SweepableBalancesSchema,
     owed: SweepableBalancesSchema,
     open_order_count: z.number(),
+    pending_turnover: bigintString.optional(),
+    pending_turnover_epoch: z.string().nullable().optional(),
   })
   .transform((v) => ({
     poolId: v.pool_id,
@@ -874,6 +876,40 @@ export const SweepablePoolSchema = z
     /** Informational: currently owed by the account. */
     owed: v.owed,
     openOrderCount: v.open_order_count,
+    /**
+     * Maker-fee turnover this pool holds for the account, not yet folded into
+     * its exchange-wide fee tier (raw quote units). Non-zero means a fold
+     * (every `claimSettled` does one) would raise the account's turnover.
+     */
+    pendingTurnover: v.pending_turnover ?? 0n,
+    /** Epoch of the newest pending entry; null when none. */
+    pendingTurnoverEpoch: v.pending_turnover_epoch ?? null,
+  }))
+
+/** A coin pool (`Pool<Base, Quote>`) with claimable or owed balances. */
+export const SweepableCoinPoolSchema = z
+  .object({
+    pool_id: z.string(),
+    base_asset_id: z.string(),
+    quote_asset_id: z.string(),
+    settled: SweepableBalancesSchema,
+    owed: SweepableBalancesSchema,
+    open_order_count: z.number(),
+    pending_turnover: bigintString,
+    pending_turnover_epoch: z.string().nullable(),
+  })
+  .transform((v) => ({
+    poolId: v.pool_id,
+    /** Fully-qualified base coin type. */
+    baseCoinType: v.base_asset_id,
+    /** Fully-qualified quote coin type. */
+    quoteCoinType: v.quote_asset_id,
+    /** Claimable into the trading account. */
+    settled: v.settled,
+    owed: v.owed,
+    openOrderCount: v.open_order_count,
+    pendingTurnover: v.pending_turnover,
+    pendingTurnoverEpoch: v.pending_turnover_epoch,
   }))
 
 export const SweepableItemSchema = z
@@ -913,12 +949,16 @@ export const SweepableSchema = z
     as_of_checkpoint: z.string().nullable(),
     pools: z.array(SweepablePoolSchema),
     items: z.array(SweepableItemSchema),
+    coin_pools: z.array(SweepableCoinPoolSchema).optional(),
   })
   .transform((v) => ({
     tradingAccountId: v.trading_account_id,
     asOfCheckpoint: v.as_of_checkpoint,
+    /** Item pools (`MultiCoinPool`). */
     pools: v.pools,
     items: v.items,
+    /** Coin pools (`Pool<Base, Quote>`) with settled or owed balances. */
+    coinPools: v.coin_pools ?? [],
   }))
 
 // ─── Orders & fills: point lookups ───────────────────────────────────────────
