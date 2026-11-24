@@ -245,7 +245,7 @@ describe('prepare tools reach the SDK method they name', () => {
       // Inputs may reach the method itself, the handle it hangs off
       // (`org(orgId, { seat })` for `org.*.x`), or a resolver whose result
       // the handler passes on (the coin-pool selector).
-      const targetPath = target[0].path
+      const targetPath = target[0]!.path
       const feeding = calls.filter((c) => {
         const p = methodPath(c.path)
         if (RESOLVERS.has(p)) return true
