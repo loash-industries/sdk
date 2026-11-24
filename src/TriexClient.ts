@@ -12,6 +12,11 @@ import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
 import { HaulingWriteApi } from './hauling/HaulingWriteApi'
 import { transactionCheckpoint } from './checkpoint'
+import {
+  applyLivePackageIds,
+  fetchLivePackageIds,
+  type PackageIdRefresh,
+} from './livePackageIds'
 import { executeAndNormalize, findCreatedObject } from './execute'
 import type { NormalizedExecution } from './execute'
 import {
@@ -209,11 +214,37 @@ export class TriexClient {
    */
   readonly hauling: HaulingWriteApi
 
+  /** Package-id fields the caller pinned; a live refresh never moves them. */
+  private readonly pinnedIds: ReadonlySet<string>
+
+  /**
+   * Construct a client and move its package ids to the live versions
+   * (`refreshPackageIds`). A failed fetch keeps the baked ids rather than
+   * failing construction; the returned client's `lastPackageIdRefresh` says
+   * what happened.
+   */
+  static async connect(
+    config: TriexClientConfig,
+    opts?: { tenant?: string; url?: string },
+  ): Promise<TriexClient> {
+    const client = new TriexClient(config)
+    try {
+      await client.refreshPackageIds(opts)
+    } catch {
+      // Baked ids stay in force; the fetch error is not fatal here.
+    }
+    return client
+  }
+
+  /** What the last `refreshPackageIds` did; null before the first. */
+  lastPackageIdRefresh: PackageIdRefresh | null = null
+
   constructor(config: TriexClientConfig) {
     this.suiClient = config.suiClient
     this.executor = config.executor
     this.address = config.address
     this.ids = resolvePackageIds(config.network ?? 'testnet', config.packageIds)
+    this.pinnedIds = new Set(Object.keys(config.packageIds ?? {}))
     this.indexer = new IndexerClient(
       config.indexerUrl ?? DEFAULT_INDEXER_URL,
       config.apiKey,
@@ -245,6 +276,28 @@ export class TriexClient {
       requireAddress: (addr) => this.requireAddress(addr),
       requireExecutor: () => this.requireExecutor(),
     })
+  }
+
+  /**
+   * Move this client's `moveCall` targets to the live package versions, from
+   * the app's public package-id endpoint — so a routine upgrade (and the
+   * retirement of the old version) needs no SDK release. Only upgrades of
+   * the configured packages are applied: original ids, type tags and shared
+   * objects never change, and ids pinned via `packageIds` stay pinned. Call
+   * it again after a `TransactionFailed` for a retired package version.
+   * @throws `IndexerError` when the endpoint can't be reached.
+   */
+  async refreshPackageIds(opts?: {
+    tenant?: string
+    url?: string
+  }): Promise<PackageIdRefresh> {
+    const live = await fetchLivePackageIds(opts)
+    this.lastPackageIdRefresh = applyLivePackageIds(
+      this.ids,
+      live,
+      this.pinnedIds,
+    )
+    return this.lastPackageIdRefresh
   }
 
   /**

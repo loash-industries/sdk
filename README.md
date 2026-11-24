@@ -466,6 +466,24 @@ Four things worth knowing before you call them:
   unused stays in the trading account. Sells need no CRED.
 - Order expiry defaults to good-til-cancelled (`GTC_EXPIRE`).
 
+## Package upgrades
+
+The SDK ships with the current package ids baked in. To pick up a package
+upgrade without waiting for an SDK release, construct with `connect`:
+
+```ts
+const client = await TriexClient.connect({ suiClient, apiKey, executor, address })
+// or, on an existing client — e.g. after a TransactionFailed for a retired version:
+await client.refreshPackageIds()
+```
+
+It reads the app's public package-id endpoint and moves `moveCall` targets
+to newer versions of the same packages. Original ids, type tags and shared
+objects never move, ids you pin via `packageIds` stay pinned, and a new
+deployment (a different original id, as at a cycle rollover) is reported in
+`skipped` rather than applied. If the endpoint is unreachable, `connect`
+keeps the baked ids.
+
 ## Consistency model
 
 The indexer is eventually-consistent (seconds behind head). On-chain writes
