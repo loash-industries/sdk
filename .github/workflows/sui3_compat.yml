@@ -1,0 +1,42 @@
+name: Sui 3 compatibility
+
+# The SDK peer-depends on @mysten/sui `^2.16.0 || ^3.0.0` while developing and
+# testing against 2.x. This job proves the 3.x half of that range on every PR:
+# the same typecheck and suite, with 3.x installed.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/sui3_compat.yml'
+  workflow_dispatch:
+
+jobs:
+  sui3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Install @mysten/sui 3.x in place of 2.x
+        run: npm install --no-audit --no-fund --no-save -D '@mysten/sui@^3.0.1'
+
+      - name: Typecheck against 3.x
+        run: npm run tscheck
+
+      - name: Test against 3.x
+        run: npm test
