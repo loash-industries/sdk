@@ -4,7 +4,7 @@
     "title": "Trinary Exchange API",
     "version": "1.0.0",
     "description": "Public API for Trinary Exchange - the market data and enrichment layer for the EVE Frontier economy.\n\nThis API exposes four data domains:\n\n- **Trading data**: order books, trades, price history, and market activity across Trinary Exchange trade hubs.\n- **Keyspace enrichment**: decoded and contextualized on-chain state from the EVE Frontier world contracts.\n- **Organization data**: Armature organizations, including governance structure, treasuries, and organizational units.\n- **Frontier enrichment**: general reference data for EVE Frontier entities such as items, systems, and structures.\n\nAll requests are served through an authenticated gateway. Authenticate with the `x-api-key` header. Each operation's `x-cu-cost` is the Compute-Unit charge deducted per call.",
-    "x-generated-at": "2026-10-01T01:01:50.431Z"
+    "x-generated-at": "2026-11-24T16:58:28.992Z"
   },
   "servers": [
     {
@@ -17,6 +17,387 @@
     }
   ],
   "paths": {
+    "/v1/agreements": {
+      "get": {
+        "description": "**Cost:** 50 compute units per request.\n\nThe job board: open agreements by default, newest first. Filter by status, currency, minimum reward, source or destination hub, cargo or wanted items, lister, hauler and whether a claim gate applies; pass `claimable_by` to learn whether an address can accept each one. Fillers who hold the wanted items search accepted jobs by `want_collection_id`/`want_asset_id`. Each side of the haul names its trade hub and whether its collection is a known warehouse vault. Paged with a self-contained `cursor` (it carries the filters). `lapsed` and `overdue` are derived from wall-clock time, which the response returns as `evaluated_at`; events still reach the index with its delay (see `X-Indexer-Checkpoint`).",
+        "operationId": "listAgreements",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of results to return (1–100).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor from a previous response’s `next_cursor`. Omit for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated statuses (default `open`): `open`, `lapsed`, `accepted`, `overdue`, `delivered`, `defaulted`, `forfeited`, `cancelled`, `closed_lapsed`. Ignored on a `cursor` request: the cursor carries the original filters.",
+            "schema": {
+              "example": "open,accepted",
+              "type": "string"
+            }
+          },
+          {
+            "name": "currency",
+            "required": false,
+            "in": "query",
+            "description": "Only agreements paid in this coin type.",
+            "schema": {
+              "example": "0x9f3a1b2c…::cred::CRED",
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_reward",
+            "required": false,
+            "in": "query",
+            "description": "Only agreements whose reward is at least this, in the smallest unit of their currency (u64 decimal). Combine with `currency`.",
+            "schema": {
+              "example": "1000000",
+              "type": "string"
+            }
+          },
+          {
+            "name": "source_hub_id",
+            "required": false,
+            "in": "query",
+            "description": "Only cargo picked up at this trade hub.",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "destination_hub_id",
+            "required": false,
+            "in": "query",
+            "description": "Only deliveries handed in at this trade hub.",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "cargo_collection_id",
+            "required": false,
+            "in": "query",
+            "description": "Only cargo of this warehouse-receipt collection.",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "want_collection_id",
+            "required": false,
+            "in": "query",
+            "description": "Only agreements that want items of this collection delivered (for fillers who already hold them).",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "cargo_asset_id",
+            "required": false,
+            "in": "query",
+            "description": "Only cargo of this item type ID.",
+            "schema": {
+              "example": "78437",
+              "type": "string"
+            }
+          },
+          {
+            "name": "want_asset_id",
+            "required": false,
+            "in": "query",
+            "description": "Only agreements that want this item type ID delivered.",
+            "schema": {
+              "example": "78437",
+              "type": "string"
+            }
+          },
+          {
+            "name": "lister",
+            "required": false,
+            "in": "query",
+            "description": "Only agreements posted by this address.",
+            "schema": {
+              "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+              "type": "string"
+            }
+          },
+          {
+            "name": "hauler",
+            "required": false,
+            "in": "query",
+            "description": "Only agreements accepted by this address.",
+            "schema": {
+              "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+              "type": "string"
+            }
+          },
+          {
+            "name": "org_id",
+            "required": false,
+            "in": "query",
+            "description": "Only agreements posted on behalf of this organization by a trusted wrapper. No wrapper is trusted yet, so this matches nothing.",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "gated",
+            "required": false,
+            "in": "query",
+            "description": "`true`: only agreements with a claim gate (limited to listed players, machine keys or organizations); `false`: only agreements anyone can accept.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "claimable_by",
+            "required": false,
+            "in": "query",
+            "description": "Add `eligibility` to each row: whether this address can accept it.",
+            "schema": {
+              "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+              "type": "string"
+            }
+          },
+          {
+            "name": "accept_deadline_before",
+            "required": false,
+            "in": "query",
+            "description": "Only agreements whose accept deadline is before this time (Unix epoch milliseconds). With `status=lapsed`, the listings lapsed long enough for the config admin to close.",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "Order (default `posted_desc`, newest first). `reward_desc` compares raw amounts, so filter by `currency` with it. Ties break on `agreement_id`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "posted_desc",
+                "reward_desc",
+                "accept_deadline_asc",
+                "delivery_deadline_asc"
+              ]
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaulingAgreementPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Search hauling agreements",
+        "tags": [
+          "Hauling-agreements"
+        ],
+        "x-cu-cost": 50
+      }
+    },
+    "/v1/agreements/config": {
+      "get": {
+        "description": "**Cost:** 20 compute units per request.\n\nWhat posting an agreement costs and accepts: the approved currencies (with symbol and decimals), the flat posting fee, the delivery fee in basis points and the treasury, plus the most recent admin changes. Returns 503 until the indexer has seen the first config change.",
+        "operationId": "getAgreementsConfig",
+        "parameters": [
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaulingConfigResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No config change has been indexed yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get the hauling agreements protocol config",
+        "tags": [
+          "Hauling-agreements"
+        ],
+        "x-cu-cost": 20
+      }
+    },
+    "/v1/agreements/stats": {
+      "get": {
+        "description": "**Cost:** 50 compute units per request.\n\nAgreements by status, volume per currency (rewards escrowed and paid, delivery fees, collateral forfeited), posting fees per fee coin and the ten busiest hub-to-hub lanes. Cached for 30 seconds. `lapsed` and `overdue` are derived from wall-clock time, which the response returns as `evaluated_at`; events still reach the index with its delay (see `X-Indexer-Checkpoint`).",
+        "operationId": "getAgreementStats",
+        "parameters": [
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaulingStatsResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Hauling agreements protocol stats",
+        "tags": [
+          "Hauling-agreements"
+        ],
+        "x-cu-cost": 50
+      }
+    },
+    "/v1/agreements/{agreement_id}": {
+      "get": {
+        "description": "**Cost:** 30 compute units per request.\n\nOne agreement in full: parties, cargo and wanted items with their hubs, payment and deadlines, its accept requirements (claim gates with their players, machine keys and organizations; other rules raw), observer, lister cap holder, proceeds, fees, claims and event timeline. With `viewer`, adds the roles that address plays and, while the agreement is open, whether and how it can accept: the claim plan names the call for each requirement in order. `lapsed` and `overdue` are derived from wall-clock time, which the response returns as `evaluated_at`; events still reach the index with its delay (see `X-Indexer-Checkpoint`).",
+        "operationId": "getAgreement",
+        "parameters": [
+          {
+            "name": "agreement_id",
+            "required": true,
+            "in": "path",
+            "description": "Object ID of the hauling agreement.",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "viewer",
+            "required": false,
+            "in": "query",
+            "description": "Add `viewer`: the roles this address plays, and while the agreement is open its eligibility and claim plan.",
+            "schema": {
+              "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaulingAgreementDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get a hauling agreement",
+        "tags": [
+          "Hauling-agreements"
+        ],
+        "x-cu-cost": 30
+      }
+    },
     "/v1/assemblies/enriched": {
       "get": {
         "description": "**Cost:** 50 compute units per request.\n\nResolves assembly object IDs to their owner wallet address and character name via on-chain lookup. Results are cached for 5 minutes. Pass a comma-separated list of Sui object IDs (max 200).",
@@ -119,7 +500,7 @@
     },
     "/v1/characters/address/{address}": {
       "get": {
-        "description": "**Cost:** 20 compute units per request.\n\nReturns every character associated with the given wallet address, newest first. Set `enrich=true` to also include the on-chain `owner_cap_id` and `assembly_id` fields.",
+        "description": "**Cost:** 20 compute units per request.\n\nReturns every character associated with the given wallet address, newest-created first (ties broken by higher `item_id`). A wallet can own several characters in one world; the first row for a tenant is the wallet's current character. Set `enrich=true` to also include the on-chain `owner_cap_id` and `assembly_id` fields.",
         "operationId": "getCharacterByAddress",
         "parameters": [
           {
@@ -441,7 +822,7 @@
     },
     "/v1/discovery": {
       "get": {
-        "description": "**Cost:** 150 compute units per request.\n\nLive open orders across trade hub markets, ordered by last activity (newest first). Orders on hubs that no longer exist are excluded. Each row carries the hub display name (`hub_name`) and power state (`hub_state`, online/offline), so callers need not resolve them separately. All filters compose freely: scope by trade hubs (`storage_unit_ids`), by item (`asset_id`), by owner (`trading_account_id`), and by side. Private-shared hubs are resolved by the caller — pass the hub list you can see; omit it for all hubs, or set `public_only=true` to restrict to location-revealed (public) hubs. Pagination is a single self-contained `cursor` param: pass `next_cursor` to page backward or `prev_cursor` to poll for new activity. Cursors embed the original filters, so no other params are needed (and filters are ignored) on cursor requests.",
+        "description": "**Cost:** 150 compute units per request.\n\nLive open orders across trade hub markets, ordered by last activity (newest first). Orders on hubs that no longer exist are excluded. Each row carries the hub display name (`hub_name`) and power state (`hub_state`, online/offline), so callers need not resolve them separately. All filters compose freely: scope by trade hubs (`storage_unit_ids`), by item (`asset_id`), by owner (`trading_account_id`), and by side. Private-shared hubs are resolved by the caller — pass the hub list you can see; omit it for all hubs, or set `public_only=true` to restrict to location-revealed (public) hubs, or `include_public=true` to widen `storage_unit_ids` to also cover every public hub. Set `exclude_offline=true` to drop orders on offline hubs. Pagination is a single self-contained `cursor` param: pass `next_cursor` to page backward or `prev_cursor` to poll for new activity. Cursors embed the original filters, so no other params are needed (and filters are ignored) on cursor requests.",
         "operationId": "getDiscovery",
         "parameters": [
           {
@@ -490,6 +871,24 @@
             "required": false,
             "in": "query",
             "description": "Set `true` to restrict to location-revealed (public) assemblies. Omit for all visible hubs.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "include_public",
+            "required": false,
+            "in": "query",
+            "description": "Set `true` to return orders on the `storage_unit_ids` hubs OR on any location-revealed (public) hub. Without `storage_unit_ids` it behaves like `public_only=true`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude_offline",
+            "required": false,
+            "in": "query",
+            "description": "Set `true` to drop orders on hubs that are offline (`hub_state` `offline`). Hubs with no known state are kept. Omit to include them.",
             "schema": {
               "type": "string"
             }
@@ -969,6 +1368,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1241,6 +1649,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1378,7 +1795,7 @@
     },
     "/v1/items/{item_id}/locations": {
       "get": {
-        "description": "**Cost:** 50 compute units per request.\n\nReturns hub locations currently offering the given item for sale, identified by type_id. Paginated: pass back `next_cursor` as `cursor` to fetch the next page.",
+        "description": "**Cost:** 50 compute units per request.\n\nReturns the location of every located hub with a live sell order for the given item (type_id), newest location first. Hubs without a reported location are not listed. Paginated: pass back `next_cursor` as `cursor` to fetch the next page.",
         "operationId": "listItemLocations",
         "parameters": [
           {
@@ -1456,6 +1873,15 @@
               "items": {
                 "type": "string"
               }
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -1562,7 +1988,7 @@
     },
     "/v1/orgs/{org_id}": {
       "get": {
-        "description": "**Cost:** 30 compute units per request.\n\nResolves an organization object ID to the full organization: name, metadata, treasury and related object IDs, current members, and the complete tree of child units (`ous`). The ID may be the top-level organization or any unit within its tree — the top-level organization is always returned. Results are cached for 5 minutes.",
+        "description": "**Cost:** 30 compute units per request.\n\nResolves an organization object ID to the full organization: name, metadata, treasury and related object IDs, current members, and the complete tree of child units (`ous`). The ID may be the top-level organization or any unit within its tree — the top-level organization is always returned. Results are cached for up to 5 minutes, dropped as soon as the indexer reports a change.",
         "operationId": "getOrg",
         "parameters": [
           {
@@ -1572,6 +1998,15 @@
             "description": "Object ID of the organization — the root organization or any unit within its tree.",
             "schema": {
               "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
               "type": "string"
             }
           }
@@ -1611,6 +2046,114 @@
         "summary": "Get an organization and its full unit tree",
         "tags": [
           "Identity | Organizations"
+        ],
+        "x-cu-cost": 30
+      }
+    },
+    "/v1/orgs/{org_id}/agreements": {
+      "get": {
+        "description": "**Cost:** 30 compute units per request.\n\nAgreements related to the organization (OU), newest first: `gated_to` (default) lists those its board members may claim, `claimed_via` those accepted through it, `posted_for` those posted on its behalf by a trusted wrapper (none is trusted yet). Only this exact OU counts: the chain checks its board, not its sub-units’. `lapsed` and `overdue` are derived from wall-clock time, which the response returns as `evaluated_at`; events still reach the index with its delay (see `X-Indexer-Checkpoint`).",
+        "operationId": "listOrgAgreements",
+        "parameters": [
+          {
+            "name": "org_id",
+            "required": true,
+            "in": "path",
+            "description": "Object ID of the organization (OU).",
+            "schema": {
+              "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of results to return (1–100).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor from a previous response’s `next_cursor`. Omit for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "relation",
+            "required": false,
+            "in": "query",
+            "description": "How the agreements relate to the organization (default `gated_to`): `gated_to` = its board members may claim them; `claimed_via` = they were accepted through it; `posted_for` = posted on its behalf by a trusted wrapper (none is trusted yet, so this is empty). Ignored on a `cursor` request: the cursor carries the original filters.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "posted_for",
+                "gated_to",
+                "claimed_via"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated statuses (default: all). Ignored on a `cursor` request: the cursor carries the original filters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaulingAgreementPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "An organization’s hauling agreements",
+        "tags": [
+          "Hauling-agreements"
         ],
         "x-cu-cost": 30
       }
@@ -1725,9 +2268,297 @@
         "x-cu-cost": 30
       }
     },
+    "/v1/players/{address}/agreements": {
+      "get": {
+        "description": "**Cost:** 50 compute units per request.\n\nAgreements the address plays a part in, newest first: as `lister`, `cap_holder`, `beneficiary`, `hauler`, or `claimed_via_org` (accepted through an organization whose board it sits on). Each row lists the roles in `viewer_roles`. Filter with `role` and `status`. `lapsed` and `overdue` are derived from wall-clock time, which the response returns as `evaluated_at`; events still reach the index with its delay (see `X-Indexer-Checkpoint`).",
+        "operationId": "listPlayerAgreements",
+        "parameters": [
+          {
+            "name": "address",
+            "required": true,
+            "in": "path",
+            "description": "Player wallet address.",
+            "schema": {
+              "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of results to return (1–100).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor from a previous response’s `next_cursor`. Omit for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated roles (default: all): `lister`, `cap_holder`, `beneficiary`, `hauler`, `claimed_via_org`. Ignored on a `cursor` request: the cursor carries the original filters.",
+            "schema": {
+              "example": "lister,hauler",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated statuses (default: all). Ignored on a `cursor` request: the cursor carries the original filters.",
+            "schema": {
+              "example": "accepted,overdue",
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaulingAgreementPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A player’s hauling agreements",
+        "tags": [
+          "Hauling-agreements"
+        ],
+        "x-cu-cost": 50
+      }
+    },
+    "/v1/players/{address}/agreements/actions": {
+      "get": {
+        "description": "**Cost:** 30 compute units per request.\n\nWhat the address can do next: collect proceeds its lister cap received, delete a spent cap, cancel its listing that nobody accepted in time, deliver a job before the deadline (soonest first) or default an overdue job it is owed. Each item names the Move call, its type argument and the object IDs to build the transaction from. `lapsed` and `overdue` are derived from wall-clock time, which the response returns as `evaluated_at`; events still reach the index with its delay (see `X-Indexer-Checkpoint`).",
+        "operationId": "listPlayerAgreementActions",
+        "parameters": [
+          {
+            "name": "address",
+            "required": true,
+            "in": "path",
+            "description": "Player wallet address.",
+            "schema": {
+              "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaulingActionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A player’s hauling to-do list",
+        "tags": [
+          "Hauling-agreements"
+        ],
+        "x-cu-cost": 30
+      }
+    },
+    "/v1/players/{address}/agreements/claimable": {
+      "get": {
+        "description": "**Cost:** 50 compute units per request.\n\nOpen agreements, before their accept deadline, that the address can accept: no claim gate, or every gate lists the address (as a player or machine key) or an organization whose board it sits on. Each comes with its claim plan, the call to make for each requirement. Soonest accept deadline first. `include_unknown=true` adds agreements with rules this API cannot evaluate. Membership is read live, so a board change shows up as soon as the indexer has it.",
+        "operationId": "listClaimableAgreements",
+        "parameters": [
+          {
+            "name": "address",
+            "required": true,
+            "in": "path",
+            "description": "Player wallet address.",
+            "schema": {
+              "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of results to return (1–100).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor from a previous response’s `next_cursor`. Omit for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "include_unknown",
+            "required": false,
+            "in": "query",
+            "description": "Also return agreements whose every claim gate passes but which have rules this API cannot evaluate (`eligibility: unknown`).",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimableHaulingAgreementPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Hauling agreements a player can accept",
+        "tags": [
+          "Hauling-agreements"
+        ],
+        "x-cu-cost": 50
+      }
+    },
+    "/v1/players/{address}/agreements/reputation": {
+      "get": {
+        "description": "**Cost:** 30 compute units per request.\n\nAs hauler: jobs accepted, in progress, overdue, delivered, defaulted and forfeited, the completion rate, and net rewards and collateral lost per currency. As lister: agreements posted and how they went. Counts are by wallet address. `lapsed` and `overdue` are derived from wall-clock time, which the response returns as `evaluated_at`; events still reach the index with its delay (see `X-Indexer-Checkpoint`).",
+        "operationId": "getPlayerAgreementReputation",
+        "parameters": [
+          {
+            "name": "address",
+            "required": true,
+            "in": "path",
+            "description": "Player wallet address.",
+            "schema": {
+              "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaulingReputationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A player’s hauling record",
+        "tags": [
+          "Hauling-agreements"
+        ],
+        "x-cu-cost": 30
+      }
+    },
     "/v1/players/{address}/orgs": {
       "get": {
-        "description": "**Cost:** 30 compute units per request.\n\nReturns every organization the address is a current governance member of, each resolved to its full unit tree. One entry per distinct top-level organization — inspect each tree’s per-unit `members` to see exactly where the address sits. Results are cached for 5 minutes.",
+        "description": "**Cost:** 30 compute units per request.\n\nReturns every organization the address is a current governance member of, each resolved to its full unit tree. One entry per distinct top-level organization — inspect each tree’s per-unit `members` to see exactly where the address sits. Trees are cached for up to 5 minutes, dropped as soon as the indexer reports a change.",
         "operationId": "listPlayerOrgs",
         "parameters": [
           {
@@ -1737,6 +2568,15 @@
             "description": "Player wallet address.",
             "schema": {
               "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
               "type": "string"
             }
           }
@@ -1907,6 +2747,15 @@
             "required": true,
             "in": "path",
             "description": "Pool (orderbook) object ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
             "schema": {
               "type": "string"
             }
@@ -2109,7 +2958,7 @@
           "Universe | Routing"
         ],
         "summary": "Calculate a route between two solar systems",
-        "description": "**Cost:** 100 compute units per request.\n\nRuns an A* search over the stargate network plus every jump-drive hop within\n`max_jump_range_ly`, and returns the ordered waypoints together with the\nroute's jump counts and travel distance.\n\n**Choosing an optimization.** `time` minimises travel time and will take long\njump-drive hops to skip gate chains. `fuel` minimises fuel burn and prefers\nstargates, which are free but slower. `balanced` interpolates between them\nusing `gate_weight`.\n\n**Ship parameters matter.** `mass` scales fuel burn per light year, so a\nheavier ship shifts `fuel` and `balanced` results toward gates;\n`max_jump_range_ly` bounds which drive hops exist at all, so a short-range\nship may be routed entirely over gates — or get a 404 when no gate path\nexists.\n\n**Reading the result.** `total_cost.total_jumps` is the hop count a player\nsees; `gate_jumps` and `drive_jumps` split it by hop type;\n`total_distance_ly` is the whole path and `drive_distance_ly` only the\njump-drive portion. A 404 means the systems are known but unreachable under\nthese parameters — retrying with a larger `max_jump_range_ly` may succeed.",
+        "description": "**Cost:** 100 compute units per request.\n\nRuns an A* search over the stargate network plus every jump-drive hop within\n`max_jump_range_ly`, and returns the ordered waypoints together with the\nroute's jump counts and travel distance.\n\n**Choosing an optimization.** `time` minimises travel time and will take long\njump-drive hops to skip gate chains. `fuel` minimises fuel burn and prefers\nstargates, which are free but slower. `balanced` interpolates between them\nusing `gate_weight`.\n\n**Ship parameters matter.** `mass` scales fuel burn per light year, so a\nheavier ship shifts `fuel` and `balanced` results toward gates;\n`max_jump_range_ly` bounds which drive hops exist at all, so a short-range\nship may be routed entirely over gates — or get a 404 when no gate path\nexists.\n\n**Reading the result.** `total_cost.total_jumps` is the hop count a player\nsees; `gate_jumps` and `drive_jumps` split it by hop type;\n`total_distance_ly` is the whole path and `drive_distance_ly` only the\njump-drive portion. A 404 means either that a name has not been reported\nby any player yet (the message says which), or that the systems are known\nbut unreachable under these parameters — retrying with a larger\n`max_jump_range_ly` may succeed. Waypoints through systems whose name has\nnot been reported carry a `null` `solar_system_name`.",
         "operationId": "getRoute",
         "parameters": [
           {
@@ -2509,6 +3358,7 @@
                   "$ref": "#/components/schemas/SpatialStatsResponse"
                 },
                 "example": {
+                  "known_solar_system_names": 15,
                   "status": "operational",
                   "total_systems": 24018
                 }
@@ -2525,7 +3375,7 @@
           "Universe | Solar Systems"
         ],
         "summary": "Look up many solar systems at once",
-        "description": "**Cost:** 50 compute units per request.\n\nResolves up to 100 solar systems in one call. Pass either\n`solar_system_ids` or `solar_system_names` — not both.\n\nIdentifiers that match nothing are omitted from `systems` rather than\nreturned as nulls, so compare `count` against the number you asked for to\ndetect misses. Prefer this over looping the single-system endpoint: it costs\none call instead of N.",
+        "description": "**Cost:** 50 compute units per request.\n\nResolves up to 100 solar systems in one call. Pass either\n`solar_system_ids` or `solar_system_names` — not both.\n\nIdentifiers that match nothing are omitted from `systems` rather than\nreturned as nulls — including names no player has reported yet — so\ncompare `count` against the number you asked for to detect misses. Prefer\nthis over looping the single-system endpoint: it costs one call instead of N.",
         "operationId": "batchGetSolarSystems",
         "parameters": [
           {
@@ -2606,7 +3456,7 @@
           "Universe | Solar Systems"
         ],
         "summary": "Autocomplete solar system names",
-        "description": "**Cost:** 20 compute units per request.\n\nReturns solar systems whose name starts with `q`, matched case-insensitively\nand sorted alphabetically.\n\nIntended for type-ahead inputs: it is served from an in-memory prefix index\nand returns only identifiers, so it is far cheaper than the full system\nlookup. Resolve the chosen suggestion with `/v1/spatial/systems/{solar_system}`\nwhen you need coordinates.",
+        "description": "**Cost:** 20 compute units per request.\n\nReturns solar systems whose name starts with `q`, matched case-insensitively\nand sorted alphabetically.\n\nOnly systems whose name a player has reported are searched, so a prefix\nthat matches nothing today may match once more of the map is discovered.\n\nIntended for type-ahead inputs: it is served from an in-memory prefix index\nand returns only identifiers, so it is far cheaper than the full system\nlookup. Resolve the chosen suggestion with `/v1/spatial/systems/{solar_system}`\nwhen you need coordinates.",
         "operationId": "autocompleteSolarSystems",
         "parameters": [
           {
@@ -2866,7 +3716,7 @@
     },
     "/v1/trades/recent": {
       "get": {
-        "description": "**Cost:** 50 compute units per request.\n\nReturns the latest executed trades across every item market, newest first. Use `before` (epoch milliseconds) to page backward — pass the previous response’s `next_cursor` as `before`. Use `after` to poll for trades executed since a given time. Filter with `public_only` (location-revealed trade hubs only) and `item_id` (a single item type). At most 50 rows are returned per page.",
+        "description": "**Cost:** 50 compute units per request.\n\nReturns the latest executed trades across every item market, newest first. Use `before` (epoch milliseconds) to page backward — pass the previous response’s `next_cursor` as `before`. Use `after` to poll for trades executed since a given time. Filter with `public_only` (location-revealed trade hubs only), `item_id` (a single item type) and `hub_id` (a single trade hub). At most 50 rows are returned per page.",
         "operationId": "getRecentTrades",
         "parameters": [
           {
@@ -2918,6 +3768,16 @@
             "description": "Only return trades for this item type (numeric asset ID).",
             "schema": {
               "example": "77800",
+              "type": "string"
+            }
+          },
+          {
+            "name": "hub_id",
+            "required": false,
+            "in": "query",
+            "description": "Only return trades at this trade hub (storage unit object ID).",
+            "schema": {
+              "example": "0x5c0f…",
               "type": "string"
             }
           }
@@ -3148,6 +4008,15 @@
               "default": 50,
               "type": "integer"
             }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3191,6 +4060,15 @@
             "description": "Trading account object ID.",
             "schema": {
               "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
               "type": "string"
             }
           }
@@ -3284,6 +4162,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3315,63 +4202,6 @@
         "x-cu-cost": 30
       }
     },
-    "/v1/tribes/{tribe_id}": {
-      "get": {
-        "description": "**Deprecated** as of 2026-08-20 (`2026-08-20T00:00:00Z`).\n\n**Cost:** 20 compute units per request.\n\nReturns tribe metadata (name, short name, tax rate, …) for the given numeric tribe ID. Tribes are game-world factions distinct from on-chain organizations.",
-        "operationId": "getTribeLegacy",
-        "parameters": [
-          {
-            "name": "tribe_id",
-            "required": true,
-            "in": "path",
-            "description": "Numeric tribe ID.",
-            "schema": {
-              "example": 98000001,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TribeResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No tribe exists with the given ID.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Get a tribe by numeric ID",
-        "tags": [
-          "World | Tribes"
-        ],
-        "deprecated": true,
-        "x-deprecation-date": "2026-08-20T00:00:00Z",
-        "x-cu-cost": 20
-      }
-    },
     "/v1/world/items": {
       "get": {
         "operationId": "listItems",
@@ -3400,7 +4230,7 @@
     },
     "/v1/world/items/search": {
       "get": {
-        "description": "**Cost:** 50 compute units per request.\n\nSearch tradeable item types by partial, case-insensitive name (or exact numeric type ID). Returns display metadata, mass, and crafting recipes for each match, best matches first (exact ID, exact name, name prefix, then name substring). Item data comes from the hourly refreshed game-data list.",
+        "description": "**Cost:** 50 compute units per request.\n\nSearch tradeable item types by partial, case-insensitive name (or exact numeric type ID). Returns display metadata, mass, and crafting recipes for each match, best matches first (exact ID, exact name, name prefix, then name substring). Item data comes from the hourly refreshed game-data list. With `variants=true`, each match also carries its supply in live storage units and its top variants (neotype keys), ranked by `variant_sort`, from a snapshot rebuilt every 5 minutes.",
         "operationId": "searchAssets",
         "parameters": [
           {
@@ -3417,6 +4247,55 @@
             "required": false,
             "in": "query",
             "description": "Maximum results (default 20, max 50).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variants",
+            "required": false,
+            "in": "query",
+            "description": "Include `supply` and `variants` (keys with units in storage) on each match. Default false.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "variant_sort",
+            "required": false,
+            "in": "query",
+            "description": "Variant order: `supply` (most units in storage, default) or `storage_units` (held in the most storage units).",
+            "schema": {
+              "enum": [
+                "supply",
+                "storage_units"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant_limit",
+            "required": false,
+            "in": "query",
+            "description": "Variants per match (default 5, max 50).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenant",
+            "required": false,
+            "in": "query",
+            "description": "World to count supply in, e.g. `stillness`. Omitted: every world.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_checkpoint",
+            "required": false,
+            "in": "query",
+            "description": "Serve data that includes at least this indexer checkpoint (e.g. the checkpoint of your transaction). A cached copy older than this is rebuilt. Every response carries `X-Indexer-Checkpoint`: the checkpoint it includes. If the indexer has not reached this checkpoint yet, the response waits briefly, then returns current data with a lower checkpoint header — retry later.",
             "schema": {
               "type": "string"
             }
@@ -3453,14 +4332,14 @@
     },
     "/v1/world/items/{asset_id}": {
       "get": {
-        "description": "**Cost:** 20 compute units per request.\n\nReturns the display name and group symbol for a given numeric item type ID. Results are cached for 1 hour.",
+        "description": "**Cost:** 20 compute units per request.\n\nReturns the display name and group symbol for a numeric asset id. A neotype (digital chemistry) variant key `(variant_id << 32) | type_id` is decomposed into `type_id` + `variant_id` and resolved through its base type, with the name composed as `<base> #<variant>`. The items list is cached for 1 hour.",
         "operationId": "getAsset",
         "parameters": [
           {
             "name": "asset_id",
             "required": true,
             "in": "path",
-            "description": "Numeric item type ID (e.g. 88561)",
+            "description": "Numeric asset id: a plain item type id (e.g. 88561) or a neotype variant key (e.g. 1885490740881 = Inkstone 97937, variant 439)",
             "schema": {
               "type": "string"
             }
@@ -3488,7 +4367,7 @@
             }
           }
         },
-        "summary": "Get asset info by numeric type ID",
+        "summary": "Get asset info by asset id (item type or neotype variant)",
         "tags": [
           "World | Items"
         ],
@@ -3779,26 +4658,46 @@
         "properties": {
           "asset_id": {
             "type": "string",
-            "example": "88561",
-            "description": "Numeric item type ID, as a string."
+            "example": "1885490740881",
+            "description": "The requested asset id (a u64), as a decimal string. For a neotype variant this is the composed key `(variant_id << 32) | type_id`."
           },
           "name": {
             "type": "string",
             "nullable": true,
-            "example": "Common Ore",
-            "description": "Item display name, or null when unknown."
+            "example": "Inkstone #439",
+            "description": "Item display name, or null when unknown. A neotype variant reads `<base name> #<variant_id>`."
           },
           "symbol": {
             "type": "string",
             "nullable": true,
             "example": "Raw Materials",
             "description": "The item's group name, or null when the item has no group."
+          },
+          "type_id": {
+            "type": "string",
+            "example": "97937",
+            "description": "Base item type id (the low 32 bits of `asset_id`). Equals `asset_id` for a plain item."
+          },
+          "variant_id": {
+            "type": "string",
+            "nullable": true,
+            "example": "439",
+            "description": "Neotype (digital chemistry) variant id (the high 32 bits of `asset_id`), or null for a plain item."
+          },
+          "base_name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Inkstone",
+            "description": "The base type's display name, without the variant suffix."
           }
         },
         "required": [
           "asset_id",
           "name",
-          "symbol"
+          "symbol",
+          "type_id",
+          "variant_id",
+          "base_name"
         ]
       },
       "AssetRecipe": {
@@ -3815,11 +4714,19 @@
             "items": {
               "$ref": "#/components/schemas/AssetRecipeComponent"
             }
+          },
+          "byproducts": {
+            "description": "Other items the same craft yields alongside this one (refining co-outputs); empty for single-output recipes.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetRecipeComponent"
+            }
           }
         },
         "required": [
           "output_quantity",
-          "components"
+          "components",
+          "byproducts"
         ]
       },
       "AssetRecipeComponent": {
@@ -3887,6 +4794,22 @@
             "items": {
               "$ref": "#/components/schemas/AssetRecipe"
             }
+          },
+          "supply": {
+            "nullable": true,
+            "description": "Only with `variants=true`: total units of the type in live storage units, over all its keys; null when none are in storage.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemSupplySummary"
+              }
+            ]
+          },
+          "variants": {
+            "description": "Only with `variants=true`: the type’s keys (plain item and neotype variants) in storage, ordered by `variant_sort`, at most `variant_limit`. Page the rest with `GET /v1/world/items/{type_id}/variants`.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemVariantSupply"
+            }
           }
         },
         "required": [
@@ -3940,6 +4863,189 @@
               "$ref": "#/components/schemas/SolarSystem"
             },
             "description": "Resolved systems. Identifiers that matched nothing are omitted rather\nthan returned as nulls, so `count` may be lower than the number requested."
+          }
+        }
+      },
+      "Blueprint": {
+        "type": "object",
+        "description": "A crafting recipe: one run of a blueprint, consuming `inputs` and yielding `outputs`.",
+        "required": [
+          "blueprintId",
+          "primaryTypeId",
+          "kind",
+          "runTime",
+          "inputs",
+          "outputs",
+          "facilities"
+        ],
+        "properties": {
+          "blueprintId": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Game-client id of the recipe: a digital chemistry recipe id when `source` is `recipe`, an industry blueprint id when `source` is `industry`; null for `construct` entries."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "recipe",
+              "industry",
+              "construct"
+            ],
+            "description": "`recipe`: a digital chemistry recipe (cycle 7 on; nearly all crafting). `industry`: a legacy industry blueprint (a few remain, none runnable). `construct`: a construction-site structure."
+          },
+          "name": {
+            "type": "string",
+            "description": "Recipe name (`recipe` entries only)."
+          },
+          "primaryTypeId": {
+            "type": "integer",
+            "description": "The item the blueprint is keyed by: its main output for `manufacture`/`construct`, the ore or salvage consumed for `refine`."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "manufacture",
+              "refine",
+              "construct",
+              "reverse"
+            ],
+            "description": "`manufacture`: build an item from parts. `refine`: refine or reprocess ore, crude matter or salvage, often into several outputs. `construct`: a construction-site structure (null `blueprintId`, no facilities). `reverse`: the backward half of a production loop (unpacking, D2 Fuel → Salt); do not price items from these."
+          },
+          "runTime": {
+            "type": "integer",
+            "description": "Run time in seconds (raw game-client value); -1 when unknown."
+          },
+          "inputs": {
+            "type": "array",
+            "description": "Items consumed per run.",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintItem"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "description": "Items produced per run. More than one for most `refine` blueprints and a few `manufacture` ones.",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintItem"
+            }
+          },
+          "facilities": {
+            "type": "array",
+            "description": "Facilities that can run the blueprint. Empty for `construct` entries, and for the few industry blueprints no facility can run.",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintFacility"
+            }
+          }
+        }
+      },
+      "BlueprintFacility": {
+        "type": "object",
+        "description": "A facility that can run a blueprint, with its per-job limits.",
+        "required": [
+          "typeId",
+          "name"
+        ],
+        "properties": {
+          "typeId": {
+            "type": "integer",
+            "description": "Item type id of the facility (e.g. a Refinery or Printer)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Facility display name."
+          },
+          "maxInputRuns": {
+            "type": "integer",
+            "description": "Maximum input runs per job in this facility. Industry blueprints only."
+          },
+          "maxOutputRuns": {
+            "type": "integer",
+            "description": "Maximum output runs per job in this facility. Industry blueprints only."
+          },
+          "maxMultiplier": {
+            "type": "integer",
+            "description": "Maximum job multiplier in this facility. Digital chemistry recipes only."
+          }
+        }
+      },
+      "BlueprintItem": {
+        "type": "object",
+        "description": "One input or output line of a blueprint. For a digital chemistry recipe it is a slot: an input can name a type, require traits, or both.",
+        "required": [
+          "id",
+          "quantity"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Item type id (joins to the item list `id`). Null for a trait-only input slot, which any stack meeting `traits` fills; see `candidates`. Outputs always have an id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name; for a trait-only slot, its trait names. May be empty."
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Units consumed or produced per run. Fractional for continuous-quantity items (see the item list's `quantityKind`). For an output with `yield`, the nominal amount."
+          },
+          "slot": {
+            "type": "integer",
+            "description": "Input or output index within the recipe (`recipe` entries only)."
+          },
+          "traits": {
+            "type": "array",
+            "description": "Traits (named property ranges) the stack in this input slot must meet.",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "candidates": {
+            "type": "array",
+            "description": "Trait-only slots: neotypes whose natural property ranges could meet `traits`. `guaranteed` means every variant of the type does; otherwise only some variants.",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "guaranteed"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "guaranteed": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "traitsGuaranteed": {
+            "type": "boolean",
+            "description": "Typed slots with `traits`: whether every variant of the type meets them."
+          },
+          "yield": {
+            "type": "string",
+            "description": "Outputs whose amount varies: `breakpointTable` means it scales with an input property (`yieldPropertyId`), e.g. ore quality."
+          },
+          "yieldPropertyId": {
+            "type": "integer",
+            "description": "The input property a variable yield follows (see `v1/items/neotype_properties.json`)."
           }
         }
       },
@@ -4087,124 +5193,402 @@
           "tribe_id"
         ]
       },
-      "CoinMarket": {
+      "ClaimPlanStepResponse": {
         "type": "object",
         "properties": {
-          "base_asset_id": {
-            "type": "string",
-            "example": "0x9f3a1b2c…::cred::CRED",
-            "description": "Fully-qualified base coin type."
+          "req_index": {
+            "type": "integer"
           },
-          "base_asset_symbol": {
+          "rule": {
             "type": "string",
-            "nullable": true,
-            "example": "AWAR",
-            "description": "Ticker symbol of the base coin, or `null` if unknown."
+            "enum": [
+              "claim",
+              "unknown"
+            ]
           },
-          "base_asset_name": {
+          "type_name": {
+            "type": "string"
+          },
+          "is_identity_rule": {
+            "type": "boolean"
+          },
+          "action": {
             "type": "string",
-            "nullable": true,
-            "description": "Display name of the base coin, or `null` if unknown."
+            "enum": [
+              "satisfy_directly",
+              "satisfy",
+              "not_satisfiable",
+              "unknown"
+            ],
+            "description": "The call for this requirement in the accept transaction: `satisfy_directly` = `agreement_roles::claim::satisfy_directly` (the address is listed); `satisfy` = `agreement_roles::claim::satisfy` with the OU `org_id`; `not_satisfiable` = the address cannot pass this gate; `unknown` = a rule this API cannot plan."
           },
-          "base_asset_decimals": {
+          "org_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "For `satisfy`: the organization to pass.",
+            "nullable": true
+          }
+        },
+        "required": [
+          "req_index",
+          "rule",
+          "type_name",
+          "is_identity_rule",
+          "action",
+          "org_id"
+        ]
+      },
+      "ClaimableHaulingAgreementPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClaimableHaulingAgreementResponse"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "evaluated_at": {
             "type": "integer",
-            "example": 9,
-            "description": "Decimal places of the base coin."
-          },
-          "quote_asset_id": {
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Wall-clock time each row’s `status` was derived at. Unix epoch milliseconds."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "evaluated_at"
+        ]
+      },
+      "ClaimableHaulingAgreementResponse": {
+        "type": "object",
+        "properties": {
+          "agreement_id": {
             "type": "string",
-            "example": "0x9f3a1b2c…::cred::CRED",
-            "description": "Fully-qualified quote coin type."
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Object ID of the shared `HaulingAgreement<T>`."
           },
-          "quote_asset_symbol": {
+          "status": {
             "type": "string",
-            "nullable": true,
-            "example": "CRED",
-            "description": "Ticker symbol of the quote coin, or `null` if unknown."
+            "enum": [
+              "open",
+              "lapsed",
+              "accepted",
+              "overdue",
+              "delivered",
+              "defaulted",
+              "forfeited",
+              "cancelled",
+              "closed_lapsed"
+            ],
+            "description": "`open` (accepting until `accept_deadline_at`), `lapsed` (open past it), `accepted` (in progress), `overdue` (accepted, past `delivery_deadline_at`: anyone may default it), or how it ended: `delivered`, `defaulted`, `forfeited`, `cancelled`, `closed_lapsed`. `lapsed` and `overdue` are derived from the clock at `evaluated_at`."
           },
-          "quote_asset_name": {
-            "type": "string",
-            "nullable": true,
-            "description": "Display name of the quote coin, or `null` if unknown."
-          },
-          "quote_asset_decimals": {
+          "posted_at": {
             "type": "integer",
-            "example": 6,
-            "description": "Decimal places of the quote coin."
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When the agreement was drafted. Unix epoch milliseconds."
           },
+          "accept_deadline_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Accepts must land before this time (exclusive; `accept_by_ms`). Unix epoch milliseconds."
+          },
+          "haul_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time a hauler has to deliver after accepting, in milliseconds."
+          },
+          "lister": {
+            "description": "Signer of the draft.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "beneficiary": {
+            "description": "Paid on delivery or default. With `pays_cap_holder` this is the lister cap’s own address, and whoever holds the cap is paid.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "pays_cap_holder": {
+            "type": "boolean",
+            "description": "Lister-side payouts go to the lister cap as `Proceeds`, collected by its holder."
+          },
+          "on_behalf_of": {
+            "nullable": true,
+            "description": "Who the agreement was posted for, when a wrapper set it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingEntityResponse"
+              }
+            ]
+          },
+          "cargo": {
+            "description": "Cargo escrowed by the lister, picked up by the hauler: one entry per item, in the agreement’s order. Empty for an agreement that only pays for delivery.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingItemsResponse"
+            }
+          },
+          "want": {
+            "description": "Exactly what must be handed in to deliver: one entry per item. A delivery hands in one balance per entry, in this order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingItemsResponse"
+            }
+          },
+          "currency": {
+            "description": "Coin type `T` of reward, collateral and delivery fee.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CoinRef"
+              }
+            ]
+          },
+          "reward": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Escrowed reward, before any delivery fee. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "collateral": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Collateral a hauler locks on accept. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "delivery_fee_bps": {
+            "type": "integer",
+            "description": "Delivery fee on the reward, in basis points, fixed at posting."
+          },
+          "claim_gated": {
+            "type": "boolean",
+            "description": "Accepting is limited to listed players, machine keys or organizations."
+          },
+          "has_other_rules": {
+            "type": "boolean",
+            "description": "Accepting needs requirements this API cannot evaluate (including any identity rule)."
+          },
+          "hauler": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "hauler_identity": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingIdentityResponse"
+              }
+            ]
+          },
+          "accepted_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When it was accepted. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "delivery_deadline_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Delivery must land before this time (exclusive; `deadline_ms`). After it, anyone may default the agreement. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "closed_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When it ended. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "closed_by": {
+            "nullable": true,
+            "description": "Sender of the transaction that ended it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "hauler_reward": {
+            "type": "string",
+            "nullable": true,
+            "example": "2500000",
+            "description": "Delivered: the reward paid to the hauler, net of the fee. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "delivery_fee": {
+            "type": "string",
+            "nullable": true,
+            "example": "2500000",
+            "description": "Delivered: the fee sent to the treasury. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "refunded_to": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "`closed_lapsed`: where the escrow went (the lister, or the cap’s address when it pays the cap holder).",
+            "nullable": true
+          },
+          "cap_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "The agreement’s `ListerCap`."
+          },
+          "posted_tx_digest": {
+            "type": "string",
+            "description": "Digest of the posting transaction."
+          },
+          "accepted_tx_digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "closed_tx_digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "eligibility": {
+            "type": "string",
+            "enum": [
+              "eligible",
+              "ineligible",
+              "unknown"
+            ],
+            "description": "With a viewer address: `eligible`, `ineligible` (a claim gate lists nothing the address satisfies) or `unknown` (other rules apply)."
+          },
+          "viewer_roles": {
+            "type": "array",
+            "description": "With a viewer address: the roles it plays.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "lister",
+                "cap_holder",
+                "beneficiary",
+                "hauler",
+                "claimed_via_org"
+              ]
+            }
+          },
+          "claim_plan": {
+            "$ref": "#/components/schemas/HaulingClaimPlanResponse"
+          }
+        },
+        "required": [
+          "agreement_id",
+          "status",
+          "posted_at",
+          "accept_deadline_at",
+          "haul_duration_ms",
+          "lister",
+          "beneficiary",
+          "pays_cap_holder",
+          "on_behalf_of",
+          "cargo",
+          "want",
+          "currency",
+          "reward",
+          "collateral",
+          "delivery_fee_bps",
+          "claim_gated",
+          "has_other_rules",
+          "hauler",
+          "hauler_identity",
+          "accepted_at",
+          "delivery_deadline_at",
+          "closed_at",
+          "closed_by",
+          "hauler_reward",
+          "delivery_fee",
+          "refunded_to",
+          "cap_id",
+          "posted_tx_digest",
+          "accepted_tx_digest",
+          "closed_tx_digest",
+          "claim_plan"
+        ]
+      },
+      "CoinMarketResponse": {
+        "type": "object",
+        "properties": {
           "pool_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Pool (order book) object ID."
+            "description": "Representative (most-active) pool ID."
           },
-          "pool_name": {
+          "quote_asset_id": {
             "type": "string",
-            "nullable": true,
-            "example": "AWAR/CRED",
-            "description": "Human-readable pool name, or `null` if unset."
+            "nullable": true
           },
-          "fee": {
+          "quote_asset_symbol": {
             "type": "string",
-            "nullable": true,
-            "example": "20000000",
-            "description": "Current pool taker fee — the entry tier of the pool's fee class, or its creation-time rate when no class schedule is indexed — scaled by 1e9 (e.g. `20000000` = 2%), or `null` if unknown."
+            "nullable": true
           },
-          "fee_rate": {
+          "quote_asset_decimals": {
             "type": "number",
-            "nullable": true,
-            "example": 0.02,
-            "description": "Decimal form of the pool taker fee (`fee` / 1e9)."
+            "nullable": true
           },
           "best_bid": {
             "type": "string",
             "nullable": true,
-            "description": "Highest resting bid price (raw integer, decimal string, scaled by `price_scaling`), or `null` when no bids rest."
+            "description": "Raw best bid (1e9-scaled)."
           },
           "best_ask": {
             "type": "string",
             "nullable": true,
-            "description": "Lowest resting ask price (raw integer, decimal string, scaled by `price_scaling`), or `null` when no asks rest."
-          },
-          "open_orders": {
-            "type": "integer",
-            "description": "Number of orders currently resting on the book."
-          },
-          "traders": {
-            "type": "integer",
-            "description": "Distinct accounts with orders resting on the book."
+            "description": "Raw best ask (1e9-scaled)."
           },
           "last_price": {
             "type": "string",
             "nullable": true,
-            "description": "Price of the most recent trade (raw integer, decimal string), or `null` if the market has never traded."
+            "description": "Raw last fill price (1e9-scaled)."
           },
           "last_traded_at": {
             "type": "integer",
             "format": "int64",
-            "nullable": true,
             "example": 1755043200000,
-            "description": "When the most recent trade executed. Unix epoch milliseconds; `null` if the market has never traded."
+            "description": "Time of the last fill on the pool. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "open_orders": {
+            "type": "number",
+            "description": "Open resting orders on the pool."
+          },
+          "traders": {
+            "type": "number",
+            "description": "Distinct resting traders."
+          },
+          "price_change_24h": {
+            "type": "number",
+            "nullable": true,
+            "description": "24h price change as a fraction (0.0372 = +3.72%)."
           }
         },
         "required": [
-          "base_asset_id",
-          "base_asset_symbol",
-          "base_asset_name",
-          "base_asset_decimals",
+          "pool_id",
           "quote_asset_id",
           "quote_asset_symbol",
-          "quote_asset_name",
           "quote_asset_decimals",
-          "pool_id",
-          "pool_name",
-          "fee",
-          "fee_rate",
           "best_bid",
           "best_ask",
+          "last_price",
+          "last_traded_at",
           "open_orders",
           "traders",
-          "last_price",
-          "last_traded_at"
+          "price_change_24h"
         ]
       },
       "CoinMintPolicy": {
@@ -4216,7 +5600,7 @@
               "fixed",
               "mintable"
             ],
-            "description": "`fixed`: TreasuryCap consumed/burn-only (no more minting). `mintable`: cap still live."
+            "description": "`fixed`: no more minting — the TreasuryCap is consumed or burn-only, per the chain or, when the chain reports no supply state (e.g. a cap wrapped in the package's own object), per the token registry's declared `supply_policy`. Burn-only coins report `fixed` too; their total supply can still shrink. `mintable`: cap still live."
           },
           "capped": {
             "type": "boolean",
@@ -4226,6 +5610,40 @@
         },
         "required": [
           "kind"
+        ]
+      },
+      "CoinRef": {
+        "type": "object",
+        "properties": {
+          "coin_type": {
+            "type": "string",
+            "example": "0x9f3a1b2c…::cred::CRED",
+            "description": "Fully-qualified Move coin type (`<address>::<module>::<STRUCT>`)."
+          },
+          "symbol": {
+            "type": "string",
+            "nullable": true,
+            "example": "CRED",
+            "description": "Ticker symbol from the coin metadata, or null if unknown."
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Cred",
+            "description": "Human-readable coin name, or null if unknown."
+          },
+          "decimals": {
+            "type": "integer",
+            "nullable": true,
+            "example": 9,
+            "description": "Decimal places of the smallest on-chain unit (raw amounts are divided by 10^decimals for display), or null if unknown."
+          }
+        },
+        "required": [
+          "coin_type",
+          "symbol",
+          "name",
+          "decimals"
         ]
       },
       "CoinResponse": {
@@ -4297,7 +5715,7 @@
           "upgradeable": {
             "type": "boolean",
             "nullable": true,
-            "description": "Package upgrade cap still live. Not sourced yet — null."
+            "description": "The package enforcing the supply policy can still be upgraded (its UpgradeCap is live), so an upgrade could change it. From the token registry's `supply_policy`; null when the registry doesn't say."
           },
           "verified": {
             "type": "boolean",
@@ -4309,7 +5727,7 @@
             "description": "Appended market data, or null when the coin has no pool.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/CoinMarket"
+                "$ref": "#/components/schemas/CoinMarketResponse"
               }
             ]
           }
@@ -4337,7 +5755,16 @@
           "address": {
             "type": "string",
             "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
-            "description": "Holder address."
+            "description": "Holder address, or the object ID for an object holder."
+          },
+          "holder": {
+            "type": "string",
+            "enum": [
+              "address",
+              "object",
+              "dynamic_fields"
+            ],
+            "description": "`address`: an account's balance; `object`: a Balance stored inside the object at `address` (e.g. a treasury object); `dynamic_fields`: balances in the object's dynamic fields (e.g. a Bag of balances)."
           },
           "label": {
             "type": "string",
@@ -4346,15 +5773,16 @@
           },
           "type": {
             "type": "string",
-            "description": "Holding kind (e.g. treasury/team/vesting/locked)."
+            "description": "Holding kind (e.g. treasury/team/vesting/unactivated)."
           },
           "amount": {
             "type": "number",
-            "description": "Balance held at this address, in whole coins."
+            "description": "Balance held at this address or object, in whole coins."
           }
         },
         "required": [
           "address",
+          "holder",
           "label",
           "type",
           "amount"
@@ -4419,6 +5847,24 @@
             "example": "4013616888017946600"
           }
         }
+      },
+      "CurrencyAmountResponse": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/CoinRef"
+          },
+          "amount": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Total. In the smallest unit of the currency (u64 decimal string)."
+          }
+        },
+        "required": [
+          "currency",
+          "amount"
+        ]
       },
       "DiscoveryOrder": {
         "type": "object",
@@ -4875,6 +6321,1589 @@
           "next_cursor"
         ]
       },
+      "HaulerRecordResponse": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "integer"
+          },
+          "in_progress": {
+            "type": "integer",
+            "description": "Accepted, before the deadline."
+          },
+          "overdue": {
+            "type": "integer",
+            "description": "Accepted, past the deadline."
+          },
+          "delivered": {
+            "type": "integer"
+          },
+          "defaulted": {
+            "type": "integer"
+          },
+          "forfeited": {
+            "type": "integer"
+          },
+          "completion_rate": {
+            "type": "number",
+            "nullable": true,
+            "example": 0.95,
+            "description": "delivered / (delivered + defaulted + forfeited); null before any job finished."
+          },
+          "net_reward": {
+            "description": "Rewards received, net of delivery fees, per currency.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CurrencyAmountResponse"
+            }
+          },
+          "collateral_lost": {
+            "description": "Collateral lost to defaults and forfeits, per currency.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CurrencyAmountResponse"
+            }
+          }
+        },
+        "required": [
+          "accepted",
+          "in_progress",
+          "overdue",
+          "delivered",
+          "defaulted",
+          "forfeited",
+          "completion_rate",
+          "net_reward",
+          "collateral_lost"
+        ]
+      },
+      "HaulingActionPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "Deliveries soonest-due first, then the rest newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingActionResponse"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Always null: the list is returned whole (up to 200 items)."
+          },
+          "evaluated_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Wall-clock time the actions were derived at. Unix epoch milliseconds."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "evaluated_at"
+        ]
+      },
+      "HaulingActionResponse": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "collect_proceeds",
+              "delete_cap",
+              "cancel_lapsed",
+              "deliver",
+              "default"
+            ],
+            "description": "`collect_proceeds`: collect what the ended agreement sent your cap; `delete_cap`: reclaim a spent cap’s storage; `cancel_lapsed`: cancel your listing nobody accepted in time and take back the escrow; `deliver`: hand in the wanted items before the deadline; `default`: claim reward and collateral from an overdue job you are owed."
+          },
+          "move_call": {
+            "type": "string",
+            "enum": [
+              "hauling::collect",
+              "hauling::delete_cap",
+              "hauling::cancel",
+              "hauling::deliver",
+              "hauling::default"
+            ],
+            "description": "Function to call in the hauling_agreements package, with `type_argument` as `T` (none for `delete_cap`)."
+          },
+          "type_argument": {
+            "type": "string",
+            "example": "0x9f3a1b2c…::cred::CRED",
+            "description": "`T` of `HaulingAgreement<T>`."
+          },
+          "agreement_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Sui object ID (0x-prefixed, 64 hex characters)."
+          },
+          "cap_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Your `ListerCap`.",
+            "nullable": true
+          },
+          "proceeds_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "`collect_proceeds`: the `Proceeds<T>` to receive.",
+            "nullable": true
+          },
+          "due_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "`deliver`: the delivery deadline (exclusive). Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "agreement": {
+            "$ref": "#/components/schemas/HaulingAgreementResponse"
+          }
+        },
+        "required": [
+          "action",
+          "move_call",
+          "type_argument",
+          "agreement_id",
+          "cap_id",
+          "proceeds_id",
+          "due_at",
+          "agreement"
+        ]
+      },
+      "HaulingAgreementDetailResponse": {
+        "type": "object",
+        "properties": {
+          "agreement_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Object ID of the shared `HaulingAgreement<T>`."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "lapsed",
+              "accepted",
+              "overdue",
+              "delivered",
+              "defaulted",
+              "forfeited",
+              "cancelled",
+              "closed_lapsed"
+            ],
+            "description": "`open` (accepting until `accept_deadline_at`), `lapsed` (open past it), `accepted` (in progress), `overdue` (accepted, past `delivery_deadline_at`: anyone may default it), or how it ended: `delivered`, `defaulted`, `forfeited`, `cancelled`, `closed_lapsed`. `lapsed` and `overdue` are derived from the clock at `evaluated_at`."
+          },
+          "posted_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When the agreement was drafted. Unix epoch milliseconds."
+          },
+          "accept_deadline_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Accepts must land before this time (exclusive; `accept_by_ms`). Unix epoch milliseconds."
+          },
+          "haul_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time a hauler has to deliver after accepting, in milliseconds."
+          },
+          "lister": {
+            "description": "Signer of the draft.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "beneficiary": {
+            "description": "Paid on delivery or default. With `pays_cap_holder` this is the lister cap’s own address, and whoever holds the cap is paid.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "pays_cap_holder": {
+            "type": "boolean",
+            "description": "Lister-side payouts go to the lister cap as `Proceeds`, collected by its holder."
+          },
+          "on_behalf_of": {
+            "nullable": true,
+            "description": "Who the agreement was posted for, when a wrapper set it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingEntityResponse"
+              }
+            ]
+          },
+          "cargo": {
+            "description": "Cargo escrowed by the lister, picked up by the hauler: one entry per item, in the agreement’s order. Empty for an agreement that only pays for delivery.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingItemsResponse"
+            }
+          },
+          "want": {
+            "description": "Exactly what must be handed in to deliver: one entry per item. A delivery hands in one balance per entry, in this order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingItemsResponse"
+            }
+          },
+          "currency": {
+            "description": "Coin type `T` of reward, collateral and delivery fee.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CoinRef"
+              }
+            ]
+          },
+          "reward": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Escrowed reward, before any delivery fee. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "collateral": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Collateral a hauler locks on accept. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "delivery_fee_bps": {
+            "type": "integer",
+            "description": "Delivery fee on the reward, in basis points, fixed at posting."
+          },
+          "claim_gated": {
+            "type": "boolean",
+            "description": "Accepting is limited to listed players, machine keys or organizations."
+          },
+          "has_other_rules": {
+            "type": "boolean",
+            "description": "Accepting needs requirements this API cannot evaluate (including any identity rule)."
+          },
+          "hauler": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "hauler_identity": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingIdentityResponse"
+              }
+            ]
+          },
+          "accepted_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When it was accepted. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "delivery_deadline_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Delivery must land before this time (exclusive; `deadline_ms`). After it, anyone may default the agreement. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "closed_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When it ended. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "closed_by": {
+            "nullable": true,
+            "description": "Sender of the transaction that ended it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "hauler_reward": {
+            "type": "string",
+            "nullable": true,
+            "example": "2500000",
+            "description": "Delivered: the reward paid to the hauler, net of the fee. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "delivery_fee": {
+            "type": "string",
+            "nullable": true,
+            "example": "2500000",
+            "description": "Delivered: the fee sent to the treasury. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "refunded_to": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "`closed_lapsed`: where the escrow went (the lister, or the cap’s address when it pays the cap holder).",
+            "nullable": true
+          },
+          "cap_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "The agreement’s `ListerCap`."
+          },
+          "posted_tx_digest": {
+            "type": "string",
+            "description": "Digest of the posting transaction."
+          },
+          "accepted_tx_digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "closed_tx_digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "eligibility": {
+            "type": "string",
+            "enum": [
+              "eligible",
+              "ineligible",
+              "unknown"
+            ],
+            "description": "With a viewer address: `eligible`, `ineligible` (a claim gate lists nothing the address satisfies) or `unknown` (other rules apply)."
+          },
+          "viewer_roles": {
+            "type": "array",
+            "description": "With a viewer address: the roles it plays.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "lister",
+                "cap_holder",
+                "beneficiary",
+                "hauler",
+                "claimed_via_org"
+              ]
+            }
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingRequirementResponse"
+            }
+          },
+          "observer": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingObserverResponse"
+              }
+            ]
+          },
+          "cap": {
+            "$ref": "#/components/schemas/HaulingCapResponse"
+          },
+          "proceeds": {
+            "nullable": true,
+            "description": "Set when the ending sent proceeds to the cap.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingProceedsResponse"
+              }
+            ]
+          },
+          "fees": {
+            "$ref": "#/components/schemas/HaulingFeesResponse"
+          },
+          "claims": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingClaimResponse"
+            }
+          },
+          "timeline": {
+            "description": "Every indexed event, oldest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingTimelineEventResponse"
+            }
+          },
+          "viewer": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingViewerResponse"
+              }
+            ]
+          },
+          "evaluated_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Wall-clock time `status` was derived at. Unix epoch milliseconds."
+          }
+        },
+        "required": [
+          "agreement_id",
+          "status",
+          "posted_at",
+          "accept_deadline_at",
+          "haul_duration_ms",
+          "lister",
+          "beneficiary",
+          "pays_cap_holder",
+          "on_behalf_of",
+          "cargo",
+          "want",
+          "currency",
+          "reward",
+          "collateral",
+          "delivery_fee_bps",
+          "claim_gated",
+          "has_other_rules",
+          "hauler",
+          "hauler_identity",
+          "accepted_at",
+          "delivery_deadline_at",
+          "closed_at",
+          "closed_by",
+          "hauler_reward",
+          "delivery_fee",
+          "refunded_to",
+          "cap_id",
+          "posted_tx_digest",
+          "accepted_tx_digest",
+          "closed_tx_digest",
+          "requirements",
+          "observer",
+          "cap",
+          "proceeds",
+          "fees",
+          "claims",
+          "timeline",
+          "viewer",
+          "evaluated_at"
+        ]
+      },
+      "HaulingAgreementPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingAgreementResponse"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "example": "eyJrIjoi...",
+            "description": "Opaque cursor for the next page. Pass it back as `cursor`; `null` when there are no further results."
+          },
+          "evaluated_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Wall-clock time each row’s `status` was derived at. Unix epoch milliseconds."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "evaluated_at"
+        ]
+      },
+      "HaulingAgreementResponse": {
+        "type": "object",
+        "properties": {
+          "agreement_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Object ID of the shared `HaulingAgreement<T>`."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "lapsed",
+              "accepted",
+              "overdue",
+              "delivered",
+              "defaulted",
+              "forfeited",
+              "cancelled",
+              "closed_lapsed"
+            ],
+            "description": "`open` (accepting until `accept_deadline_at`), `lapsed` (open past it), `accepted` (in progress), `overdue` (accepted, past `delivery_deadline_at`: anyone may default it), or how it ended: `delivered`, `defaulted`, `forfeited`, `cancelled`, `closed_lapsed`. `lapsed` and `overdue` are derived from the clock at `evaluated_at`."
+          },
+          "posted_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When the agreement was drafted. Unix epoch milliseconds."
+          },
+          "accept_deadline_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Accepts must land before this time (exclusive; `accept_by_ms`). Unix epoch milliseconds."
+          },
+          "haul_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time a hauler has to deliver after accepting, in milliseconds."
+          },
+          "lister": {
+            "description": "Signer of the draft.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "beneficiary": {
+            "description": "Paid on delivery or default. With `pays_cap_holder` this is the lister cap’s own address, and whoever holds the cap is paid.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "pays_cap_holder": {
+            "type": "boolean",
+            "description": "Lister-side payouts go to the lister cap as `Proceeds`, collected by its holder."
+          },
+          "on_behalf_of": {
+            "nullable": true,
+            "description": "Who the agreement was posted for, when a wrapper set it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingEntityResponse"
+              }
+            ]
+          },
+          "cargo": {
+            "description": "Cargo escrowed by the lister, picked up by the hauler: one entry per item, in the agreement’s order. Empty for an agreement that only pays for delivery.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingItemsResponse"
+            }
+          },
+          "want": {
+            "description": "Exactly what must be handed in to deliver: one entry per item. A delivery hands in one balance per entry, in this order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingItemsResponse"
+            }
+          },
+          "currency": {
+            "description": "Coin type `T` of reward, collateral and delivery fee.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CoinRef"
+              }
+            ]
+          },
+          "reward": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Escrowed reward, before any delivery fee. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "collateral": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Collateral a hauler locks on accept. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "delivery_fee_bps": {
+            "type": "integer",
+            "description": "Delivery fee on the reward, in basis points, fixed at posting."
+          },
+          "claim_gated": {
+            "type": "boolean",
+            "description": "Accepting is limited to listed players, machine keys or organizations."
+          },
+          "has_other_rules": {
+            "type": "boolean",
+            "description": "Accepting needs requirements this API cannot evaluate (including any identity rule)."
+          },
+          "hauler": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "hauler_identity": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingIdentityResponse"
+              }
+            ]
+          },
+          "accepted_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When it was accepted. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "delivery_deadline_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Delivery must land before this time (exclusive; `deadline_ms`). After it, anyone may default the agreement. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "closed_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When it ended. Unix epoch milliseconds.",
+            "nullable": true
+          },
+          "closed_by": {
+            "nullable": true,
+            "description": "Sender of the transaction that ended it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "hauler_reward": {
+            "type": "string",
+            "nullable": true,
+            "example": "2500000",
+            "description": "Delivered: the reward paid to the hauler, net of the fee. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "delivery_fee": {
+            "type": "string",
+            "nullable": true,
+            "example": "2500000",
+            "description": "Delivered: the fee sent to the treasury. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "refunded_to": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "`closed_lapsed`: where the escrow went (the lister, or the cap’s address when it pays the cap holder).",
+            "nullable": true
+          },
+          "cap_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "The agreement’s `ListerCap`."
+          },
+          "posted_tx_digest": {
+            "type": "string",
+            "description": "Digest of the posting transaction."
+          },
+          "accepted_tx_digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "closed_tx_digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "eligibility": {
+            "type": "string",
+            "enum": [
+              "eligible",
+              "ineligible",
+              "unknown"
+            ],
+            "description": "With a viewer address: `eligible`, `ineligible` (a claim gate lists nothing the address satisfies) or `unknown` (other rules apply)."
+          },
+          "viewer_roles": {
+            "type": "array",
+            "description": "With a viewer address: the roles it plays.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "lister",
+                "cap_holder",
+                "beneficiary",
+                "hauler",
+                "claimed_via_org"
+              ]
+            }
+          }
+        },
+        "required": [
+          "agreement_id",
+          "status",
+          "posted_at",
+          "accept_deadline_at",
+          "haul_duration_ms",
+          "lister",
+          "beneficiary",
+          "pays_cap_holder",
+          "on_behalf_of",
+          "cargo",
+          "want",
+          "currency",
+          "reward",
+          "collateral",
+          "delivery_fee_bps",
+          "claim_gated",
+          "has_other_rules",
+          "hauler",
+          "hauler_identity",
+          "accepted_at",
+          "delivery_deadline_at",
+          "closed_at",
+          "closed_by",
+          "hauler_reward",
+          "delivery_fee",
+          "refunded_to",
+          "cap_id",
+          "posted_tx_digest",
+          "accepted_tx_digest",
+          "closed_tx_digest"
+        ]
+      },
+      "HaulingCapResponse": {
+        "type": "object",
+        "properties": {
+          "cap_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Sui object ID (0x-prefixed, 64 hex characters)."
+          },
+          "owner_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "address",
+              "object",
+              "wrapped",
+              "shared",
+              "immutable",
+              "party"
+            ],
+            "description": "How the cap is held: by an `address`, by another `object` (such as an organization’s custody), or `wrapped` inside one. Null until indexed."
+          },
+          "owner": {
+            "type": "string",
+            "nullable": true,
+            "description": "The holding address or object ID."
+          },
+          "owner_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "receives_proceeds": {
+            "type": "boolean",
+            "description": "The cap receives the agreement’s proceeds."
+          },
+          "ended_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "cancelled",
+              "collected",
+              "deleted"
+            ],
+            "description": "How the cap was destroyed; null while it exists."
+          }
+        },
+        "required": [
+          "cap_id",
+          "owner_kind",
+          "owner",
+          "owner_name",
+          "receives_proceeds",
+          "ended_kind"
+        ]
+      },
+      "HaulingClaimPlanResponse": {
+        "type": "object",
+        "properties": {
+          "eligibility": {
+            "type": "string",
+            "enum": [
+              "eligible",
+              "ineligible",
+              "unknown"
+            ]
+          },
+          "steps": {
+            "description": "One step per requirement, in order. Advisory: the chain reads board membership when the accept lands, and the index trails it.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClaimPlanStepResponse"
+            }
+          }
+        },
+        "required": [
+          "eligibility",
+          "steps"
+        ]
+      },
+      "HaulingClaimResponse": {
+        "type": "object",
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/HaulingPartyResponse"
+          },
+          "principal": {
+            "description": "The principal the accepter matched: an `ou` means it claimed for that organization.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPrincipalResponse"
+              }
+            ]
+          },
+          "tx_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "actor",
+          "principal",
+          "tx_digest"
+        ]
+      },
+      "HaulingConfigChangeResponse": {
+        "type": "object",
+        "properties": {
+          "currencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "post_fee_currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "post_fee_amount": {
+            "type": "string",
+            "nullable": true
+          },
+          "delivery_fee_bps": {
+            "type": "integer"
+          },
+          "treasury": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "Sui address (0x-prefixed, 64 hex characters)."
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When the change landed. Unix epoch milliseconds."
+          },
+          "updated_by": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "Sender of the admin transaction."
+          },
+          "tx_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currencies",
+          "post_fee_currency",
+          "post_fee_amount",
+          "delivery_fee_bps",
+          "treasury",
+          "updated_at",
+          "updated_by",
+          "tx_digest"
+        ]
+      },
+      "HaulingConfigResponse": {
+        "type": "object",
+        "properties": {
+          "config_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "The shared hauling `Config` object."
+          },
+          "currencies": {
+            "description": "Coin types approved for reward and collateral.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoinRef"
+            }
+          },
+          "post_fee": {
+            "nullable": true,
+            "description": "Flat fee charged to post, in its own coin; null for none.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPostFeeResponse"
+              }
+            ]
+          },
+          "delivery_fee_bps": {
+            "type": "integer",
+            "description": "Delivery fee on new agreements, in basis points of the reward."
+          },
+          "treasury": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "Fee recipient."
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When the config last changed. Unix epoch milliseconds."
+          },
+          "history": {
+            "description": "Most recent changes first (up to 20).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingConfigChangeResponse"
+            }
+          }
+        },
+        "required": [
+          "config_id",
+          "currencies",
+          "post_fee",
+          "delivery_fee_bps",
+          "treasury",
+          "updated_at",
+          "history"
+        ]
+      },
+      "HaulingCurrencyStatsResponse": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/CoinRef"
+          },
+          "agreements": {
+            "type": "integer"
+          },
+          "reward_posted": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Rewards escrowed by every agreement. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "reward_paid": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Rewards paid to haulers, net of fees. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "delivery_fees": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Delivery fees sent to the treasury. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "collateral_forfeited": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Collateral lost to defaults and forfeits. In the smallest unit of the currency (u64 decimal string)."
+          }
+        },
+        "required": [
+          "currency",
+          "agreements",
+          "reward_posted",
+          "reward_paid",
+          "delivery_fees",
+          "collateral_forfeited"
+        ]
+      },
+      "HaulingEntityResponse": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Move type of the wrapper that vouched for the entity."
+          },
+          "id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "The entity, usually an organization."
+          },
+          "trusted": {
+            "type": "boolean",
+            "description": "Whether the wrapper is trusted. Untrusted entities are shown raw and never credited. No wrapper is trusted yet."
+          },
+          "org": {
+            "nullable": true,
+            "description": "The organization, when trusted.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingOrgRefResponse"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "trusted",
+          "org"
+        ]
+      },
+      "HaulingFeesResponse": {
+        "type": "object",
+        "properties": {
+          "post_fee": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPostFeeResponse"
+              }
+            ]
+          },
+          "delivery_fee_bps": {
+            "type": "integer"
+          },
+          "delivery_fee": {
+            "type": "string",
+            "nullable": true,
+            "example": "2500000",
+            "description": "Delivered: the fee sent to the treasury. In the smallest unit of the currency (u64 decimal string)."
+          },
+          "treasury": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "Fee recipient."
+          }
+        },
+        "required": [
+          "post_fee",
+          "delivery_fee_bps",
+          "delivery_fee",
+          "treasury"
+        ]
+      },
+      "HaulingIdentityResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Identity the hauler proved, for example a character."
+          },
+          "rule": {
+            "type": "string",
+            "nullable": true,
+            "description": "Move type of the identity rule that checked it."
+          },
+          "trusted": {
+            "type": "boolean",
+            "description": "Whether the identity rule is trusted. No identity rule is trusted yet."
+          }
+        },
+        "required": [
+          "id",
+          "rule",
+          "trusted"
+        ]
+      },
+      "HaulingItemsResponse": {
+        "type": "object",
+        "properties": {
+          "collection_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Warehouse-receipt collection of the items."
+          },
+          "asset_id": {
+            "type": "string",
+            "example": "78437",
+            "description": "Item type ID."
+          },
+          "quantity": {
+            "type": "string",
+            "example": "100",
+            "description": "Quantity (u64 decimal)."
+          },
+          "hub_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Trade hub whose warehouse issues receipts of this collection: where cargo is picked up, or where the wanted items are handed in. Null when the collection is not a known warehouse-receipt vault.",
+            "nullable": true
+          },
+          "hub_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Whether the collection is a known warehouse-receipt vault. The contract does not check collections, so haulers should not accept unverified ones."
+          }
+        },
+        "required": [
+          "collection_id",
+          "asset_id",
+          "quantity",
+          "hub_id",
+          "hub_name",
+          "verified"
+        ]
+      },
+      "HaulingLaneResponse": {
+        "type": "object",
+        "properties": {
+          "source_hub_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Trade hub the cargo is picked up at."
+          },
+          "source_hub_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "destination_hub_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Trade hub the delivery is handed in at."
+          },
+          "destination_hub_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "agreements": {
+            "type": "integer"
+          },
+          "delivered": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_hub_id",
+          "source_hub_name",
+          "destination_hub_id",
+          "destination_hub_name",
+          "agreements",
+          "delivered"
+        ]
+      },
+      "HaulingObserverFeeResponse": {
+        "type": "object",
+        "properties": {
+          "collection_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Sui object ID (0x-prefixed, 64 hex characters)."
+          },
+          "asset_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection_id",
+          "asset_id",
+          "quantity"
+        ]
+      },
+      "HaulingObserverResponse": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Move type of the bound observer."
+          },
+          "instance_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Observer instance the outcome record is sent to."
+          },
+          "fee": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingObserverFeeResponse"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "instance_id",
+          "fee"
+        ]
+      },
+      "HaulingOrgRefResponse": {
+        "type": "object",
+        "properties": {
+          "org_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Object ID of the organization (OU)."
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "root_org_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Root organization of its hierarchy (itself when it is the root)."
+          },
+          "root_org_name": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "org_id",
+          "name",
+          "root_org_id",
+          "root_org_name"
+        ]
+      },
+      "HaulingPartyResponse": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "Sui address (0x-prefixed, 64 hex characters)."
+          },
+          "character_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Name of the character owned by the address, if any."
+          }
+        },
+        "required": [
+          "address",
+          "character_name"
+        ]
+      },
+      "HaulingPostFeeResponse": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/CoinRef"
+          },
+          "amount": {
+            "type": "string",
+            "nullable": false,
+            "example": "2500000",
+            "description": "Posting fee paid. In the smallest unit of the currency (u64 decimal string)."
+          }
+        },
+        "required": [
+          "currency",
+          "amount"
+        ]
+      },
+      "HaulingPrincipalResponse": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "player",
+              "machine",
+              "ou"
+            ],
+            "description": "`player` or `machine`: that address; `ou`: any current board member of that organization."
+          },
+          "id": {
+            "type": "string",
+            "description": "The address, or the organization ID."
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Character or organization name."
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "name"
+        ]
+      },
+      "HaulingProceedsResponse": {
+        "type": "object",
+        "properties": {
+          "proceeds_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "The `Proceeds<T>` sent to the cap when the agreement ended."
+          },
+          "collected": {
+            "type": "boolean"
+          },
+          "collected_by": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          }
+        },
+        "required": [
+          "proceeds_id",
+          "collected",
+          "collected_by"
+        ]
+      },
+      "HaulingReputationResponse": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "Sui address (0x-prefixed, 64 hex characters)."
+          },
+          "as_hauler": {
+            "$ref": "#/components/schemas/HaulerRecordResponse"
+          },
+          "as_lister": {
+            "$ref": "#/components/schemas/ListerRecordResponse"
+          },
+          "evaluated_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Wall-clock time the counts were derived at. Unix epoch milliseconds."
+          }
+        },
+        "required": [
+          "address",
+          "as_hauler",
+          "as_lister",
+          "evaluated_at"
+        ]
+      },
+      "HaulingRequirementResponse": {
+        "type": "object",
+        "properties": {
+          "req_index": {
+            "type": "integer",
+            "description": "Position: an accept satisfies requirements in this order."
+          },
+          "rule": {
+            "type": "string",
+            "enum": [
+              "claim",
+              "unknown"
+            ],
+            "description": "`claim`: an agreement_roles claim gate; `unknown`: a rule this API cannot evaluate."
+          },
+          "type_name": {
+            "type": "string",
+            "description": "Move type of the requirement config."
+          },
+          "is_identity_rule": {
+            "type": "boolean",
+            "description": "It is the agreement’s identity rule."
+          },
+          "principals": {
+            "description": "A claim gate’s principals: the accepter must satisfy one.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingPrincipalResponse"
+            }
+          },
+          "data": {
+            "type": "string",
+            "nullable": true,
+            "description": "An unknown rule’s config, BCS as 0x-hex; null for claim gates."
+          }
+        },
+        "required": [
+          "req_index",
+          "rule",
+          "type_name",
+          "is_identity_rule",
+          "principals",
+          "data"
+        ]
+      },
+      "HaulingStatsResponse": {
+        "type": "object",
+        "properties": {
+          "by_status": {
+            "$ref": "#/components/schemas/HaulingStatusCountsResponse"
+          },
+          "by_currency": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingCurrencyStatsResponse"
+            }
+          },
+          "post_fees": {
+            "description": "Posting fees paid, per fee coin.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CurrencyAmountResponse"
+            }
+          },
+          "lanes": {
+            "description": "Busiest hub-to-hub lanes by agreements (top 10), counting only verified hubs.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HaulingLaneResponse"
+            }
+          },
+          "evaluated_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Wall-clock time the counts were derived at. Unix epoch milliseconds."
+          }
+        },
+        "required": [
+          "by_status",
+          "by_currency",
+          "post_fees",
+          "lanes",
+          "evaluated_at"
+        ]
+      },
+      "HaulingStatusCountsResponse": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "integer"
+          },
+          "lapsed": {
+            "type": "integer"
+          },
+          "accepted": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          },
+          "delivered": {
+            "type": "integer"
+          },
+          "defaulted": {
+            "type": "integer"
+          },
+          "forfeited": {
+            "type": "integer"
+          },
+          "cancelled": {
+            "type": "integer"
+          },
+          "closed_lapsed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "open",
+          "lapsed",
+          "accepted",
+          "overdue",
+          "delivered",
+          "defaulted",
+          "forfeited",
+          "cancelled",
+          "closed_lapsed"
+        ]
+      },
+      "HaulingTimelineEventResponse": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "posted",
+              "accepted",
+              "claimed",
+              "delivered",
+              "defaulted",
+              "forfeited",
+              "cancelled",
+              "closed_lapsed",
+              "proceeds_collected",
+              "cap_deleted"
+            ]
+          },
+          "actor": {
+            "description": "Who acted.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingPartyResponse"
+              }
+            ]
+          },
+          "at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "Checkpoint time. Unix epoch milliseconds."
+          },
+          "checkpoint": {
+            "type": "string"
+          },
+          "tx_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "actor",
+          "at",
+          "checkpoint",
+          "tx_digest"
+        ]
+      },
+      "HaulingViewerResponse": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "Sui address (0x-prefixed, 64 hex characters)."
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "lister",
+                "cap_holder",
+                "beneficiary",
+                "hauler",
+                "claimed_via_org"
+              ]
+            }
+          },
+          "claim_plan": {
+            "nullable": true,
+            "description": "How the viewer can accept; null unless the status is `open`.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HaulingClaimPlanResponse"
+              }
+            ]
+          }
+        },
+        "required": [
+          "address",
+          "roles",
+          "claim_plan"
+        ]
+      },
       "HubDaoVault": {
         "type": "object",
         "properties": {
@@ -4996,20 +8025,24 @@
           },
           "assembly_item_id": {
             "type": "string",
-            "description": "Numeric in-game item ID of the hub structure, as a string."
+            "nullable": true,
+            "description": "Numeric in-game item ID of the hub structure, as a string; null for a hub with no reported location (a private hub)."
           },
           "assembly_tenant": {
             "type": "string",
-            "description": "Tenant (shard) the hub is deployed on."
+            "nullable": true,
+            "description": "Tenant (shard) the hub is deployed on; null for a hub with no reported location (a private hub)."
           },
           "type_id": {
             "type": "string",
-            "description": "Numeric structure type ID, as a string."
+            "nullable": true,
+            "description": "Numeric structure type ID, as a string; null for a hub with no reported location (a private hub)."
           },
           "owner_cap_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Owner capability object ID for the hub."
+            "description": "Owner capability object ID for the hub. Read on-chain for hubs with no reported location; null only if that lookup fails.",
+            "nullable": true
           },
           "owner": {
             "type": "string",
@@ -5018,19 +8051,23 @@
           },
           "solar_system": {
             "type": "string",
-            "description": "Numeric solar system ID the hub is located in, as a string. Empty when the hub has no indexed location."
+            "nullable": true,
+            "description": "Numeric solar system ID the hub is located in, as a string; null for a hub with no reported location (a private hub)."
           },
           "x": {
             "type": "string",
-            "description": "X coordinate (meters)."
+            "nullable": true,
+            "description": "X coordinate (meters); null for a hub with no reported location (a private hub)."
           },
           "y": {
             "type": "string",
-            "description": "Y coordinate (meters)."
+            "nullable": true,
+            "description": "Y coordinate (meters); null for a hub with no reported location (a private hub)."
           },
           "z": {
             "type": "string",
-            "description": "Z coordinate (meters)."
+            "nullable": true,
+            "description": "Z coordinate (meters); null for a hub with no reported location (a private hub)."
           },
           "updated_at": {
             "type": "integer",
@@ -5061,6 +8098,17 @@
             "type": "number",
             "nullable": true,
             "description": "Region ID of the solar system, when known."
+          },
+          "state": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "online",
+              "offline",
+              "unanchored"
+            ],
+            "example": "online",
+            "description": "The hub's power state from its last indexed status change: `online`, `offline` (a freshly anchored hub starts offline) or `unanchored`; null when no status change has been indexed for it."
           }
         },
         "required": [
@@ -5079,7 +8127,8 @@
           "pool_count",
           "last_activity_at",
           "is_public",
-          "region_id"
+          "region_id",
+          "state"
         ]
       },
       "HubItem": {
@@ -5097,12 +8146,24 @@
           "has_asks": {
             "type": "boolean",
             "description": "True when at least one open sell order (ask) exists."
+          },
+          "bid_quantity": {
+            "type": "string",
+            "example": "120",
+            "description": "Item units wanted across open buy orders (integer string; item markets have a lot size of 1)."
+          },
+          "ask_quantity": {
+            "type": "string",
+            "example": "45",
+            "description": "Item units offered across open sell orders (integer string)."
           }
         },
         "required": [
           "asset_id",
           "has_bids",
-          "has_asks"
+          "has_asks",
+          "bid_quantity",
+          "ask_quantity"
         ]
       },
       "HubItemOrderbookResponse": {
@@ -5339,6 +8400,18 @@
           "iconUrl": {
             "type": "string",
             "description": "Icon URL on the public CDN; empty when no icon is published."
+          },
+          "quantityKind": {
+            "type": "string",
+            "enum": [
+              "discrete",
+              "continuous"
+            ],
+            "description": "`continuous` items hold fractional amounts in game (floored to whole units on chain)."
+          },
+          "neotype": {
+            "type": "boolean",
+            "description": "Digital chemistry: items of this type carry per-item property variants, traded under composed asset ids `(variant_id << 32) | type_id`. See `v1/items/neotypes/{typeId}`."
           }
         }
       },
@@ -5410,6 +8483,14 @@
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
             "description": "Storage unit (trade hub) object ID backing the market."
+          },
+          "counterparty": {
+            "description": "The player or organization behind the counterparty's trading account.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TradeParty"
+              }
+            ]
           }
         },
         "required": [
@@ -5425,7 +8506,8 @@
           "side",
           "traded_at",
           "asset_id",
-          "storage_unit_id"
+          "storage_unit_id",
+          "counterparty"
         ]
       },
       "ItemAccountTradePage": {
@@ -5449,6 +8531,40 @@
           "data",
           "next_cursor"
         ]
+      },
+      "ItemBlueprints": {
+        "type": "object",
+        "description": "Every blueprint that produces or consumes one item.",
+        "required": [
+          "typeId",
+          "name",
+          "producedBy",
+          "usedIn"
+        ],
+        "properties": {
+          "typeId": {
+            "type": "integer",
+            "description": "The item's type id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The item's display name."
+          },
+          "producedBy": {
+            "type": "array",
+            "description": "Blueprints with this item among their outputs (its recipes). Empty when nothing produces it, including a listed item whose recipes left the game.",
+            "items": {
+              "$ref": "#/components/schemas/Blueprint"
+            }
+          },
+          "usedIn": {
+            "type": "array",
+            "description": "Blueprints that take this item type as an input. Empty when nothing consumes it. A trait-only input slot is listed under none of its candidates.",
+            "items": {
+              "$ref": "#/components/schemas/Blueprint"
+            }
+          }
+        }
       },
       "ItemOpenOrder": {
         "type": "object",
@@ -5487,17 +8603,18 @@
             "type": "string",
             "description": "Base quantity already filled (raw integer, decimal string)."
           },
-          "expires_at": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1755043200000,
-            "description": "When the order expires. Unix epoch milliseconds."
-          },
           "updated_at": {
             "type": "integer",
             "format": "int64",
             "example": 1755043200000,
             "description": "When the order state last changed on-chain. Unix epoch milliseconds."
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1755043200000,
+            "description": "When the order expires, in Unix epoch milliseconds. `null` for good-til-cancelled orders (no expiry).",
+            "nullable": true
           },
           "asset_id": {
             "type": "string",
@@ -5527,8 +8644,8 @@
           "price",
           "remaining_quantity",
           "filled_quantity",
-          "expires_at",
           "updated_at",
+          "expires_at",
           "asset_id",
           "storage_unit_id",
           "quote_asset_symbol",
@@ -5555,6 +8672,31 @@
         "required": [
           "data",
           "next_cursor"
+        ]
+      },
+      "ItemSupplySummary": {
+        "type": "object",
+        "properties": {
+          "supply": {
+            "type": "string",
+            "example": "48200",
+            "description": "Units across all of the type’s keys, as a decimal string."
+          },
+          "variant_count": {
+            "type": "integer",
+            "example": 312,
+            "description": "Keys (plain item + variants) with units in storage."
+          },
+          "as_of_ms": {
+            "type": "integer",
+            "example": 1762790400000,
+            "description": "When the supply snapshot was built (ms). It is rebuilt every few minutes."
+          }
+        },
+        "required": [
+          "supply",
+          "variant_count",
+          "as_of_ms"
         ]
       },
       "ItemTrade": {
@@ -5640,6 +8782,22 @@
             "type": "string",
             "nullable": true,
             "description": "Human-readable solar system name, or `null` if unavailable."
+          },
+          "buyer": {
+            "description": "The player or organization that bought.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TradeParty"
+              }
+            ]
+          },
+          "seller": {
+            "description": "The player or organization that sold.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TradeParty"
+              }
+            ]
           }
         },
         "required": [
@@ -5657,7 +8815,9 @@
           "quote_currency_decimals",
           "region_id",
           "solar_system_id",
-          "solar_system_name"
+          "solar_system_name",
+          "buyer",
+          "seller"
         ]
       },
       "ItemTradePage": {
@@ -5682,6 +8842,51 @@
           "next_cursor"
         ]
       },
+      "ItemVariantSupply": {
+        "type": "object",
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "example": "1885490740881",
+            "description": "Full item key, `(variant_id << 32) | type_id`, as a decimal string. Equal to the type id for the plain item."
+          },
+          "variant_id": {
+            "type": "string",
+            "nullable": true,
+            "example": "439",
+            "description": "Neotype variant id, or null for the plain item."
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Inkstone #439",
+            "description": "Display name, `<base name> #<variant>`; null when the base type is not in the items list."
+          },
+          "supply": {
+            "type": "string",
+            "example": "12500",
+            "description": "Units held across all live storage units (every inventory: owner, character and open storage, which holds warehouse-receipt deposits), as a decimal string."
+          },
+          "storage_units": {
+            "type": "integer",
+            "example": 7,
+            "description": "Distinct live storage units holding it."
+          },
+          "last_seen_ms": {
+            "type": "integer",
+            "example": 1762790400000,
+            "description": "Newest update (ms) among the storage inventories holding it: when its storage last changed."
+          }
+        },
+        "required": [
+          "asset_id",
+          "variant_id",
+          "name",
+          "supply",
+          "storage_units",
+          "last_seen_ms"
+        ]
+      },
       "JumpType": {
         "type": "string",
         "description": "Type of jump between waypoints",
@@ -5689,6 +8894,50 @@
           "start",
           "stargate",
           "jump_drive"
+        ]
+      },
+      "ListerRecordResponse": {
+        "type": "object",
+        "properties": {
+          "posted": {
+            "type": "integer"
+          },
+          "open": {
+            "type": "integer"
+          },
+          "lapsed": {
+            "type": "integer"
+          },
+          "in_progress": {
+            "type": "integer",
+            "description": "Accepted and not yet ended."
+          },
+          "delivered": {
+            "type": "integer"
+          },
+          "defaulted": {
+            "type": "integer"
+          },
+          "forfeited": {
+            "type": "integer"
+          },
+          "cancelled": {
+            "type": "integer"
+          },
+          "closed_lapsed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "posted",
+          "open",
+          "lapsed",
+          "in_progress",
+          "delivered",
+          "defaulted",
+          "forfeited",
+          "cancelled",
+          "closed_lapsed"
         ]
       },
       "LocationResponse": {
@@ -5701,20 +8950,24 @@
           },
           "assembly_item_id": {
             "type": "string",
-            "description": "Numeric in-game item ID of the hub structure, as a string."
+            "nullable": true,
+            "description": "Numeric in-game item ID of the hub structure, as a string; null for a hub with no reported location (a private hub)."
           },
           "assembly_tenant": {
             "type": "string",
-            "description": "Tenant (shard) the hub is deployed on."
+            "nullable": true,
+            "description": "Tenant (shard) the hub is deployed on; null for a hub with no reported location (a private hub)."
           },
           "type_id": {
             "type": "string",
-            "description": "Numeric structure type ID, as a string."
+            "nullable": true,
+            "description": "Numeric structure type ID, as a string; null for a hub with no reported location (a private hub)."
           },
           "owner_cap_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Owner capability object ID for the hub."
+            "description": "Owner capability object ID for the hub. Read on-chain for hubs with no reported location; null only if that lookup fails.",
+            "nullable": true
           },
           "owner": {
             "type": "string",
@@ -5723,19 +8976,23 @@
           },
           "solar_system": {
             "type": "string",
-            "description": "Numeric solar system ID the hub is located in, as a string. Empty when the hub has no indexed location."
+            "nullable": true,
+            "description": "Numeric solar system ID the hub is located in, as a string; null for a hub with no reported location (a private hub)."
           },
           "x": {
             "type": "string",
-            "description": "X coordinate (meters)."
+            "nullable": true,
+            "description": "X coordinate (meters); null for a hub with no reported location (a private hub)."
           },
           "y": {
             "type": "string",
-            "description": "Y coordinate (meters)."
+            "nullable": true,
+            "description": "Y coordinate (meters); null for a hub with no reported location (a private hub)."
           },
           "z": {
             "type": "string",
-            "description": "Z coordinate (meters)."
+            "nullable": true,
+            "description": "Z coordinate (meters); null for a hub with no reported location (a private hub)."
           },
           "updated_at": {
             "type": "integer",
@@ -5812,20 +9069,24 @@
           },
           "assembly_item_id": {
             "type": "string",
-            "description": "Numeric in-game item ID of the hub structure, as a string."
+            "nullable": true,
+            "description": "Numeric in-game item ID of the hub structure, as a string; null for a hub with no reported location (a private hub)."
           },
           "assembly_tenant": {
             "type": "string",
-            "description": "Tenant (shard) the hub is deployed on."
+            "nullable": true,
+            "description": "Tenant (shard) the hub is deployed on; null for a hub with no reported location (a private hub)."
           },
           "type_id": {
             "type": "string",
-            "description": "Numeric structure type ID, as a string."
+            "nullable": true,
+            "description": "Numeric structure type ID, as a string; null for a hub with no reported location (a private hub)."
           },
           "owner_cap_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Owner capability object ID for the hub."
+            "description": "Owner capability object ID for the hub. Read on-chain for hubs with no reported location; null only if that lookup fails.",
+            "nullable": true
           },
           "owner": {
             "type": "string",
@@ -5834,19 +9095,23 @@
           },
           "solar_system": {
             "type": "string",
-            "description": "Numeric solar system ID the hub is located in, as a string. Empty when the hub has no indexed location."
+            "nullable": true,
+            "description": "Numeric solar system ID the hub is located in, as a string; null for a hub with no reported location (a private hub)."
           },
           "x": {
             "type": "string",
-            "description": "X coordinate (meters)."
+            "nullable": true,
+            "description": "X coordinate (meters); null for a hub with no reported location (a private hub)."
           },
           "y": {
             "type": "string",
-            "description": "Y coordinate (meters)."
+            "nullable": true,
+            "description": "Y coordinate (meters); null for a hub with no reported location (a private hub)."
           },
           "z": {
             "type": "string",
-            "description": "Z coordinate (meters)."
+            "nullable": true,
+            "description": "Z coordinate (meters); null for a hub with no reported location (a private hub)."
           },
           "updated_at": {
             "type": "integer",
@@ -5872,6 +9137,11 @@
             "nullable": true,
             "description": "Human-readable solar system name, when resolved."
           },
+          "hub_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Hub display name from its on-chain metadata; null when it hasn't set one."
+          },
           "distance_ly": {
             "type": "string",
             "description": "Distance from the search origin, in light years."
@@ -5893,6 +9163,7 @@
           "is_public",
           "region_id",
           "solar_system_name",
+          "hub_name",
           "distance_ly"
         ]
       },
@@ -5931,7 +9202,7 @@
               "string",
               "null"
             ],
-            "description": "Human-readable solar system name, or `null` when unavailable.",
+            "description": "Human-readable solar system name, or `null` until a player has reported it.",
             "example": "IF3-HS9"
           }
         }
@@ -5941,7 +9212,6 @@
         "description": "Result of a radius search around a named solar system.",
         "required": [
           "solar_system_id",
-          "solar_system_name",
           "radius_ly",
           "count",
           "systems"
@@ -5965,8 +9235,11 @@
             "example": 30000142
           },
           "solar_system_name": {
-            "type": "string",
-            "description": "Name of the system searched from.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name of the system searched from, or `null` until a player has reported it.",
             "example": "EHK-KH7"
           },
           "systems": {
@@ -6115,7 +9388,8 @@
             "type": "integer",
             "format": "int64",
             "example": 1755043200000,
-            "description": "When the order expires. Unix epoch milliseconds."
+            "description": "When the order expires, in Unix epoch milliseconds. `null` for good-til-cancelled orders (no expiry).",
+            "nullable": true
           },
           "updated_at": {
             "type": "integer",
@@ -6131,7 +9405,7 @@
           "asset_name": {
             "type": "string",
             "nullable": true,
-            "description": "Human-readable item name, or `null` if unavailable."
+            "description": "Human-readable item name from the item catalog, or `null` if unavailable."
           },
           "trading_account": {
             "description": "Account that placed the order.",
@@ -6143,7 +9417,7 @@
           },
           "hub": {
             "nullable": true,
-            "description": "Trade hub the order lives at, or `null` if location data is unavailable.",
+            "description": "Trade hub the order lives at, or `null` if the order's pool has no warehouse vault.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/OrderHub"
@@ -6224,8 +9498,7 @@
             "description": "Trading account object ID of the counterparty."
           },
           "counterparty": {
-            "nullable": true,
-            "description": "Resolved counterparty account, or `null` if not resolved.",
+            "description": "The counterparty's trading account and who is behind it.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/OrderParty"
@@ -6259,22 +9532,31 @@
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
             "description": "Trade hub (storage unit) object ID."
           },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "The storage unit's on-chain name, or `null` if it has none or it couldn't be read."
+          },
           "assembly_item_id": {
             "type": "string",
-            "description": "Assembly item ID of the hub."
+            "nullable": true,
+            "description": "Assembly item ID of the hub, or `null` if not located."
           },
           "assembly_tenant": {
             "type": "string",
-            "description": "Tenant the hub belongs to."
+            "nullable": true,
+            "description": "Tenant the hub belongs to, or `null` if not located."
           },
           "type_id": {
             "type": "string",
-            "description": "Hub structure type ID."
+            "nullable": true,
+            "description": "Hub structure type ID, or `null` if not located."
           },
           "owner_cap_id": {
             "type": "string",
             "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
-            "description": "Owner capability object ID for the hub."
+            "description": "Owner capability object ID for the hub, or `null` if it couldn't be read.",
+            "nullable": true
           },
           "owner": {
             "type": "string",
@@ -6283,19 +9565,23 @@
           },
           "solarsystem": {
             "type": "string",
-            "description": "Raw solar system identifier the hub is located in."
+            "nullable": true,
+            "description": "Raw solar system identifier the hub is located in, or `null` if not located."
           },
           "x": {
             "type": "string",
-            "description": "X coordinate of the hub."
+            "nullable": true,
+            "description": "X coordinate of the hub, or `null` if not located."
           },
           "y": {
             "type": "string",
-            "description": "Y coordinate of the hub."
+            "nullable": true,
+            "description": "Y coordinate of the hub, or `null` if not located."
           },
           "z": {
             "type": "string",
-            "description": "Z coordinate of the hub."
+            "nullable": true,
+            "description": "Z coordinate of the hub, or `null` if not located."
           },
           "solar_system_id": {
             "type": "integer",
@@ -6319,6 +9605,7 @@
         },
         "required": [
           "hub_id",
+          "name",
           "assembly_item_id",
           "assembly_tenant",
           "type_id",
@@ -6345,7 +9632,7 @@
           "owner": {
             "type": "string",
             "nullable": true,
-            "description": "Wallet address that owns the trading account, or `null` if not resolved."
+            "description": "The trading account object's on-chain owner, or `null` if not resolved. For an organization's account this is its trading custody, not a wallet — use `party` to identify who placed the order."
           },
           "character": {
             "nullable": true,
@@ -6355,12 +9642,21 @@
                 "$ref": "#/components/schemas/OrderCharacter"
               }
             ]
+          },
+          "party": {
+            "description": "The player or organization behind the trading account. `kind` is `null` when the account's owner is not indexed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TradeParty"
+              }
+            ]
           }
         },
         "required": [
           "id",
           "owner",
-          "character"
+          "character",
+          "party"
         ]
       },
       "OrderbookOrderDto": {
@@ -6394,6 +9690,14 @@
           },
           "price": {
             "type": "string"
+          },
+          "tradingAccountId": {
+            "type": "string",
+            "description": "The trading account the order rests under (0x + 64 hex)."
+          },
+          "lastCheckpoint": {
+            "type": "string",
+            "description": "Checkpoint (decimal string) of the last on-chain state change: the order already reflects every event up to it."
           }
         },
         "required": [
@@ -6404,7 +9708,9 @@
           "lastUpdatedTimestamp",
           "epoch",
           "status",
-          "price"
+          "price",
+          "tradingAccountId",
+          "lastCheckpoint"
         ]
       },
       "OrderbookResponseDto": {
@@ -6762,6 +10068,16 @@
             "type": "number",
             "nullable": true,
             "description": "Decimal form of the pool fee (fee / 1e9), e.g. 0.02 for 2%."
+          },
+          "maker_fee": {
+            "type": "string",
+            "nullable": true,
+            "description": "Current pool maker fee — the entry tier of the pool's fee class, or its creation-time rate when no class schedule is indexed — scaled by 1e9 (18000000 = 1.8%). Charged when a resting order fills."
+          },
+          "maker_fee_rate": {
+            "type": "number",
+            "nullable": true,
+            "description": "Decimal form of the pool maker fee (maker_fee / 1e9), e.g. 0.018 for 1.8%."
           }
         },
         "required": [
@@ -6777,7 +10093,9 @@
           "asset_id",
           "collection_id",
           "fee",
-          "fee_rate"
+          "fee_rate",
+          "maker_fee",
+          "maker_fee_rate"
         ]
       },
       "PoolResolveResponseDto": {
@@ -6953,6 +10271,24 @@
             "example": 1775739423394,
             "description": "Creation time of the proposal (Unix epoch milliseconds): the timestamp of the checkpoint holding its creation event. Null when the creation event is not indexed."
           },
+          "payload_bcs": {
+            "type": "string",
+            "nullable": true,
+            "format": "byte",
+            "description": "BCS bytes (base64) of the proposal's payload, recorded when it was created. Decode against `payload_type`. Stays available after the on-chain proposal is deleted on execution or expiry, so it is the record of what an executed proposal did. Null when not indexed."
+          },
+          "executor": {
+            "type": "string",
+            "nullable": true,
+            "example": "0x2a4b6e7c8d9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b",
+            "description": "Address that executed the proposal, or null when not executed."
+          },
+          "executed_ms": {
+            "type": "integer",
+            "nullable": true,
+            "example": 1775739423394,
+            "description": "Execution time of the proposal (Unix epoch milliseconds): the timestamp of the checkpoint holding its execution event. Null when not executed."
+          },
           "composite": {
             "description": "Ordered steps of a composite proposal; omitted for every other proposal type.",
             "type": "array",
@@ -6974,7 +10310,10 @@
           "created_checkpoint",
           "metadata_ipfs",
           "config",
-          "created_ms"
+          "created_ms",
+          "payload_bcs",
+          "executor",
+          "executed_ms"
         ]
       },
       "Route": {
@@ -7138,7 +10477,6 @@
         "description": "A solar system and its place in the star map.",
         "required": [
           "solar_system_id",
-          "solar_system_name",
           "location"
         ],
         "properties": {
@@ -7171,8 +10509,11 @@
             "example": 30001053
           },
           "solar_system_name": {
-            "type": "string",
-            "description": "Human-readable solar system name.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable solar system name, or `null` until a player has\nreported it. Names are player-discovered, so a system can be found by\nID long before it can be found by name.",
             "example": "IF3-HS9"
           }
         }
@@ -7211,7 +10552,7 @@
           },
           "solar_system_name": {
             "type": "string",
-            "description": "Human-readable solar system name.",
+            "description": "Human-readable solar system name. Always present: only reported\nnames are suggested.",
             "example": "EHK-1D2"
           }
         }
@@ -7221,9 +10562,16 @@
         "description": "Coverage of the loaded star map.",
         "required": [
           "total_systems",
+          "known_solar_system_names",
           "status"
         ],
         "properties": {
+          "known_solar_system_names": {
+            "type": "integer",
+            "description": "Number of solar systems whose name a player has reported and this\ninstance has cached. Only these can be looked up by name.",
+            "example": 15,
+            "minimum": 0
+          },
           "status": {
             "type": "string",
             "description": "Service status. `operational` when the index is loaded and queryable.",
@@ -7665,13 +11013,21 @@
             "items": {
               "$ref": "#/components/schemas/SweepableItem"
             }
+          },
+          "coin_pools": {
+            "description": "Coin pools where the account has settled (claimable) or owed balances, or fee-tier turnover still to fold.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SweepableCoinPool"
+            }
           }
         },
         "required": [
           "trading_account_id",
           "as_of_checkpoint",
           "pools",
-          "items"
+          "items",
+          "coin_pools"
         ]
       },
       "SweepableBalances": {
@@ -7694,6 +11050,67 @@
           "base",
           "quote",
           "cred"
+        ]
+      },
+      "SweepableCoinPool": {
+        "type": "object",
+        "properties": {
+          "pool_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Pool (order book) object ID."
+          },
+          "base_asset_id": {
+            "type": "string",
+            "example": "0x9f3a1b2c…::cred::CRED",
+            "description": "Base coin type of the pool — the first type argument to use when withdrawing settled amounts."
+          },
+          "quote_asset_id": {
+            "type": "string",
+            "example": "0x9f3a1b2c…::cred::CRED",
+            "description": "Quote coin type of the pool — the second type argument to use when withdrawing settled amounts."
+          },
+          "settled": {
+            "description": "Settled amounts, claimable into the trading account.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SweepableBalances"
+              }
+            ]
+          },
+          "owed": {
+            "description": "Amounts currently owed by the account (informational).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SweepableBalances"
+              }
+            ]
+          },
+          "open_order_count": {
+            "type": "integer",
+            "description": "Number of orders the account still has open on this pool."
+          },
+          "pending_turnover": {
+            "type": "string",
+            "example": "2980000000",
+            "description": "Maker-fee turnover this pool holds for the account, not yet folded into its exchange-wide fee-tier turnover (raw quote units, decimal string). Non-zero means `pool::fold_pending_turnover` would raise the account's turnover."
+          },
+          "pending_turnover_epoch": {
+            "type": "string",
+            "nullable": true,
+            "example": "1242",
+            "description": "Epoch of the newest pending entry; null when none."
+          }
+        },
+        "required": [
+          "pool_id",
+          "base_asset_id",
+          "quote_asset_id",
+          "settled",
+          "owed",
+          "open_order_count",
+          "pending_turnover",
+          "pending_turnover_epoch"
         ]
       },
       "SweepableItem": {
@@ -7785,6 +11202,17 @@
           "open_order_count": {
             "type": "integer",
             "description": "Number of orders the account still has open on this pool."
+          },
+          "pending_turnover": {
+            "type": "string",
+            "example": "2980000000",
+            "description": "Maker-fee turnover this pool holds for the account, not yet folded into its exchange-wide fee-tier turnover (raw quote units, decimal string). Non-zero means `multicoin_pool::fold_pending_turnover` would raise the account's turnover."
+          },
+          "pending_turnover_epoch": {
+            "type": "string",
+            "nullable": true,
+            "example": "1242",
+            "description": "Epoch of the newest pending entry; null when none."
           }
         },
         "required": [
@@ -7796,7 +11224,56 @@
           "vault_config_id",
           "settled",
           "owed",
-          "open_order_count"
+          "open_order_count",
+          "pending_turnover",
+          "pending_turnover_epoch"
+        ]
+      },
+      "TradeParty": {
+        "type": "object",
+        "properties": {
+          "trading_account_id": {
+            "type": "string",
+            "example": "0x7f3a9b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8",
+            "description": "Trading account object ID on this side."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "player",
+              "org"
+            ],
+            "nullable": true,
+            "description": "`player` for a wallet-owned trading account, `org` for one held by an organization's trading custody; `null` when the account's owner is not indexed."
+          },
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "description": "The player's wallet address, or the organization's object ID. `null` when unresolved."
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "The player's current character name, or the organization's name. `null` when unknown."
+          },
+          "root_org_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Organizations only: object ID of the top-level organization this one sits under (itself when it is the top level). `null` for players."
+          },
+          "root_org_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Organizations only: name of the top-level organization. `null` for players or when unknown."
+          }
+        },
+        "required": [
+          "trading_account_id",
+          "kind",
+          "id",
+          "name",
+          "root_org_id",
+          "root_org_name"
         ]
       },
       "TradingAccountOwner": {
@@ -7903,155 +11380,15 @@
             "example": "EHK-KH7"
           }
         }
-      },
-      "Blueprint": {
-        "type": "object",
-        "description": "A crafting recipe: one run of a blueprint, consuming `inputs` and yielding `outputs`.",
-        "required": [
-          "blueprintId",
-          "primaryTypeId",
-          "kind",
-          "runTime",
-          "inputs",
-          "outputs",
-          "facilities"
-        ],
-        "properties": {
-          "blueprintId": {
-            "type": "integer",
-            "nullable": true,
-            "description": "Game-client blueprint id; null for `construct` entries, which are not industry blueprints."
-          },
-          "primaryTypeId": {
-            "type": "integer",
-            "description": "The item the blueprint is keyed by: its main output for `manufacture`/`construct`, the ore or salvage consumed for `refine`."
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "manufacture",
-              "refine",
-              "construct",
-              "reverse"
-            ],
-            "description": "`manufacture`: build an item from parts. `refine`: refine ore, crude matter or salvage, often into several outputs. `construct`: a construction-site structure (null `blueprintId`, no facilities). `reverse`: the backward half of a production loop (unpacking, D2 Fuel → Salt); do not price items from these."
-          },
-          "runTime": {
-            "type": "integer",
-            "description": "Run time in seconds (raw game-client value); -1 when unknown."
-          },
-          "inputs": {
-            "type": "array",
-            "description": "Items consumed per run.",
-            "items": {
-              "$ref": "#/components/schemas/BlueprintItem"
-            }
-          },
-          "outputs": {
-            "type": "array",
-            "description": "Items produced per run. More than one for most `refine` blueprints and a few `manufacture` ones.",
-            "items": {
-              "$ref": "#/components/schemas/BlueprintItem"
-            }
-          },
-          "facilities": {
-            "type": "array",
-            "description": "Facilities that can run the blueprint. Empty for `construct` entries, and for the few industry blueprints no facility can run.",
-            "items": {
-              "$ref": "#/components/schemas/BlueprintFacility"
-            }
-          }
-        }
-      },
-      "BlueprintItem": {
-        "type": "object",
-        "description": "One input or output line of a blueprint.",
-        "required": [
-          "id",
-          "quantity"
-        ],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "description": "Item type id (joins to the item list `id`)."
-          },
-          "name": {
-            "type": "string",
-            "description": "Display name; may be empty."
-          },
-          "quantity": {
-            "type": "integer",
-            "description": "Units consumed or produced per run."
-          }
-        }
-      },
-      "BlueprintFacility": {
-        "type": "object",
-        "description": "A facility that can run a blueprint, with its per-job run limits.",
-        "required": [
-          "typeId",
-          "name",
-          "maxInputRuns",
-          "maxOutputRuns"
-        ],
-        "properties": {
-          "typeId": {
-            "type": "integer",
-            "description": "Item type id of the facility (e.g. a Refinery or Printer)."
-          },
-          "name": {
-            "type": "string",
-            "description": "Facility display name."
-          },
-          "maxInputRuns": {
-            "type": "integer",
-            "description": "Maximum input runs per job in this facility."
-          },
-          "maxOutputRuns": {
-            "type": "integer",
-            "description": "Maximum output runs per job in this facility."
-          }
-        }
-      },
-      "ItemBlueprints": {
-        "type": "object",
-        "description": "Every blueprint that produces or consumes one item.",
-        "required": [
-          "typeId",
-          "name",
-          "producedBy",
-          "usedIn"
-        ],
-        "properties": {
-          "typeId": {
-            "type": "integer",
-            "description": "The item's type id."
-          },
-          "name": {
-            "type": "string",
-            "description": "The item's display name."
-          },
-          "producedBy": {
-            "type": "array",
-            "description": "Blueprints with this item among their outputs (its recipes). Empty when nothing produces it.",
-            "items": {
-              "$ref": "#/components/schemas/Blueprint"
-            }
-          },
-          "usedIn": {
-            "type": "array",
-            "description": "Blueprints that consume this item as an input. Empty when nothing consumes it.",
-            "items": {
-              "$ref": "#/components/schemas/Blueprint"
-            }
-          }
-        }
       }
     }
   },
   "tags": [
     {
       "name": "Access | Keyspaces"
+    },
+    {
+      "name": "Hauling-agreements"
     },
     {
       "name": "Identity | Characters"

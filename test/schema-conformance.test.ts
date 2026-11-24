@@ -127,11 +127,20 @@ const SDK_SCHEMAS: Record<string, z.ZodType> = {
 /**
  * Operations whose responses another module pins: Armature (orgs, players,
  * hub DAO vaults) has its own schemas and tests, and coin markets are the
- * coin-pool module's. The deprecated tribe alias shares `getTribe`'s shape.
+ * coin-pool module's. Hauling agreements are pinned by the `hauling` group
+ * (TRIEX-221); remove those entries when it lands.
  */
 const PINNED_ELSEWHERE = new Set([
   'listCoins',
-  'getTribeLegacy',
+  'listAgreements',
+  'getAgreement',
+  'getAgreementsConfig',
+  'getAgreementStats',
+  'listOrgAgreements',
+  'listPlayerAgreements',
+  'listPlayerAgreementActions',
+  'listClaimableAgreements',
+  'getPlayerAgreementReputation',
   'batchGetOrgs',
   'getOrg',
   'listOrgDirectory',

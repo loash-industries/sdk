@@ -224,6 +224,59 @@ describe('order-status schemas', () => {
     expect(parsed.orders[0].remainingQuantity).toBe(7n)
   })
 
+  it('reads a good-til-cancelled open order as expiresAt null', () => {
+    // The gateway sends `expires_at: null` for an order with no expiry, which
+    // is what the SDK places by default (GTC_EXPIRE). Rejecting it would fail
+    // the whole page for any account with one resting GTC order.
+    const parsed = OpenOrdersPageSchema.parse({
+      data: [
+        {
+          pool_id: HEX,
+          order_id: '9',
+          side: 'sell',
+          price: '1500',
+          remaining_quantity: '1',
+          filled_quantity: '0',
+          expires_at: null,
+          updated_at: 1755043100000,
+          asset_id: '77800',
+          storage_unit_id: HEX,
+          quote_asset_symbol: 'CRED',
+          quote_asset_decimals: 9,
+        },
+      ],
+      next_cursor: null,
+    })
+    expect(parsed.orders[0].expiresAt).toBeNull()
+  })
+
+  it('reads a private hub (no reported location) with null placement fields', () => {
+    const parsed = HubLocationSchema.parse({
+      hub_id: HEX,
+      assembly_item_id: null,
+      assembly_tenant: null,
+      type_id: null,
+      owner_cap_id: HEX,
+      owner: null,
+      solar_system: null,
+      x: null,
+      y: null,
+      z: null,
+      updated_at: 1755043100000,
+      tx_digest: 'abc',
+      is_public: false,
+      region_id: null,
+      solar_system_name: null,
+    })
+    expect(parsed).toMatchObject({
+      hubId: HEX,
+      assemblyItemId: null,
+      solarSystemId: null,
+      x: null,
+      ownerCapId: HEX,
+    })
+  })
+
   it('parses a fills page', () => {
     const parsed = FillsPageSchema.parse({
       data: [

@@ -243,15 +243,17 @@ export const HubVaultSchema = z
  */
 const hubPlacementShape = {
   hub_id: z.string(),
-  assembly_item_id: z.string(),
-  assembly_tenant: z.string(),
-  type_id: z.string(),
-  owner_cap_id: z.string(),
+  // Null for a private hub: one with no reported location. `owner_cap_id` is
+  // read on-chain for those, and is null only if that lookup fails.
+  assembly_item_id: z.string().nullable(),
+  assembly_tenant: z.string().nullable(),
+  type_id: z.string().nullable(),
+  owner_cap_id: z.string().nullable(),
   owner: z.string().nullable(),
-  solar_system: z.string(),
-  x: z.string(),
-  y: z.string(),
-  z: z.string(),
+  solar_system: z.string().nullable(),
+  x: z.string().nullable(),
+  y: z.string().nullable(),
+  z: z.string().nullable(),
   updated_at: z.number(),
   tx_digest: z.string(),
   is_public: z.boolean(),
@@ -269,9 +271,15 @@ function hubPlacement(v: HubPlacementWire) {
     typeId: v.type_id,
     ownerCapId: v.owner_cap_id,
     owner: v.owner,
-    /** Numeric solar-system id as a string; empty when unindexed. */
+    /**
+     * Numeric solar-system id as a string; null for a private hub (no
+     * reported location) and empty when unindexed.
+     */
     solarSystemId: v.solar_system,
-    /** Coordinates in metres, as decimal strings (they exceed f64 precision). */
+    /**
+     * Coordinates in metres, as decimal strings (they exceed f64 precision);
+     * null for a private hub.
+     */
     x: v.x,
     y: v.y,
     z: v.z,
@@ -637,7 +645,8 @@ export const OpenOrderSchema = z
     price: bigintString,
     remaining_quantity: bigintString,
     filled_quantity: bigintString,
-    expires_at: z.number(),
+    // Null for a good-til-cancelled order (no expiry).
+    expires_at: z.number().nullable(),
     updated_at: z.number(),
     asset_id: z.string(),
     storage_unit_id: z.string(),
@@ -652,6 +661,7 @@ export const OpenOrderSchema = z
     price: v.price,
     remainingQuantity: v.remaining_quantity,
     filledQuantity: v.filled_quantity,
+    /** Epoch ms; null for a good-til-cancelled order (no expiry). */
     expiresAt: v.expires_at,
     updatedAt: v.updated_at,
     assetId: v.asset_id,
@@ -879,15 +889,17 @@ export const OrderPartySchema = z
 export const OrderHubSchema = z
   .object({
     hub_id: z.string(),
-    assembly_item_id: z.string(),
-    assembly_tenant: z.string(),
-    type_id: z.string(),
-    owner_cap_id: z.string(),
+    name: z.string().nullish(),
+    // Null for a private hub (no reported location).
+    assembly_item_id: z.string().nullable(),
+    assembly_tenant: z.string().nullable(),
+    type_id: z.string().nullable(),
+    owner_cap_id: z.string().nullable(),
     owner: z.string().nullable(),
-    solarsystem: z.string(),
-    x: z.string(),
-    y: z.string(),
-    z: z.string(),
+    solarsystem: z.string().nullable(),
+    x: z.string().nullable(),
+    y: z.string().nullable(),
+    z: z.string().nullable(),
     solar_system_id: z.number().nullable(),
     solar_system_name: z.string().nullable(),
     is_public: z.boolean(),
@@ -895,12 +907,14 @@ export const OrderHubSchema = z
   })
   .transform((v) => ({
     hubId: v.hub_id,
+    /** Hub display name, when the operator has set one. */
+    name: v.name ?? null,
     assemblyItemId: v.assembly_item_id,
     assemblyTenant: v.assembly_tenant,
     typeId: v.type_id,
     ownerCapId: v.owner_cap_id,
     owner: v.owner,
-    /** Raw solar system identifier as indexed (string). */
+    /** Raw solar system identifier as indexed (string); null for a private hub. */
     solarSystem: v.solarsystem,
     /** Coordinates in metres, as decimal strings. */
     x: v.x,
@@ -971,7 +985,8 @@ export const OrderDetailSchema = z
     quantity: bigintString,
     remaining_quantity: bigintString,
     filled_quantity: bigintString,
-    expires_at: z.number(),
+    // Null for a good-til-cancelled order (no expiry).
+    expires_at: z.number().nullable(),
     updated_at: z.number(),
     asset_id: z.string(),
     asset_name: z.string().nullable(),
@@ -993,7 +1008,7 @@ export const OrderDetailSchema = z
     quantity: v.quantity,
     remainingQuantity: v.remaining_quantity,
     filledQuantity: v.filled_quantity,
-    /** Epoch ms. */
+    /** Epoch ms; null for a good-til-cancelled order (no expiry). */
     expiresAt: v.expires_at,
     updatedAt: v.updated_at,
     assetId: v.asset_id,
@@ -1520,34 +1535,85 @@ export const BLUEPRINT_KINDS = [
   'reverse',
 ] as const
 
-/** One input or output line of a blueprint. */
-export const BlueprintItemSchema = z
-  .object({
-    id: z.number(),
-    name: z.string().optional(),
-    quantity: z.number(),
-  })
+/** Known blueprint sources. */
+export const BLUEPRINT_SOURCES = ['recipe', 'industry', 'construct'] as const
+
+/** A trait (named property range) a stack must meet to fill an input slot. */
+const BlueprintTraitSchema = z
+  .object({ id: z.number(), name: z.string() })
+  .transform((v) => ({ traitId: String(v.id), name: v.name }))
+
+/** A neotype whose natural property ranges could meet a trait-only slot. */
+const BlueprintCandidateSchema = z
+  .object({ id: z.number(), name: z.string(), guaranteed: z.boolean() })
   .transform((v) => ({
     assetId: String(v.id),
     name: v.name || null,
-    /** Units consumed or produced per run. */
-    quantity: v.quantity,
+    /** Every variant of the type meets the slot's traits, not just some. */
+    guaranteed: v.guaranteed,
   }))
 
-/** A facility that can run a blueprint, with its per-job run limits. */
+/** One input or output line of a blueprint. */
+export const BlueprintItemSchema = z
+  .object({
+    id: z.number().nullable(),
+    name: z.string().optional(),
+    quantity: z.number(),
+    slot: z.number().optional(),
+    traits: z.array(BlueprintTraitSchema).optional(),
+    candidates: z.array(BlueprintCandidateSchema).optional(),
+    traitsGuaranteed: z.boolean().optional(),
+    yield: z.string().optional(),
+    yieldPropertyId: z.number().optional(),
+  })
+  .transform((v) => ({
+    /**
+     * Item type id. Null for a trait-only input slot, which any stack meeting
+     * `traits` fills (see `candidates`). Outputs always have one.
+     */
+    assetId: v.id === null ? null : String(v.id),
+    /** Display name; for a trait-only slot, its trait names. */
+    name: v.name || null,
+    /**
+     * Units consumed or produced per run. Fractional for continuous-quantity
+     * items; for an output with a variable `yield`, the nominal amount.
+     */
+    quantity: v.quantity,
+    /** Input or output index within the recipe (`recipe` entries only). */
+    slot: v.slot ?? null,
+    /** Traits the stack in this input slot must meet. */
+    traits: v.traits ?? [],
+    /** Trait-only slots: neotypes that could meet `traits`. */
+    candidates: v.candidates ?? [],
+    /** Typed slots with traits: whether every variant of the type meets them. */
+    traitsGuaranteed: v.traitsGuaranteed ?? null,
+    /**
+     * How a variable output scales, e.g. `breakpointTable` (with an input
+     * property, `yieldPropertyId`, such as ore quality); null when fixed.
+     */
+    yield: v.yield ?? null,
+    yieldPropertyId: v.yieldPropertyId ?? null,
+  }))
+
+/** A facility that can run a blueprint, with its per-job limits. */
 export const BlueprintFacilitySchema = z
   .object({
     typeId: z.number(),
     name: z.string(),
-    maxInputRuns: z.number(),
-    maxOutputRuns: z.number(),
+    maxInputRuns: z.number().optional(),
+    maxOutputRuns: z.number().optional(),
+    maxMultiplier: z.number().optional(),
   })
   .transform((v) => ({
     /** The facility's item type id (a Refinery, Printer, ...). */
     assetId: String(v.typeId),
     name: v.name || null,
-    maxInputRuns: v.maxInputRuns,
-    maxOutputRuns: v.maxOutputRuns,
+    /** Industry blueprints only; null for digital chemistry recipes. */
+    maxInputRuns: v.maxInputRuns ?? null,
+    /** Industry blueprints only; null for digital chemistry recipes. */
+    maxOutputRuns: v.maxOutputRuns ?? null,
+    /** Maximum job multiplier; digital chemistry recipes only. */
+    maxMultiplier: v.maxMultiplier ?? null,
   }))
 
 /**
@@ -1557,6 +1623,8 @@ export const BlueprintFacilitySchema = z
 export const BlueprintSchema = z
   .object({
     blueprintId: z.number().nullable(),
+    source: openEnum(BLUEPRINT_SOURCES).optional(),
+    name: z.string().optional(),
     primaryTypeId: z.number(),
     kind: openEnum(BLUEPRINT_KINDS),
     runTime: z.number(),
@@ -1567,6 +1635,14 @@ export const BlueprintSchema = z
   .transform((v) => ({
     /** Null for `construct` entries, which are not industry blueprints. */
     blueprintId: v.blueprintId,
+    /**
+     * `recipe`: a digital chemistry recipe (cycle 7 on; nearly all crafting).
+     * `industry`: a legacy industry blueprint. `construct`: a
+     * construction-site structure. Null when the gateway does not say.
+     */
+    source: v.source ?? null,
+    /** Recipe name (`recipe` entries only). */
+    name: v.name || null,
     /**
      * The item the blueprint is keyed by: its main output for `manufacture`
      * and `construct`, the ore or salvage consumed for `refine`.
