@@ -59,3 +59,8 @@ export declare function diffGateway(
   calls: readonly SdkCall[],
   options?: { allowedExtraParams?: readonly string[] },
 ): GatewayDiff
+
+/** Paths, operations, parameters and schemas, with prose keys removed. */
+export function contractShape(spec: any): unknown
+/** Whether two documents differ in anything a client depends on. */
+export function contractsDiffer(a: any, b: any): boolean

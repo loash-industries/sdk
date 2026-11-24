@@ -420,8 +420,9 @@ npm run tscheck && npm test          # unit tests, including the gateway gate
 npm run build
 
 # Contract checks (no API key needed — /swagger.json is public):
-npm run check:gateway                # against the vendored contract
-npm run check:gateway -- --live      # against api.trinary.exchange right now
+npm run check:gateway                # requests vs the vendored contract
+npm run check:gateway -- --live      # requests vs api.trinary.exchange right now
+npm run check:schemas -- --live      # response schemas vs the live contract
 npm run refresh:gateway              # update the vendored copy
 
 # Live verification (needs .env — see .env.sample):
@@ -455,8 +456,17 @@ a gap in coverage rather than a pass.
 `test/gateway.test.ts` runs it against a vendored copy of the contract, so PR
 CI stays hermetic and deterministic, and drives the comparison with doctored
 inputs to prove the gate fails when it should. A vendored copy cannot see the
-gateway moving underneath us, so a scheduled job runs the same check against
-the live document — see `.github/workflows/gateway_drift.yml`.
+gateway moving underneath us, so a scheduled job runs against the live document
+every day — see `.github/workflows/gateway_drift.yml`. It checks both
+directions:
+
+- **Requests** (`check:gateway -- --live --strict`): the gate above, plus a
+  failure when the vendored copy is structurally stale (prose-only edits to
+  descriptions and examples don't count).
+- **Responses** (`check:schemas -- --live`): `test/schema-conformance.test.ts`
+  against the live document. It synthesises payloads from every wrapped
+  operation's response schema, so a field going nullable upstream fails here
+  the day it is published, before it fails a caller's read.
 
 ### Regenerating the abort catalog
 

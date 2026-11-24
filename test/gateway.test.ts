@@ -1,4 +1,5 @@
 import {
+  contractsDiffer,
   diffGateway,
   loadSpec,
   normalizePath,
@@ -57,6 +58,45 @@ describe('gateway contract', () => {
     expect(normalizePath('/v1/hubs/{a}/items/{b}/orderbook')).not.toBe(
       normalizePath('/v1/hubs/{a}/items'),
     )
+  })
+})
+
+describe('stale-contract detection', () => {
+  const base = {
+    paths: { '/v1/x': { get: { summary: 'X', parameters: [] } } },
+    components: {
+      schemas: {
+        X: {
+          type: 'object',
+          properties: { a: { type: 'string', description: 'A.' } },
+        },
+      },
+    },
+  }
+
+  it('ignores prose-only edits', () => {
+    const reworded = structuredClone(base)
+    reworded.paths['/v1/x'].get.summary = 'Get an X'
+    reworded.components.schemas.X.properties.a.description = 'The A.'
+    expect(contractsDiffer(base, reworded)).toBe(false)
+  })
+
+  it('flags a field going nullable, a new path and a new parameter', () => {
+    const nullable = structuredClone(base) as any
+    nullable.components.schemas.X.properties.a.nullable = true
+    expect(contractsDiffer(base, nullable)).toBe(true)
+
+    const newPath = structuredClone(base) as any
+    newPath.paths['/v1/y'] = { get: {} }
+    expect(contractsDiffer(base, newPath)).toBe(true)
+
+    const newParam = structuredClone(base) as any
+    newParam.paths['/v1/x'].get.parameters = [{ name: 'q', in: 'query' }]
+    expect(contractsDiffer(base, newParam)).toBe(true)
+  })
+
+  it('finds the vendored copy current against itself', () => {
+    expect(contractsDiffer(spec, loadSpec())).toBe(false)
   })
 })
 

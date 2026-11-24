@@ -14,6 +14,9 @@
  * The spec's own response examples are parsed as well. Together with the
  * gateway gate (which checks requests), this pins both directions of the wire
  * against the same vendored document.
+ *
+ * Set `GATEWAY_SPEC` to a path to check against another copy instead;
+ * `npm run check:schemas -- --live` does that with the live document.
  */
 import { z } from 'zod'
 import { loadSpec } from '../scripts/gateway-surface.mjs'
@@ -152,7 +155,10 @@ const PINNED_ELSEWHERE = new Set([
 ])
 
 type Json = any
-const spec = loadSpec()
+// `GATEWAY_SPEC` points the suite at another copy of the contract — the daily
+// drift job runs it against the live document (`npm run check:schemas --
+// --live`). PR runs use the vendored fixture and stay hermetic.
+const spec = loadSpec(process.env.GATEWAY_SPEC || undefined)
 const components: Record<string, Json> = spec.components?.schemas ?? {}
 
 function resolve(node: Json): Json {

@@ -18,6 +18,8 @@ on:
       - 'src/**'
       - 'scripts/gateway-surface.mjs'
       - 'scripts/check-gateway.mjs'
+      - 'scripts/check-schemas.mjs'
+      - 'test/schema-conformance.test.ts'
       - 'test/fixtures/gateway-openapi.json'
       - '.github/workflows/gateway_drift.yml'
   schedule:
@@ -40,5 +42,15 @@ jobs:
 
       - run: npm ci --no-audit --no-fund
 
-      - name: Check the SDK against the live gateway contract
-        run: npm run check:gateway -- --live
+      # Requests: endpoints and query parameters the SDK sends. --strict also
+      # fails when the vendored copy is structurally stale, so the hermetic
+      # suite never quietly tests against an old contract.
+      - name: Check the SDK's requests against the live gateway contract
+        run: npm run check:gateway -- --live --strict
+
+      # Responses: what the SDK must parse. A field going nullable upstream
+      # makes every read that meets one throw, and the request check cannot
+      # see it.
+      - name: Check the SDK's response schemas against the live gateway contract
+        if: success() || failure()
+        run: npm run check:schemas -- --live
