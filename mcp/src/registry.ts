@@ -1,5 +1,6 @@
 import { coinTools } from './tools/coins.js'
 import { coinPrepareTools } from './tools/coinsPrepare.js'
+import { haulingTools } from './tools/hauling.js'
 import { keyspaceTools } from './tools/keyspace.js'
 import { orgTools } from './tools/org.js'
 import { orgLifecycleTools } from './tools/orgLifecycle.js'
@@ -14,6 +15,7 @@ import type { ServerMode } from './env.js'
 export const ALL_TOOLS: ToolDef[] = [
   ...readTools,
   ...worldTools,
+  ...haulingTools,
   ...coinTools,
   ...keyspaceTools,
   ...orgTools,
@@ -93,6 +95,13 @@ export const EXCLUDED_SDK_PATHS: Record<string, string> = {
  */
 export function toolsForMode(mode: ServerMode): ToolDef[] {
   return mode === 'read'
-    ? [...readTools, ...worldTools, ...coinTools, ...keyspaceTools, ...orgTools]
+    ? [
+        ...readTools,
+        ...worldTools,
+        ...haulingTools,
+        ...coinTools,
+        ...keyspaceTools,
+        ...orgTools,
+      ]
     : ALL_TOOLS
 }

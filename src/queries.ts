@@ -3,6 +3,7 @@ import { OrgQueries } from './armature/queries'
 import { CoinListSchema } from './coins/schemas'
 import type { CoinInfo } from './coins/types'
 import { TriexClientError, TriexError } from './errors'
+import { HaulingQueries } from './hauling/queries'
 import { indexerGet } from './http'
 import type { QueryParams } from './http'
 import {
@@ -158,12 +159,15 @@ export class IndexerClient {
    * trading surface stays readable; shares this client's base URL + API key.
    */
   readonly orgs: OrgQueries
+  /** Hauling-agreement reads; shares this client's base URL + API key. */
+  readonly hauling: HaulingQueries
 
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
   ) {
     this.orgs = new OrgQueries(baseUrl, apiKey)
+    this.hauling = new HaulingQueries(baseUrl, apiKey)
   }
 
   /**

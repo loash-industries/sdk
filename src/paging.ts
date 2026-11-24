@@ -1,4 +1,11 @@
 import type { OrgDirectoryEntry, OrgDirectoryParams } from './armature/types'
+import type {
+  AgreementFilters,
+  ClaimableAgreement,
+  ClaimableAgreementsParams,
+  HaulingAgreement,
+  PlayerAgreementsParams,
+} from './hauling/types'
 import type { IndexerClient } from './queries'
 import type {
   DiscoveryFilters,
@@ -232,6 +239,69 @@ export async function* iterateOrgDirectory(
       if (++yielded >= max) return
     }
     if (!page.nextCursor || page.entries.length === 0) return
+    cursor = page.nextCursor
+  }
+}
+
+/**
+ * Stream the hauling job board across pages (50 CU each). Filters as
+ * `hauling.agreements`; `limit` sets the page size.
+ */
+export async function* iterateAgreements(
+  indexer: IndexerClient,
+  filters?: AgreementFilters,
+  options?: IterateOptions,
+): AsyncGenerator<HaulingAgreement> {
+  const max = options?.maxItems ?? 10_000
+  let cursor = filters?.cursor
+  let yielded = 0
+  for (;;) {
+    const page = await indexer.hauling.agreements({ ...filters, cursor })
+    for (const agreement of page.agreements) {
+      yield agreement
+      if (++yielded >= max) return
+    }
+    if (!page.nextCursor || page.agreements.length === 0) return
+    cursor = page.nextCursor
+  }
+}
+
+/** Stream every agreement an address plays a part in (50 CU per page). */
+export async function* iteratePlayerAgreements(
+  indexer: IndexerClient,
+  params: PlayerAgreementsParams & { address: string },
+  options?: IterateOptions,
+): AsyncGenerator<HaulingAgreement> {
+  const max = options?.maxItems ?? 10_000
+  let cursor = params.cursor
+  let yielded = 0
+  for (;;) {
+    const page = await indexer.hauling.playerAgreements({ ...params, cursor })
+    for (const agreement of page.agreements) {
+      yield agreement
+      if (++yielded >= max) return
+    }
+    if (!page.nextCursor || page.agreements.length === 0) return
+    cursor = page.nextCursor
+  }
+}
+
+/** Stream every agreement an address can accept (50 CU per page). */
+export async function* iterateClaimableAgreements(
+  indexer: IndexerClient,
+  params: ClaimableAgreementsParams & { address: string },
+  options?: IterateOptions,
+): AsyncGenerator<ClaimableAgreement> {
+  const max = options?.maxItems ?? 10_000
+  let cursor = params.cursor
+  let yielded = 0
+  for (;;) {
+    const page = await indexer.hauling.claimable({ ...params, cursor })
+    for (const agreement of page.agreements) {
+      yield agreement
+      if (++yielded >= max) return
+    }
+    if (!page.nextCursor || page.agreements.length === 0) return
     cursor = page.nextCursor
   }
 }

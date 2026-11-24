@@ -65,6 +65,8 @@ export enum TriexError {
   TribeNotFound = 'TRIEX_TRIBE_NOT_FOUND',
   /** No item type with that numeric id exists in the world item data. */
   ItemNotFound = 'TRIEX_ITEM_NOT_FOUND',
+  /** No hauling agreement with that id has been indexed. */
+  AgreementNotFound = 'TRIEX_AGREEMENT_NOT_FOUND',
   /**
    * No route: either a system NAME is not known (cycle-7 names are
    * player-reported, so an unreported name is unknown to the router), or

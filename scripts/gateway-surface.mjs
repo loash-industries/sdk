@@ -225,6 +225,8 @@ export function readSdkCalls(
     // drift gate has to see them too — a renamed org query param is exactly as
     // quiet as a renamed market one.
     join(here, '..', 'src', 'armature', 'queries.ts'),
+    // Hauling agreements, likewise their own module on the same gateway.
+    join(here, '..', 'src', 'hauling', 'queries.ts'),
   ],
   // `fetchJson` is the Armature module's HTTP helper; `get` there is a public
   // method (fetch one org), not the request primitive.

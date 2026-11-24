@@ -454,6 +454,430 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     },
     "type": "object",
   },
+  "hauling_actions": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The player wallet address.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the gateway waits briefly and then answers with older data.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "address",
+    ],
+    "type": "object",
+  },
+  "hauling_agreement": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "agreementId": {
+        "description": "The agreement object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the gateway waits briefly and then answers with older data.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "viewer": {
+        "description": "Address to report roles and a claim plan for.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "agreementId",
+    ],
+    "type": "object",
+  },
+  "hauling_agreements": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "acceptDeadlineBefore": {
+        "description": "Unix ms: only agreements whose accept deadline is earlier.",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991,
+        "type": "integer",
+      },
+      "cargoAssetId": {
+        "description": "Item asset id in the cargo.",
+        "type": "string",
+      },
+      "cargoCollectionId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "claimableBy": {
+        "description": "Report eligibility for this address on every row.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "currency": {
+        "description": "Reward coin type, e.g. 0x…::cred::CRED.",
+        "type": "string",
+      },
+      "cursor": {
+        "description": "nextCursor from the previous page.",
+        "type": "string",
+      },
+      "destinationHubId": {
+        "description": "Hub the wanted items must reach.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "gated": {
+        "description": "Only agreements with (true) or without (false) a claim gate.",
+        "type": "boolean",
+      },
+      "hauler": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "limit": {
+        "description": "1–100, default 50.",
+        "exclusiveMinimum": 0,
+        "maximum": 100,
+        "type": "integer",
+      },
+      "lister": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the gateway waits briefly and then answers with older data.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "minReward": {
+        "description": "Minimum reward, raw base units.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Agreements gated to or posted for this organization.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sort": {
+        "enum": [
+          "posted_desc",
+          "reward_desc",
+          "accept_deadline_asc",
+          "delivery_deadline_asc",
+        ],
+        "type": "string",
+      },
+      "sourceHubId": {
+        "description": "Hub the cargo is at.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "status": {
+        "anyOf": [
+          {
+            "enum": [
+              "open",
+              "lapsed",
+              "accepted",
+              "overdue",
+              "delivered",
+              "defaulted",
+              "forfeited",
+              "cancelled",
+              "closed_lapsed",
+            ],
+            "type": "string",
+          },
+          {
+            "items": {
+              "enum": [
+                "open",
+                "lapsed",
+                "accepted",
+                "overdue",
+                "delivered",
+                "defaulted",
+                "forfeited",
+                "cancelled",
+                "closed_lapsed",
+              ],
+              "type": "string",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+        ],
+        "description": "One status or several. lapsed (open past its accept deadline) and overdue (accepted past its delivery deadline) are judged at evaluatedAt.",
+      },
+      "wantAssetId": {
+        "description": "Item asset id among the wanted items.",
+        "type": "string",
+      },
+      "wantCollectionId": {
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "type": "object",
+  },
+  "hauling_claimable": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The player wallet address.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "cursor": {
+        "description": "nextCursor from the previous page.",
+        "type": "string",
+      },
+      "includeUnknown": {
+        "type": "boolean",
+      },
+      "limit": {
+        "description": "1–100, default 50.",
+        "exclusiveMinimum": 0,
+        "maximum": 100,
+        "type": "integer",
+      },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the gateway waits briefly and then answers with older data.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "address",
+    ],
+    "type": "object",
+  },
+  "hauling_config": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the gateway waits briefly and then answers with older data.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+    },
+    "type": "object",
+  },
+  "hauling_org_agreements": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "cursor": {
+        "description": "nextCursor from the previous page.",
+        "type": "string",
+      },
+      "limit": {
+        "description": "1–100, default 50.",
+        "exclusiveMinimum": 0,
+        "maximum": 100,
+        "type": "integer",
+      },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the gateway waits briefly and then answers with older data.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "orgId": {
+        "description": "Organization (OU) object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "relation": {
+        "enum": [
+          "gated_to",
+          "claimed_via",
+          "posted_for",
+        ],
+        "type": "string",
+      },
+      "status": {
+        "anyOf": [
+          {
+            "enum": [
+              "open",
+              "lapsed",
+              "accepted",
+              "overdue",
+              "delivered",
+              "defaulted",
+              "forfeited",
+              "cancelled",
+              "closed_lapsed",
+            ],
+            "type": "string",
+          },
+          {
+            "items": {
+              "enum": [
+                "open",
+                "lapsed",
+                "accepted",
+                "overdue",
+                "delivered",
+                "defaulted",
+                "forfeited",
+                "cancelled",
+                "closed_lapsed",
+              ],
+              "type": "string",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+        ],
+        "description": "One status or several. lapsed (open past its accept deadline) and overdue (accepted past its delivery deadline) are judged at evaluatedAt.",
+      },
+    },
+    "required": [
+      "orgId",
+    ],
+    "type": "object",
+  },
+  "hauling_player_agreements": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The player wallet address.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "cursor": {
+        "description": "nextCursor from the previous page.",
+        "type": "string",
+      },
+      "limit": {
+        "description": "1–100, default 50.",
+        "exclusiveMinimum": 0,
+        "maximum": 100,
+        "type": "integer",
+      },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the gateway waits briefly and then answers with older data.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "role": {
+        "anyOf": [
+          {
+            "enum": [
+              "lister",
+              "cap_holder",
+              "beneficiary",
+              "hauler",
+              "claimed_via_org",
+            ],
+            "type": "string",
+          },
+          {
+            "items": {
+              "enum": [
+                "lister",
+                "cap_holder",
+                "beneficiary",
+                "hauler",
+                "claimed_via_org",
+              ],
+              "type": "string",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+        ],
+        "description": "One role or several.",
+      },
+      "status": {
+        "anyOf": [
+          {
+            "enum": [
+              "open",
+              "lapsed",
+              "accepted",
+              "overdue",
+              "delivered",
+              "defaulted",
+              "forfeited",
+              "cancelled",
+              "closed_lapsed",
+            ],
+            "type": "string",
+          },
+          {
+            "items": {
+              "enum": [
+                "open",
+                "lapsed",
+                "accepted",
+                "overdue",
+                "delivered",
+                "defaulted",
+                "forfeited",
+                "cancelled",
+                "closed_lapsed",
+              ],
+              "type": "string",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+        ],
+        "description": "One status or several. lapsed (open past its accept deadline) and overdue (accepted past its delivery deadline) are judged at evaluatedAt.",
+      },
+    },
+    "required": [
+      "address",
+    ],
+    "type": "object",
+  },
+  "hauling_reputation": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The player wallet address.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the gateway waits briefly and then answers with older data.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "address",
+    ],
+    "type": "object",
+  },
+  "hauling_stats": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the gateway waits briefly and then answers with older data.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+    },
+    "type": "object",
+  },
   "keyspace_get_acl": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,

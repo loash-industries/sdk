@@ -156,17 +156,6 @@ describe('the SDK wraps the published surface', () => {
   const NOT_WRAPPED_HERE = new Set([
     // Coin (currency-pair) markets — wrapped by the coin-pool module.
     'GET /v1/coins',
-    // Hauling agreements: wrapped by the `hauling` group (TRIEX-221). Remove
-    // these when it lands.
-    'GET /v1/agreements',
-    'GET /v1/agreements/{agreement_id}',
-    'GET /v1/agreements/config',
-    'GET /v1/agreements/stats',
-    'GET /v1/orgs/{org_id}/agreements',
-    'GET /v1/players/{address}/agreements',
-    'GET /v1/players/{address}/agreements/actions',
-    'GET /v1/players/{address}/agreements/claimable',
-    'GET /v1/players/{address}/agreements/reputation',
   ])
 
   it('wraps every live, non-deprecated operation', () => {

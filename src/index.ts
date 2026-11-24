@@ -15,6 +15,8 @@ export { OrgsApi } from './armature/OrgsApi'
 export { OrgHandle } from './armature/OrgClient'
 export type { OrgHandleDeps, RunOutcome } from './armature/OrgClient'
 export { OrgQueries, MAX_BATCH_IDS } from './armature/queries'
+export { HaulingApi } from './hauling/HaulingApi'
+export { HaulingQueries } from './hauling/queries'
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 export {
@@ -99,12 +101,15 @@ export {
 } from './book'
 export type { BookLevel } from './book'
 export {
+  iterateAgreements,
+  iterateClaimableAgreements,
   iterateDiscovery,
   iterateFills,
   iterateHubLocations,
   iterateItemLocations,
   iterateOpenOrders,
   iterateOrgDirectory,
+  iteratePlayerAgreements,
   iterateRecentTrades,
   iterateTrades,
 } from './paging'
@@ -549,6 +554,41 @@ export {
 } from './armature/vault'
 export type { OuVaultInfo } from './armature/vault'
 export type { OrgSweepSkip } from './armature/OrgClient'
+
+// ─── Hauling agreements ──────────────────────────────────────────────────────
+export {
+  AGREEMENT_ACTIONS,
+  AGREEMENT_ELIGIBILITY,
+  AGREEMENT_EVENTS,
+  AGREEMENT_ROLES,
+  AGREEMENT_STATUSES,
+} from './hauling/schemas'
+export type {
+  AgreementFilters,
+  AgreementPageParams,
+  AgreementParams,
+  AgreementRole,
+  AgreementSort,
+  AgreementStatus,
+  ClaimableAgreement,
+  ClaimableAgreementPage,
+  ClaimableAgreementsParams,
+  HaulingAction,
+  HaulingActionPage,
+  HaulingAgreement,
+  HaulingAgreementDetail,
+  HaulingAgreementPage,
+  HaulingClaimPlan,
+  HaulingCoin,
+  HaulingConfig,
+  HaulingItems,
+  HaulingReputation,
+  HaulingStats,
+  MinCheckpoint,
+  OrgAgreementsParams,
+  PlayerAgreementsParams,
+  PlayerHaulingParams,
+} from './hauling/types'
 
 // ─── Coins: currency-pair markets (triex::pool) ──────────────────────────────
 export {

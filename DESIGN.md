@@ -118,6 +118,8 @@ throws on live data.
 | Tribes | `GET /v1/world/tribes/{tribe_id}` | `characters.tribe` | 20 |
 | World items & recipes (CDN, static) | `GET /v1/world/items`, `/{asset_id}`, `/v1/world/recipes`, `/{item_id}` | `world.items` / `item` / `recipes` / `recipesFor` | 20 each |
 | Routing (location-api) | `GET /v1/routing/route`, `/compare`, `/stats` | `routing.route` / `compare` / `stats` | 100 / 300 / 20 |
+| Hauling agreements: job board, one agreement, config, stats | `GET /v1/agreements`, `/{id}`, `/config`, `/stats` | `hauling.agreements` / `agreement` / `config` / `stats` | 50 / 30 / 20 / 50 |
+| Hauling agreements by org and player; to-do list; claimable; reputation | `GET /v1/orgs/{id}/agreements`, `/v1/players/{a}/agreements[/actions\|/claimable\|/reputation]` | `hauling.orgAgreements` / `playerAgreements` / `actions` / `claimable` / `reputation` | 30 / 50 / 30 / 50 / 30 |
 
 Notes that change how results are read:
 
@@ -699,8 +701,9 @@ object IDs. For latency-sensitive bots, note the post-MVP live-stream option.
 ## 13. Appendix — published gateway surface → SDK
 
 The gateway's published OpenAPI document (`https://api.trinary.exchange/swagger.json`,
-vendored at `test/fixtures/gateway-openapi.json`) — **60 operations, all `GET`**, as of
-2026-10-01. Upstreams per `dynamic-config-registry/gateway-routes/`: etl-api (market
+vendored at `test/fixtures/gateway-openapi.json`) — **68 operations, all `GET`**, as of
+2026-11-24 (60 on 2026-10-01, plus the nine hauling-agreement reads, minus the retired
+`/v1/tribes/{id}` alias). Upstreams per `dynamic-config-registry/gateway-routes/`: etl-api (market
 data), location-api (`/v1/spatial/*`, `/v1/routing/*`) and the public CDN
 (`/v1/world/items`, `/v1/world/recipes*`). `npm run check:gateway [-- --live]` lists any
 operation the SDK does not wrap.
@@ -768,6 +771,16 @@ GET /v1/players/{address}/orgs · /v1/players/{address}/accessible-keyspaces
 GET /v1/hubs/{hub_id}/dao-vaults · /v1/search
 # Coin (currency-pair) markets — coin-pool module
 GET /v1/coins
+# Hauling agreements (etl-api) — src/hauling/
+GET /v1/agreements                                    50 CU  hauling.agreements     (iterateAgreements)
+GET /v1/agreements/{agreement_id}                     30 CU  hauling.agreement
+GET /v1/agreements/config                             20 CU  hauling.config
+GET /v1/agreements/stats                              50 CU  hauling.stats
+GET /v1/orgs/{org_id}/agreements                      30 CU  hauling.orgAgreements
+GET /v1/players/{address}/agreements                  50 CU  hauling.playerAgreements (iteratePlayerAgreements)
+GET /v1/players/{address}/agreements/actions          30 CU  hauling.actions
+GET /v1/players/{address}/agreements/claimable        50 CU  hauling.claimable      (iterateClaimableAgreements)
+GET /v1/players/{address}/agreements/reputation       30 CU  hauling.reputation
 ```
 
 **Deliberately unpublished (D11 — sluice attaches no caller identity):** the remaining

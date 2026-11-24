@@ -10,6 +10,7 @@ import { OrgsWriteApi } from './armature/OrgsApi'
 import { CoinsApi } from './coins/CoinsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
+import { HaulingApi } from './hauling/HaulingApi'
 import { executeAndNormalize, findCreatedObject } from './execute'
 import type { NormalizedExecution } from './execute'
 import {
@@ -192,6 +193,12 @@ export class TriexClient {
    * `/v1/coins`) and trading. See DESIGN-COINS.md.
    */
   readonly coins: CoinsApi
+  /**
+   * Hauling agreements: the job board, agreements in full, what a player can
+   * accept and must do next, reputations and stats. Player-scoped reads
+   * default to the configured address.
+   */
+  readonly hauling: HaulingApi
 
   constructor(config: TriexClientConfig) {
     this.suiClient = config.suiClient
@@ -221,6 +228,9 @@ export class TriexClient {
       },
     )
     this.coins = new CoinsApi(this)
+    this.hauling = new HaulingApi(this.indexer.hauling, (addr) =>
+      this.requireAddress(addr),
+    )
   }
 
   /**
