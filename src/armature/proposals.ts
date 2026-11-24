@@ -5,6 +5,17 @@ import type { ProposalConfig } from './governance'
 import { normalizeMoveType } from './governance'
 
 /**
+ * The slice of a `listDynamicFields` page used here. Annotated because
+ * @mysten/sui 3.x made the method generic, which leaves an un-annotated
+ * paging loop's type circular; the shape is the same in 2.x and 3.x.
+ */
+type DynamicFieldsPage = {
+  dynamicFields: { fieldId: string; name: { type: string; bcs: Uint8Array } }[]
+  hasNextPage: boolean
+  cursor: string | null
+}
+
+/**
  * Live on-chain reads the indexer cannot serve (DESIGN-ARMATURE.md §8): one
  * proposal's full state (A8), an OU's capability vault, its encrypted entries,
  * and a composite frame's step payloads.
@@ -378,7 +389,7 @@ export async function fetchFrameStepPayload(
   let fieldId: string | undefined
   let cursor: string | null = null
   do {
-    const page = await suiClient.core.listDynamicFields({
+    const page: DynamicFieldsPage = await suiClient.core.listDynamicFields({
       parentId: frameId,
       cursor,
     })

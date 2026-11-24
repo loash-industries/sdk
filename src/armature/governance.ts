@@ -2,6 +2,17 @@ import { bcs } from '@mysten/sui/bcs'
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 
 /**
+ * The slice of a `listDynamicFields` page used here. Annotated because
+ * @mysten/sui 3.x made the method generic, which leaves an un-annotated
+ * paging loop's type circular; the shape is the same in 2.x and 3.x.
+ */
+type DynamicFieldsPage = {
+  dynamicFields: { fieldId: string; name: { type: string; bcs: Uint8Array } }[]
+  hasNextPage: boolean
+  cursor: string | null
+}
+
+/**
  * An organizational unit's governance state, read from the live objects.
  *
  * The indexer does not serve any of this, and it has to be head-current: a
@@ -476,7 +487,7 @@ export async function fetchTypeSlots(
   const fieldIds: string[] = []
   let cursor: string | null = null
   do {
-    const page = await suiClient.core.listDynamicFields({
+    const page: DynamicFieldsPage = await suiClient.core.listDynamicFields({
       parentId: ouId,
       cursor,
     })
