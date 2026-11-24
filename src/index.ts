@@ -115,6 +115,8 @@ export {
 } from './paging'
 export type { IterateOptions } from './paging'
 export { untilIndexed } from './wait'
+export { transactionCheckpoint } from './checkpoint'
+export { READ_YOUR_WRITES } from './http'
 
 // Known values of the open enumerations in gateway responses (a value outside
 // these still parses — see `openEnum` in schemas.ts).
@@ -190,6 +192,8 @@ export type {
   TradesPage,
   BalancesAtHubParams,
   HistoryPageParams,
+  MinCheckpoint,
+  OpenOrdersParams,
   FillsParams,
   TradesParams,
   Sweepable,
@@ -584,7 +588,6 @@ export type {
   HaulingItems,
   HaulingReputation,
   HaulingStats,
-  MinCheckpoint,
   OrgAgreementsParams,
   PlayerAgreementsParams,
   PlayerHaulingParams,

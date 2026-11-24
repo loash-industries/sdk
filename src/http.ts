@@ -19,6 +19,66 @@ export async function indexerGet<T = unknown>(
   query?: QueryParams,
   notFound?: TriexError,
 ): Promise<T> {
+  const wanted = parseCheckpoint(query?.min_checkpoint)
+  for (let attempt = 0; ; attempt++) {
+    const { data, checkpoint } = await indexerGetOnce<T>(
+      baseUrl,
+      apiKey,
+      path,
+      query,
+      notFound,
+    )
+    // Read-your-writes: the gateway waits briefly for the indexer to reach
+    // `min_checkpoint`, then answers with whatever it has and says which
+    // checkpoint that is. Behind → retry a few times before settling for it.
+    const delay = READ_YOUR_WRITES.retryDelaysMs[attempt]
+    if (
+      wanted === null ||
+      checkpoint === null ||
+      checkpoint >= wanted ||
+      delay === undefined
+    ) {
+      return data
+    }
+    await new Promise((r) => setTimeout(r, delay))
+  }
+}
+
+/**
+ * How long reads that pass `minCheckpoint` keep retrying while the indexer is
+ * behind it — one entry per retry. The gateway itself already waits briefly
+ * per request, so these are short. Mutable for tests and unusual deployments.
+ */
+export const READ_YOUR_WRITES = {
+  retryDelaysMs: [250, 500, 1000, 2000] as number[],
+}
+
+/** The `min_checkpoint` query value for an optional `minCheckpoint`. */
+export function checkpointParam(opts?: {
+  minCheckpoint?: bigint | string
+}): string | undefined {
+  return opts?.minCheckpoint === undefined
+    ? undefined
+    : String(opts.minCheckpoint)
+}
+
+function parseCheckpoint(v: unknown): bigint | null {
+  if (v === undefined || v === null || v === '') return null
+  try {
+    return BigInt(String(v))
+  } catch {
+    return null
+  }
+}
+
+/** One GET; returns the body and the `X-Indexer-Checkpoint` it was served at. */
+async function indexerGetOnce<T>(
+  baseUrl: string,
+  apiKey: string,
+  path: string,
+  query: QueryParams | undefined,
+  notFound: TriexError | undefined,
+): Promise<{ data: T; checkpoint: bigint | null }> {
   if (!apiKey) {
     throw new TriexClientError(
       TriexError.ApiKeyRequired,
@@ -82,5 +142,8 @@ export async function indexerGet<T = unknown>(
       res.status,
     )
   }
-  return (await res.json()) as T
+  const checkpoint = parseCheckpoint(
+    res.headers?.get?.('x-indexer-checkpoint') ?? null,
+  )
+  return { data: (await res.json()) as T, checkpoint }
 }

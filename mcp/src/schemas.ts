@@ -131,6 +131,19 @@ export const locationPagingShape = {
   cursor: z.string().optional(),
 }
 
+/**
+ * Read-your-writes, for the reads the gateway supports it on: only serve data
+ * that includes this indexer checkpoint (the SDK's `checkpointOf(tx)` after a
+ * write). A decimal string — checkpoints run past 2^53.
+ */
+export const minCheckpointShape = {
+  minCheckpoint: u64
+    .optional()
+    .describe(
+      'Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.',
+    ),
+}
+
 /** Item search takes a limit and nothing else. */
 export const searchPagingShape = limitShape
 

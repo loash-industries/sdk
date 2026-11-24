@@ -235,7 +235,7 @@ whether the abort was `resolved`, came from a dependency package
 | `coins` | `list` · `resolvePool` · `orderbook` · `tradeParams` · `quote` · `estimateMarket` · `openOrders` · `account` · `balances` · `deposit` · `withdraw` · `limit` · `market` · `swap` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `claimSettled` · `createPool` — see below |
 | `orgs` | `get` · `batch` · `directory` · `forPlayer` · `search` · `proposals` · `seats` · `tradingAccount` · `accessibleKeyspaces` · `vaultsAtHub` |
 | `org(id)` handle | `.governance` · `.members` · `.metadata` · `.types` · `.treasury` · `.orders` · `.vault` — see below |
-| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `estimateMarketSellProceeds` · `computeBidQuoteDeposit` · `computeAskProceeds` · `computeQuoteFee` · `iterateDiscovery/Fills/Trades/OpenOrders/RecentTrades/HubLocations/ItemLocations/OrgDirectory/Agreements/PlayerAgreements/ClaimableAgreements` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
+| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `estimateMarketSellProceeds` · `computeBidQuoteDeposit` · `computeAskProceeds` · `computeQuoteFee` · `iterateDiscovery/Fills/Trades/OpenOrders/RecentTrades/HubLocations/ItemLocations/OrgDirectory/Agreements/PlayerAgreements/ClaimableAgreements` · `untilIndexed` · `client.checkpointOf` / `transactionCheckpoint` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
 
 `ReadOnlyClient` exposes the same reads flat (`ro.recentTrades()`,
 `ro.order()`, `ro.character()`, `ro.route()`, `ro.worldItems()`, …), and
@@ -445,6 +445,21 @@ and roll back, never lose funds. The SDK reads everything that funds
 transactions (trading-account resolution, currency balances, receipts, hangar
 slots) from the **fullnode**, head-current. Prefer ids returned from writes
 (`TxResult.createdObjects`) over immediate re-reads.
+
+To read your own write back from the indexer, pass the transaction's checkpoint:
+
+```ts
+const placed = await client.orders.limit({ … })
+const { orders } = await client.orders.openOrders({
+  minCheckpoint: await client.checkpointOf(placed), // needs a SuiGrpcClient
+})
+```
+
+The gateway waits briefly for the indexer to reach that checkpoint, and the SDK
+retries a few times (about 4 s in all) if it is still behind. `minCheckpoint`
+works on open orders, trades, `account.sweepable`, `market.hub`, item search,
+the `orgs` reads, `indexer.orderbook` and every `hauling` read; for anything
+else, `untilIndexed()` polls.
 
 ## Develop
 

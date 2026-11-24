@@ -3,7 +3,12 @@ import type { ClientWithCoreApi } from '@mysten/sui/client'
 import { TriexClientError, TriexError } from '../errors'
 import { executeAndNormalize } from '../execute'
 import type { IndexerClient } from '../queries'
-import type { PackageIds, TransactionExecutor, TxResult } from '../types'
+import type {
+  MinCheckpoint,
+  PackageIds,
+  TransactionExecutor,
+  TxResult,
+} from '../types'
 import { createTribeTx, tradingTypeInits, type TypeInitInput } from './create'
 import { fetchOuState } from './governance'
 import { fetchCapabilityVault } from './proposals'
@@ -50,8 +55,8 @@ export class OrgsApi {
    * on the whole graph.
    * @throws `OrgNotFound` when nothing resolves.
    */
-  get(orgId: string): Promise<Org> {
-    return this.indexer.orgs.get(orgId)
+  get(orgId: string, opts?: MinCheckpoint): Promise<Org> {
+    return this.indexer.orgs.get(orgId, opts)
   }
 
   /**
@@ -60,8 +65,8 @@ export class OrgsApi {
    * `metadata.errorReason === 'unresolved'` rather than being dropped.
    * @throws `ValidationFailed` when more than 200 ids are passed.
    */
-  batch(orgIds: string[]): Promise<Org[]> {
-    return this.indexer.orgs.batch(orgIds)
+  batch(orgIds: string[], opts?: MinCheckpoint): Promise<Org[]> {
+    return this.indexer.orgs.batch(orgIds, opts)
   }
 
   /**
@@ -77,8 +82,8 @@ export class OrgsApi {
    * with `seats()` to find where within each tree the address actually sits.
    * @throws `AddressRequired` when no address is configured or passed.
    */
-  async forPlayer(address?: string): Promise<Org[]> {
-    return this.indexer.orgs.forPlayer(this.requireAddress(address))
+  async forPlayer(address?: string, opts?: MinCheckpoint): Promise<Org[]> {
+    return this.indexer.orgs.forPlayer(this.requireAddress(address), opts)
   }
 
   /**
@@ -119,8 +124,8 @@ export class OrgsApi {
    * E1 — active organization receipt vaults at a trade hub, with their
    * grant/revoke-netted ACL per role. Balances are a fullnode read (Phase D).
    */
-  vaultsAtHub(hubId: string): Promise<HubDaoVault[]> {
-    return this.indexer.orgs.vaultsAtHub(hubId)
+  vaultsAtHub(hubId: string, opts?: MinCheckpoint): Promise<HubDaoVault[]> {
+    return this.indexer.orgs.vaultsAtHub(hubId, opts)
   }
 
   // ─── Tree convenience (one fetch + pure lookups) ──────────────────────────

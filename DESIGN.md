@@ -683,18 +683,31 @@ Mitigations (all adopted):
 2. The client **caches the BM id** after first create/read (read-your-writes).
 3. Callers may pass a known `balanceManagerId` to skip discovery entirely.
 
-**Edge 2 — read-your-writes for freshly created objects.** Every write returns object IDs from
-`objectChanges` (new BM id, new order id). Bots should trust those over an immediate indexer
-re-read. Optional `waitForTx`/confirm helper; optional short client-side cache (TTL) so a
-just-submitted state isn't clobbered by a lagging read.
+**Edge 2 — read-your-writes after a write (revised 2026-11-24).** Writes return object IDs
+from `objectChanges` (new BM id, new order id), and bots should still trust those. For reads
+that must reflect a write, the gateway now supports it server-side: 19 reads accept
+`min_checkpoint` and every response carries `X-Indexer-Checkpoint`. The SDK uses both:
+
+1. `client.checkpointOf(txResult)` asks the fullnode (gRPC ledger service) which checkpoint
+   the transaction landed in, polling briefly because a transaction is final a moment before
+   it is checkpointed.
+2. Pass that as `minCheckpoint` on the supported reads: open orders, trades, sweepable, the
+   pool order book (`indexer.orderbook`), hub vault (`market.hub`), item search,
+   organizations (`orgs.get` / `batch` / `forPlayer` / `vaultsAtHub`) and every hauling read.
+3. The gateway waits briefly for the indexer; if the response's `X-Indexer-Checkpoint` is
+   still behind, `indexerGet` retries with short backoff (`READ_YOUR_WRITES.retryDelaysMs`,
+   ~4 s total) before returning what it has. Reads without `minCheckpoint` never retry.
+
+`untilIndexed()` remains for reads without checkpoint support.
 
 **Not affected by lag:** PTB *input* resolution (owner-cap `version`/`digest` for
 `tx.receivingRef`, coin/receipt object selection) reads the **fullnode**, which is always
 head-current. "Indexer-only" scopes market/account *data*, not transaction inputs.
 
 **Docs stance:** the README states plainly that read endpoints are eventually-consistent
-(seconds), on-chain writes are authoritative, and post-write reads should prefer returned
-object IDs. For latency-sensitive bots, note the post-MVP live-stream option.
+(seconds), on-chain writes are authoritative, and post-write reads should pass
+`minCheckpoint: await client.checkpointOf(tx)` where supported, or prefer returned object
+IDs. For latency-sensitive bots, note the post-MVP live-stream option.
 
 ---
 

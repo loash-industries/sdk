@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import type { MinCheckpoint } from '../types'
 import type {
   AGREEMENT_ROLES,
   AGREEMENT_STATUSES,
@@ -15,6 +16,8 @@ import type {
   HaulingReputationSchema,
   HaulingStatsSchema,
 } from './schemas'
+
+export type { MinCheckpoint }
 
 export type HaulingAgreement = z.output<typeof HaulingAgreementSchema>
 export type HaulingAgreementPage = z.output<typeof HaulingAgreementPageSchema>
@@ -48,15 +51,6 @@ export type AgreementSort =
   | 'reward_desc'
   | 'accept_deadline_asc'
   | 'delivery_deadline_asc'
-
-/**
- * Read-your-writes: serve data that includes at least this indexer checkpoint
- * (e.g. the checkpoint of your transaction). If the indexer has not reached
- * it, the gateway waits briefly and then answers with older data.
- */
-export interface MinCheckpoint {
-  minCheckpoint?: string | bigint
-}
 
 /** Cursor paging shared by the agreement lists. */
 export interface AgreementPageParams extends MinCheckpoint {

@@ -1,5 +1,9 @@
 import { TriexError } from '../errors'
-import { indexerGet, type QueryParams } from '../http'
+import {
+  checkpointParam as checkpoint,
+  indexerGet,
+  type QueryParams,
+} from '../http'
 import { parseWith } from '../schemas'
 import {
   ClaimableAgreementPageSchema,
@@ -30,10 +34,6 @@ import type {
 function list(value: string | string[] | undefined): string | undefined {
   if (value === undefined) return undefined
   return Array.isArray(value) ? value.join(',') : value
-}
-
-function checkpoint(p?: MinCheckpoint): string | undefined {
-  return p?.minCheckpoint === undefined ? undefined : String(p.minCheckpoint)
 }
 
 /**

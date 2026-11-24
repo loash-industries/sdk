@@ -5,6 +5,7 @@ import {
   decimalInt,
   historyPagingShape,
   locationPagingShape,
+  minCheckpointShape,
   objectId,
   searchPagingShape,
   suiAddress,
@@ -47,6 +48,7 @@ export const readTools: ToolDef[] = [
     kind: 'read',
     sdkPath: 'market.searchItems',
     inputShape: {
+      ...minCheckpointShape,
       query: z.string().min(1).describe('Item name or partial name.'),
       ...searchPagingShape,
     },
@@ -62,8 +64,13 @@ export const readTools: ToolDef[] = [
       'Detail for one trade hub: vault configuration, collection, and location when public.',
     kind: 'read',
     sdkPath: 'market.hub',
-    inputShape: { hubId: objectId },
-    handler: async (ctx, args) => ok(await ctx.readClient().hub(args.hubId)),
+    inputShape: { hubId: objectId, ...minCheckpointShape },
+    handler: async (ctx, args) =>
+      ok(
+        await ctx
+          .readClient()
+          .hub(args.hubId, { minCheckpoint: args.minCheckpoint }),
+      ),
   },
   {
     name: 'market_items_at_hub',
@@ -602,9 +609,13 @@ export const readTools: ToolDef[] = [
       'Unclaimed proceeds and settled balances that can be claimed or withdrawn.',
     kind: 'read',
     sdkPath: 'account.sweepable',
-    inputShape: { tradingAccountId: objectId },
+    inputShape: { tradingAccountId: objectId, ...minCheckpointShape },
     handler: async (ctx, args) =>
-      ok(await ctx.readClient().sweepable(args.tradingAccountId)),
+      ok(
+        await ctx.readClient().sweepable(args.tradingAccountId, {
+          minCheckpoint: args.minCheckpoint,
+        }),
+      ),
   },
   {
     name: 'account_owners',
@@ -685,7 +696,11 @@ export const readTools: ToolDef[] = [
     description: 'Resting orders for a trading account.',
     kind: 'read',
     sdkPath: 'orders.openOrders',
-    inputShape: { tradingAccountId: objectId, ...historyPagingShape },
+    inputShape: {
+      tradingAccountId: objectId,
+      ...historyPagingShape,
+      ...minCheckpointShape,
+    },
     handler: async (ctx, args) => {
       const { tradingAccountId, ...rest } = args
       return ok(await ctx.readClient().openOrders(tradingAccountId, rest))
@@ -709,7 +724,11 @@ export const readTools: ToolDef[] = [
     description: 'Completed trades for a trading account.',
     kind: 'read',
     sdkPath: 'orders.trades',
-    inputShape: { tradingAccountId: objectId, ...historyPagingShape },
+    inputShape: {
+      tradingAccountId: objectId,
+      ...historyPagingShape,
+      ...minCheckpointShape,
+    },
     handler: async (ctx, args) => {
       const { tradingAccountId, ...rest } = args
       return ok(await ctx.readClient().trades(tradingAccountId, rest))

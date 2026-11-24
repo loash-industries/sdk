@@ -1,5 +1,6 @@
 import { TriexClientError, TriexError } from '../errors'
-import { indexerGet } from '../http'
+import { checkpointParam, indexerGet } from '../http'
+import type { MinCheckpoint } from '../types'
 import { parseWith } from '../schemas'
 import {
   AccessibleKeyspaceListSchema,
@@ -59,10 +60,10 @@ export class OrgQueries {
    *
    * @throws `OrgNotFound` when the id resolves to no organization.
    */
-  async get(orgId: string): Promise<Org> {
+  async get(orgId: string, opts?: MinCheckpoint): Promise<Org> {
     const data = await this.fetchJson(
       `/v1/orgs/${encodeURIComponent(orgId)}`,
-      undefined,
+      { min_checkpoint: checkpointParam(opts) },
       TriexError.OrgNotFound,
     )
     return parseWith(OrgSchema, data, 'org')
@@ -76,10 +77,13 @@ export class OrgQueries {
    *
    * @throws `ValidationFailed` when more than 200 ids are passed.
    */
-  async batch(orgIds: string[]): Promise<Org[]> {
+  async batch(orgIds: string[], opts?: MinCheckpoint): Promise<Org[]> {
     requireBatchSize(orgIds, 'orgIds')
     if (orgIds.length === 0) return []
-    const data = await this.fetchJson('/v1/orgs', { ids: orgIds.join(',') })
+    const data = await this.fetchJson('/v1/orgs', {
+      ids: orgIds.join(','),
+      min_checkpoint: checkpointParam(opts),
+    })
     return parseWith(OrgListSchema, data, 'orgs')
   }
 
@@ -103,9 +107,10 @@ export class OrgQueries {
    * organization; inspect each tree's per-unit `members` (or use
    * `seatsFor()`) to find exactly where the address sits.
    */
-  async forPlayer(address: string): Promise<Org[]> {
+  async forPlayer(address: string, opts?: MinCheckpoint): Promise<Org[]> {
     const data = await this.fetchJson(
       `/v1/players/${encodeURIComponent(address)}/orgs`,
+      { min_checkpoint: checkpointParam(opts) },
     )
     return parseWith(OrgListSchema, data, 'playerOrgs')
   }
@@ -181,10 +186,13 @@ export class OrgQueries {
    * This answers "who can use which shared storage here". It does NOT carry
    * vault balances — those are a fullnode read (Phase D).
    */
-  async vaultsAtHub(hubId: string): Promise<HubDaoVault[]> {
+  async vaultsAtHub(
+    hubId: string,
+    opts?: MinCheckpoint,
+  ): Promise<HubDaoVault[]> {
     const data = await this.fetchJson(
       `/v1/hubs/${encodeURIComponent(hubId)}/dao-vaults`,
-      undefined,
+      { min_checkpoint: checkpointParam(opts) },
       TriexError.HubNotFound,
     )
     return parseWith(HubDaoVaultListSchema, data, 'hubDaoVaults')

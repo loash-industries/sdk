@@ -109,6 +109,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
       "tradingAccountId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
@@ -1052,6 +1057,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
     },
     "required": [
       "hubId",
@@ -1286,6 +1296,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 200,
         "type": "integer",
       },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
       "query": {
         "description": "Item name or partial name.",
         "minLength": 1,
@@ -1451,6 +1466,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 200,
         "type": "integer",
       },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
       "tradingAccountId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
@@ -1481,6 +1501,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "exclusiveMinimum": 0,
         "maximum": 200,
         "type": "integer",
+      },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.",
+        "pattern": "^\\d+$",
+        "type": "string",
       },
       "tradingAccountId": {
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
@@ -1519,6 +1544,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
       "orgIds": {
         "description": "Organization object ids (max 200).",
         "items": {
@@ -1654,6 +1684,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
         "type": "string",
       },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
     },
     "required": [
       "address",
@@ -1695,6 +1730,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
       "orgId": {
         "description": "Organization object id — the root or ANY unit in its tree; the whole tree is returned either way.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
@@ -2013,6 +2053,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "hubId": {
         "description": "Trade hub / storage unit object id.",
         "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "minCheckpoint": {
+        "description": "Read-your-writes: only serve data that includes this indexer checkpoint, e.g. the checkpoint of a transaction you just ran. If the indexer is behind, the read waits briefly and then answers with what it has.",
+        "pattern": "^\\d+$",
         "type": "string",
       },
     },

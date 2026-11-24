@@ -562,13 +562,26 @@ export interface HistoryPageParams {
   limit?: number
 }
 
+/**
+ * Read-your-writes for the reads that support it: serve data that includes at
+ * least this indexer checkpoint — typically `await client.checkpointOf(tx)`
+ * after a write. If the indexer is behind, the gateway waits briefly and the
+ * SDK retries a few times before returning whatever it has.
+ */
+export interface MinCheckpoint {
+  minCheckpoint?: bigint | string
+}
+
+/** Open-orders paging, with read-your-writes. */
+export interface OpenOrdersParams extends HistoryPageParams, MinCheckpoint {}
+
 export interface FillsParams extends HistoryPageParams {
   poolId?: string
   /** The account's role in the fill. */
   side?: 'maker' | 'taker' | 'all'
 }
 
-export interface TradesParams extends HistoryPageParams {
+export interface TradesParams extends HistoryPageParams, MinCheckpoint {
   /** The account's role in the trade. */
   side?: 'maker' | 'taker' | 'all'
   assetId?: string

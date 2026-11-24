@@ -3,6 +3,7 @@ import { ok } from '../result.js'
 import {
   big,
   cursorPagingShape,
+  minCheckpointShape,
   objectId,
   suiAddress,
   u64,
@@ -57,9 +58,16 @@ export const orgTools: ToolDef[] = [
       'Resolve an organization to its full unit tree: name, metadata, treasury, capability vault, board members per unit, and any trading account. Any unit id returns the top-level organization.',
     kind: 'read',
     sdkPath: 'orgs.get',
-    inputShape: { ...orgIdShape },
+    inputShape: {
+      ...minCheckpointShape,
+      ...orgIdShape,
+    },
     handler: async (ctx, args) =>
-      ok(await ctx.readClient().orgs.get(args.orgId)),
+      ok(
+        await ctx
+          .readClient()
+          .orgs.get(args.orgId, { minCheckpoint: args.minCheckpoint }),
+      ),
   },
   {
     name: 'org_batch',
@@ -69,6 +77,7 @@ export const orgTools: ToolDef[] = [
     kind: 'read',
     sdkPath: 'orgs.batch',
     inputShape: {
+      ...minCheckpointShape,
       orgIds: z
         .array(objectId)
         .min(1)
@@ -76,7 +85,11 @@ export const orgTools: ToolDef[] = [
         .describe('Organization object ids (max 200).'),
     },
     handler: async (ctx, args) =>
-      ok(await ctx.readClient().orgs.batch(args.orgIds)),
+      ok(
+        await ctx
+          .readClient()
+          .orgs.batch(args.orgIds, { minCheckpoint: args.minCheckpoint }),
+      ),
   },
   {
     name: 'org_directory',
@@ -107,10 +120,15 @@ export const orgTools: ToolDef[] = [
     kind: 'read',
     sdkPath: 'orgs.forPlayer',
     inputShape: {
+      ...minCheckpointShape,
       address: suiAddress.describe('Player wallet address.'),
     },
     handler: async (ctx, args) =>
-      ok(await ctx.readClient().orgs.forPlayer(args.address)),
+      ok(
+        await ctx
+          .readClient()
+          .orgs.forPlayer(args.address, { minCheckpoint: args.minCheckpoint }),
+      ),
   },
   {
     name: 'org_search',
@@ -201,10 +219,15 @@ export const orgTools: ToolDef[] = [
     kind: 'read',
     sdkPath: 'orgs.vaultsAtHub',
     inputShape: {
+      ...minCheckpointShape,
       hubId: objectId.describe('Trade hub / storage unit object id.'),
     },
     handler: async (ctx, args) =>
-      ok(await ctx.readClient().orgs.vaultsAtHub(args.hubId)),
+      ok(
+        await ctx
+          .readClient()
+          .orgs.vaultsAtHub(args.hubId, { minCheckpoint: args.minCheckpoint }),
+      ),
   },
 
   // ─── unit-scoped reads ─────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import type { CoinInfo } from './coins/types'
 import { TriexClientError, TriexError } from './errors'
 import { HaulingQueries } from './hauling/queries'
 import { indexerGet } from './http'
+import { checkpointParam } from './http'
 import type { QueryParams } from './http'
 import {
   AssemblyEnrichedSchema,
@@ -69,7 +70,6 @@ import type {
   DiscoveryResult,
   FillsPage,
   FillsParams,
-  HistoryPageParams,
   HubEnriched,
   HubItemMarket,
   HubItemsPage,
@@ -80,12 +80,14 @@ import type {
   HubVaultInfo,
   InventoryBalances,
   LocationPageParams,
+  MinCheckpoint,
   NearbyHub,
   NearbyHubsParams,
   NearbyHubsBySystemParams,
   NearbySystems,
   NearbySystemsParams,
   OpenOrdersPage,
+  OpenOrdersParams,
   Orderbook,
   PoolMetadata,
   SolarSystem,
@@ -238,10 +240,10 @@ export class IndexerClient {
   }
 
   /** #9b — resting orders for a pool (bids high-first, asks low-first). 30 CU. */
-  async orderbook(poolId: string): Promise<Orderbook> {
+  async orderbook(poolId: string, opts?: MinCheckpoint): Promise<Orderbook> {
     const data = await this.get(
       `/v1/pools/${encodeURIComponent(poolId)}/orderbook`,
-      undefined,
+      { min_checkpoint: checkpointParam(opts) },
       TriexError.PoolNotFound,
     )
     return { poolId, ...parseWith(OrderbookSchema, data, 'orderbook') }
@@ -267,10 +269,10 @@ export class IndexerClient {
    * Vault descriptor for a trade hub — `collectionId` (pool resolution + §6.1)
    * and `vaultConfigId` (item deposit/withdraw PTBs). 20 CU.
    */
-  async hubVault(hubId: string): Promise<HubVaultInfo> {
+  async hubVault(hubId: string, opts?: MinCheckpoint): Promise<HubVaultInfo> {
     const data = await this.get(
       `/v1/hubs/${encodeURIComponent(hubId)}/vault`,
-      undefined,
+      { min_checkpoint: checkpointParam(opts) },
       TriexError.HubNotFound,
     )
     return parseWith(HubVaultSchema, data, 'hubVault')
@@ -401,8 +403,16 @@ export class IndexerClient {
   }
 
   /** #8a — search item types by partial name or exact numeric ID. 50 CU. */
-  async searchItems(query: string, limit?: number): Promise<ItemSearchPage> {
-    const data = await this.get('/v1/world/items/search', { q: query, limit })
+  async searchItems(
+    query: string,
+    limit?: number,
+    opts?: MinCheckpoint,
+  ): Promise<ItemSearchPage> {
+    const data = await this.get('/v1/world/items/search', {
+      q: query,
+      limit,
+      min_checkpoint: checkpointParam(opts),
+    })
     return parseWith(ItemSearchPageSchema, data, 'searchItems')
   }
 
@@ -616,11 +626,16 @@ export class IndexerClient {
    */
   async openOrders(
     tradingAccountId: string,
-    params?: HistoryPageParams,
+    params?: OpenOrdersParams,
   ): Promise<OpenOrdersPage> {
     const data = await this.get(
       `/v1/trading-accounts/${encodeURIComponent(tradingAccountId)}/open-orders`,
-      { before: params?.before, after: params?.after, limit: params?.limit },
+      {
+        before: params?.before,
+        after: params?.after,
+        limit: params?.limit,
+        min_checkpoint: checkpointParam(params),
+      },
       TriexError.TradingAccountNotFound,
     )
     return parseWith(OpenOrdersPageSchema, data, 'openOrders')
@@ -653,10 +668,13 @@ export class IndexerClient {
    * settled proceeds + idle BM item balances. (BM-resident CRED is deliberately
    * not in this manifest — read it via `balances.currency()`.) 30 CU.
    */
-  async sweepable(tradingAccountId: string): Promise<Sweepable> {
+  async sweepable(
+    tradingAccountId: string,
+    opts?: MinCheckpoint,
+  ): Promise<Sweepable> {
     const data = await this.get(
       `/v1/trading-accounts/${encodeURIComponent(tradingAccountId)}/sweepable`,
-      undefined,
+      { min_checkpoint: checkpointParam(opts) },
       TriexError.TradingAccountNotFound,
     )
     return parseWith(SweepableSchema, data, 'sweepable')
@@ -678,6 +696,7 @@ export class IndexerClient {
         limit: params?.limit,
         side: params?.side,
         asset_id: params?.assetId,
+        min_checkpoint: checkpointParam(params),
       },
       TriexError.TradingAccountNotFound,
     )
