@@ -388,6 +388,13 @@ export interface DiscoveryFilters {
   side?: 'buy' | 'sell' | 'both'
   /** Restrict to location-revealed (public) hubs. */
   publicOnly?: boolean
+  /**
+   * With `storageUnitIds`: orders on those hubs OR on any public hub (without
+   * `storageUnitIds` it behaves like `publicOnly`).
+   */
+  includePublic?: boolean
+  /** Drop orders on hubs that are offline; hubs of unknown state stay. */
+  excludeOffline?: boolean
   cursor?: string
   /** Rows per page (default and max 100). */
   limit?: number
@@ -500,6 +507,25 @@ export interface RecentTradesParams extends HistoryPageParams {
   publicOnly?: boolean
   /** Only trades of this item type (numeric asset id). */
   assetId?: string
+  /** Only trades at this trade hub (storage unit object id). */
+  hubId?: string
+}
+
+/** Item-search options. */
+export interface ItemSearchOptions extends MinCheckpoint {
+  /** Matches to return. */
+  limit?: number
+  /**
+   * Include each match's `supply` and `variants` (its keys — plain item and
+   * neotype variants — with units in storage).
+   */
+  variants?: boolean
+  /** Variant order: `supply` (default) or `storage_units`. */
+  variantSort?: 'supply' | 'storage_units'
+  /** Variants per match (default 5, max 50). */
+  variantLimit?: number
+  /** World to count supply in, e.g. `stillness`; omitted: every world. */
+  tenant?: string
 }
 
 /**

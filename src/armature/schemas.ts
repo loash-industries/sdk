@@ -275,6 +275,9 @@ export const ProposalSummarySchema = z
     config: ProposalConfigWireSchema.nullable().optional(),
     created_ms: z.number().nullable().optional(),
     composite: z.array(ProposalCompositeStepSchema).optional(),
+    payload_bcs: z.string().nullable().optional(),
+    executor: z.string().nullable().optional(),
+    executed_ms: z.number().nullable().optional(),
   })
   .transform((v) => ({
     proposalId: v.proposal_id,
@@ -301,6 +304,16 @@ export const ProposalSummarySchema = z
     /** Epoch ms of the creating checkpoint; null if not indexed. */
     createdMs: v.created_ms ?? null,
     composite: v.composite,
+    /**
+     * BCS bytes (base64) of the payload, recorded at creation — decode
+     * against `payloadType`. Survives the on-chain proposal's deletion, so it
+     * is the record of what an executed proposal did. Null when not indexed.
+     */
+    payloadBcs: v.payload_bcs ?? null,
+    /** Address that executed the proposal; null when not executed. */
+    executor: v.executor ?? null,
+    /** Epoch ms of the execution checkpoint; null when not executed. */
+    executedMs: v.executed_ms ?? null,
   }))
 
 export const ProposalSummaryListSchema = z.array(ProposalSummarySchema)

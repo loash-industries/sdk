@@ -93,6 +93,7 @@ import type {
   HubItemsPage,
   HubLocationFilters,
   HubLocationPage,
+  ItemSearchOptions,
   ItemSearchPage,
   InventoryBalances,
   LimitOrderParams,
@@ -945,7 +946,7 @@ class MarketApi {
    */
   searchItems(
     query: string,
-    opts?: { limit?: number } & MinCheckpoint,
+    opts?: ItemSearchOptions,
   ): Promise<ItemSearchPage> {
     return this.c.indexer.searchItems(query, opts?.limit, opts)
   }

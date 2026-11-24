@@ -346,10 +346,12 @@ describe('recentTrades', () => {
       limit: 25,
       publicOnly: true,
       assetId: '95679',
+      hubId: HEX,
     })
 
     const url = urlOf(fetchMock)
     expect(url.pathname).toBe('/v1/trades/recent')
+    expect(url.searchParams.get('hub_id')).toBe(HEX)
     expect(url.searchParams.get('before')).toBe('200')
     expect(url.searchParams.get('after')).toBe('100')
     expect(url.searchParams.get('limit')).toBe('25')
@@ -374,6 +376,42 @@ describe('recentTrades', () => {
       regionId: null,
       solarSystemId: null,
       solarSystemName: null,
+      buyer: null,
+      seller: null,
+    })
+  })
+
+  it('names both parties of a trade, player or organization', async () => {
+    mockFetch([
+      {
+        data: [
+          {
+            ...recentTrade,
+            buyer: {
+              trading_account_id: HEX,
+              kind: 'player',
+              id: WALLET,
+              name: 'Rin Farshot',
+              root_org_id: null,
+              root_org_name: null,
+            },
+            seller: {
+              trading_account_id: HEX,
+              kind: 'org',
+              id: HEX,
+              name: 'Haulers Guild',
+              root_org_id: HEX,
+              root_org_name: 'Guild',
+            },
+          },
+        ],
+        next_cursor: null,
+      },
+    ])
+    const page = await client.recentTrades()
+    expect(page.trades[0]).toMatchObject({
+      buyer: { kind: 'player', id: WALLET, name: 'Rin Farshot' },
+      seller: { kind: 'org', name: 'Haulers Guild', rootOrgName: 'Guild' },
     })
   })
 

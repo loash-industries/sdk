@@ -963,6 +963,14 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
       "cursor": {
         "type": "string",
       },
+      "excludeOffline": {
+        "description": "Drop orders on hubs that are offline (hubs of unknown state are kept).",
+        "type": "boolean",
+      },
+      "includePublic": {
+        "description": "With storageUnitIds: also include orders on any hub that publishes its location. Without storageUnitIds it is the same as publicOnly.",
+        "type": "boolean",
+      },
       "limit": {
         "exclusiveMinimum": 0,
         "maximum": 200,
@@ -1274,6 +1282,11 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "maximum": 9007199254740991,
         "type": "integer",
       },
+      "hubId": {
+        "description": "Only trades at this trade hub (storage unit id).",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
       "limit": {
         "description": "Trades per page (max 50 — the gateway caps it there).",
         "exclusiveMinimum": 0,
@@ -1305,6 +1318,28 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "description": "Item name or partial name.",
         "minLength": 1,
         "type": "string",
+      },
+      "tenant": {
+        "description": "World to count supply in, e.g. "stillness"; omit for every world.",
+        "type": "string",
+      },
+      "variantLimit": {
+        "description": "Variants per match (default 5, max 50).",
+        "exclusiveMinimum": 0,
+        "maximum": 50,
+        "type": "integer",
+      },
+      "variantSort": {
+        "description": "Order variants by units in storage (default) or by storage units holding them.",
+        "enum": [
+          "supply",
+          "storage_units",
+        ],
+        "type": "string",
+      },
+      "variants": {
+        "description": "Include supply and variants (keys with units in storage).",
+        "type": "boolean",
       },
     },
     "required": [

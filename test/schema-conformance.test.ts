@@ -20,6 +20,7 @@
  */
 import { z } from 'zod'
 import { loadSpec } from '../scripts/gateway-surface.mjs'
+import { CoinListSchema } from '../src/coins/schemas'
 import {
   ClaimableAgreementPageSchema,
   HaulingActionPageSchema,
@@ -134,6 +135,8 @@ const SDK_SCHEMAS: Record<string, z.ZodType> = {
   getRoute: RouteSchema,
   compareRoutes: RouteComparisonSchema,
   getRoutingStats: RoutingStatsSchema,
+  // coin (currency-pair) markets
+  listCoins: CoinListSchema,
   // hauling agreements
   listAgreements: HaulingAgreementPageSchema,
   getAgreement: HaulingAgreementDetailSchema,
@@ -148,11 +151,9 @@ const SDK_SCHEMAS: Record<string, z.ZodType> = {
 
 /**
  * Operations whose responses another module pins: Armature (orgs, players,
- * hub DAO vaults) has its own schemas and tests, and coin markets are the
- * coin-pool module's.
+ * hub DAO vaults) has its own schemas and tests.
  */
 const PINNED_ELSEWHERE = new Set([
-  'listCoins',
   'batchGetOrgs',
   'getOrg',
   'listOrgDirectory',

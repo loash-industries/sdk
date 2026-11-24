@@ -25,6 +25,7 @@ import type {
   HubItemsPage,
   HubLocationFilters,
   HubLocationPage,
+  ItemSearchOptions,
   ItemSearchPage,
   InventoryBalances,
   LocationPageParams,
@@ -178,7 +179,7 @@ export class ReadOnlyClient {
    */
   searchItems(
     query: string,
-    opts?: { limit?: number } & MinCheckpoint,
+    opts?: ItemSearchOptions,
   ): Promise<ItemSearchPage> {
     return this.indexer.searchItems(query, opts?.limit, opts)
   }

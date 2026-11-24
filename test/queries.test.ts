@@ -32,10 +32,14 @@ describe('IndexerClient request building', () => {
       assetId: '70810',
       side: 'buy',
       publicOnly: true,
+      includePublic: true,
+      excludeOffline: true,
       limit: 20,
     })
 
     const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit]
+    expect(url.searchParams.get('include_public')).toBe('true')
+    expect(url.searchParams.get('exclude_offline')).toBe('true')
     expect(String(url)).toContain('/v1/discovery')
     expect(url.searchParams.get('storage_unit_ids')).toBe(`${HEX},0xabc`)
     expect(url.searchParams.get('asset_id')).toBe('70810')
@@ -82,6 +86,57 @@ describe('IndexerClient request building', () => {
           outputQuantity: 1,
           components: [{ assetId: '78429', quantity: 4 }],
         },
+      ],
+      supply: null,
+      variants: [],
+    })
+  })
+
+  it('searchItems asks for variant supply and maps it', async () => {
+    const fetchMock = mockFetch([
+      {
+        data: [
+          {
+            asset_id: '77800',
+            name: 'Crude',
+            symbol: null,
+            mass: 1,
+            recipes: [],
+            supply: { supply: '9000', variant_count: 2, as_of_ms: 1 },
+            variants: [
+              {
+                asset_id: '77800',
+                variant_id: '0xabc',
+                name: 'Crude (rich)',
+                supply: '6000',
+                storage_units: 4,
+                last_seen_ms: 2,
+              },
+            ],
+          },
+        ],
+      },
+    ])
+    const client = new IndexerClient('https://api.example.test', 'k')
+    const page = await client.searchItems('crude', 5, {
+      variants: true,
+      variantSort: 'storage_units',
+      variantLimit: 10,
+      tenant: 'stillness',
+    })
+    const [url] = fetchMock.mock.calls[0] as [URL]
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      q: 'crude',
+      limit: '5',
+      variants: 'true',
+      variant_sort: 'storage_units',
+      variant_limit: '10',
+      tenant: 'stillness',
+    })
+    expect(page.items[0]).toMatchObject({
+      supply: { supply: 9000n, variantCount: 2 },
+      variants: [
+        { variantId: '0xabc', supply: 6000n, storageUnits: 4, lastSeenMs: 2 },
       ],
     })
   })

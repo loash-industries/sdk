@@ -131,9 +131,18 @@ export const OrderbookOrderSchema = z
     lastUpdatedTimestamp: bigintString,
     status: z.number(),
     price: bigintString,
+    tradingAccountId: z.string().optional(),
+    lastCheckpoint: bigintString.optional(),
   })
   .transform((v) => ({
     orderId: v.encodedOrderId,
+    /** The trading account the order rests under; null on older gateways. */
+    tradingAccountId: v.tradingAccountId ?? null,
+    /**
+     * Checkpoint of the order's last on-chain change — it reflects every event
+     * up to there. Usable as `minCheckpoint` for a follow-up read.
+     */
+    lastCheckpoint: v.lastCheckpoint ?? null,
     /** Original order quantity (= remaining + filled). */
     quantity: v.quantity,
     filledQuantity: v.filledQuantity,
@@ -167,6 +176,8 @@ export const PoolMetadataSchema = z
     collection_id: z.string().nullable(),
     fee: z.string().nullable(),
     fee_rate: z.number().nullable(),
+    maker_fee: z.string().nullable().optional(),
+    maker_fee_rate: z.number().nullable().optional(),
   })
   .transform((v) => ({
     poolId: v.pool_id,
@@ -192,6 +203,17 @@ export const PoolMetadataSchema = z
     feeRateScaled: v.fee === null ? 0n : BigInt(v.fee),
     /** Decimal form of `feeRateScaled` (fee / 1e9), for display. */
     feeRate: v.fee_rate,
+    /**
+     * Entry-tier MAKER rate of the pool's fee class (or its creation-time
+     * rate), 1e9-scaled — charged when a resting order fills; null when
+     * unknown. Like `feeRateScaled`, an account's own tier is on-chain only.
+     */
+    makerFeeRateScaled:
+      v.maker_fee === null || v.maker_fee === undefined
+        ? null
+        : BigInt(v.maker_fee),
+    /** Decimal form of `makerFeeRateScaled`, for display. */
+    makerFeeRate: v.maker_fee_rate ?? null,
   }))
 
 /**
@@ -581,6 +603,40 @@ export const ItemRecipeSchema = z
     components: v.components,
   }))
 
+/** Units of an item type in live storage units, over all its keys. */
+const ItemSupplySummarySchema = z
+  .object({
+    supply: bigintString,
+    variant_count: z.number(),
+    as_of_ms: z.number(),
+  })
+  .transform((v) => ({
+    supply: v.supply,
+    variantCount: v.variant_count,
+    asOfMs: v.as_of_ms,
+  }))
+
+/** One key of an item type (the plain item or a neotype variant) in storage. */
+const ItemVariantSupplySchema = z
+  .object({
+    asset_id: z.string(),
+    variant_id: z.string().nullable(),
+    name: z.string().nullable(),
+    supply: bigintString,
+    storage_units: z.number(),
+    last_seen_ms: z.number(),
+  })
+  .transform((v) => ({
+    assetId: v.asset_id,
+    /** Null for the plain (non-variant) item. */
+    variantId: v.variant_id,
+    name: v.name,
+    supply: v.supply,
+    /** Storage units holding it. */
+    storageUnits: v.storage_units,
+    lastSeenMs: v.last_seen_ms,
+  }))
+
 export const ItemSearchResultSchema = z
   .object({
     asset_id: z.string(),
@@ -588,6 +644,8 @@ export const ItemSearchResultSchema = z
     symbol: z.string().nullable(),
     mass: z.number(),
     recipes: z.array(ItemRecipeSchema),
+    supply: ItemSupplySummarySchema.nullable().optional(),
+    variants: z.array(ItemVariantSupplySchema).optional(),
   })
   .transform((v) => ({
     assetId: v.asset_id,
@@ -595,6 +653,10 @@ export const ItemSearchResultSchema = z
     symbol: v.symbol,
     mass: v.mass,
     recipes: v.recipes,
+    /** With `variants: true`: total units in storage; null when none. */
+    supply: v.supply ?? null,
+    /** With `variants: true`: the type's keys in storage. */
+    variants: v.variants ?? [],
   }))
 
 export const ItemSearchPageSchema = z
@@ -713,6 +775,32 @@ export const FillsPageSchema = z
   })
   .transform((v) => ({ fills: v.data, nextCursor: v.next_cursor }))
 
+/**
+ * One side of a trade: the trading account, and who is behind it — a player
+ * (wallet + character name) or an organization (via its trading custody).
+ */
+export const TradePartySchema = z
+  .object({
+    trading_account_id: z.string(),
+    kind: openEnum(['player', 'org'] as const).nullable(),
+    id: z.string().nullable(),
+    name: z.string().nullable(),
+    root_org_id: z.string().nullable(),
+    root_org_name: z.string().nullable(),
+  })
+  .transform((v) => ({
+    tradingAccountId: v.trading_account_id,
+    /** `player` or `org`; null when the account's owner is not indexed. */
+    kind: v.kind,
+    /** The player's wallet address, or the organization's object id. */
+    id: v.id,
+    /** Character name, or organization name; null when unknown. */
+    name: v.name,
+    /** Organizations: the top-level organization (itself when top-level). */
+    rootOrgId: v.root_org_id,
+    rootOrgName: v.root_org_name,
+  }))
+
 export const TradeSchema = z
   .object({
     event_digest: z.string(),
@@ -728,6 +816,7 @@ export const TradeSchema = z
     traded_at: z.number(),
     asset_id: z.string(),
     storage_unit_id: z.string(),
+    counterparty: TradePartySchema.optional(),
   })
   .transform((v) => ({
     eventDigest: v.event_digest,
@@ -743,6 +832,8 @@ export const TradeSchema = z
     tradedAt: v.traded_at,
     assetId: v.asset_id,
     storageUnitId: v.storage_unit_id,
+    /** Who was on the other side; null on older gateways. */
+    counterparty: v.counterparty ?? null,
   }))
 
 export const TradesPageSchema = z
@@ -1088,6 +1179,8 @@ export const RecentTradeSchema = z
     region_id: z.number().nullable(),
     solar_system_id: z.number().nullable(),
     solar_system_name: z.string().nullable(),
+    buyer: TradePartySchema.optional(),
+    seller: TradePartySchema.optional(),
   })
   .transform((v) => ({
     /** Execution price, human-readable quote units per item. */
@@ -1118,6 +1211,10 @@ export const RecentTradeSchema = z
     solarSystemId: v.solar_system_id,
     /** Null when unavailable — including names no player has reported yet. */
     solarSystemName: v.solar_system_name,
+    /** The player or organization that bought; null on older gateways. */
+    buyer: v.buyer ?? null,
+    /** The player or organization that sold; null on older gateways. */
+    seller: v.seller ?? null,
   }))
 
 export const RecentTradesPageSchema = z
