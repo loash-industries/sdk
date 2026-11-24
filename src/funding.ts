@@ -1,6 +1,7 @@
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 import type {
   Transaction,
+  TransactionArgument,
   TransactionObjectArgument,
 } from '@mysten/sui/transactions'
 
@@ -13,7 +14,11 @@ import {
   getTradingAccountItemBalance,
   getObjectRef,
 } from './onchain'
-import { depositMulticoinObject, sourceItemsFromHangar } from './transactions'
+import {
+  depositHangarReceipt,
+  depositMulticoinObject,
+  sourceItemsFromHangar,
+} from './transactions'
 import type { PackageIds } from './types'
 
 /**
@@ -285,4 +290,197 @@ export async function sourceItemsIntoTradingAccount(
     TriexError.CharacterNotFound,
     `Insufficient wallet receipts (cover ${fromWallet} of ${amount}) and no on-chain character resolved for ${params.owner} to draw hangar items from.`,
   )
+}
+
+// ─── Item balances (wallet receipts → hangar) ────────────────────────────────
+
+export interface SourceItemBalanceParams {
+  owner: string
+  /** The receipt collection the balance must be in (a hub vault's). */
+  collectionId: string
+  assetId: bigint
+  /** Exactly this many units. */
+  quantity: bigint
+  /**
+   * Draw what wallet receipts can't cover from this hub's hangar (the
+   * owner's storage-unit slot first when they own the hub, then their
+   * character's slot), depositing it into a receipt in the same transaction.
+   * Omitted: wallet receipts only.
+   */
+  hangar?: { ssuObjectId: string; vaultConfigId: string }
+}
+
+/**
+ * One `multicoin::Balance` of exactly `quantity` units of `assetId` in
+ * `collectionId`, built in `tx` — for hauling cargo and deliveries, which
+ * take balances rather than a trading account.
+ *
+ * Wallet receipts go first, largest first, joined and split to the exact
+ * amount (the remainder stays in the wallet); the hangar covers the rest when
+ * `hangar` is given. Ported from triex-app-api's `receiptBalanceArg` /
+ * `hangarBalanceArgs`.
+ * @throws `ValidationFailed` for a non-positive quantity;
+ *   `InsufficientBalance` when wallet and hangar together fall short.
+ */
+export async function sourceItemBalance(
+  suiClient: ClientWithCoreApi,
+  tx: Transaction,
+  ids: PackageIds,
+  params: SourceItemBalanceParams,
+): Promise<TransactionArgument> {
+  const { quantity, assetId } = params
+  if (quantity <= 0n) {
+    throw new TriexClientError(
+      TriexError.ValidationFailed,
+      'Item quantity must be positive.',
+    )
+  }
+  const collection = params.collectionId.trim().toLowerCase()
+  const receipts = (
+    await findOwnedItemReceipts(suiClient, ids, params.owner, {
+      assetId: assetId.toString(),
+    })
+  )
+    .filter(
+      (r) => r.amount > 0n && r.collectionId?.toLowerCase() === collection,
+    )
+    .sort((a, b) => (a.amount > b.amount ? -1 : a.amount < b.amount ? 1 : 0))
+
+  const used: typeof receipts = []
+  let fromWallet = 0n
+  for (const r of receipts) {
+    if (fromWallet >= quantity) break
+    used.push(r)
+    fromWallet += r.amount
+  }
+
+  // Wallet receipts alone cover it: join, then split off exactly `quantity`.
+  let walletPart: TransactionObjectArgument | null = null
+  if (used.length) {
+    const primary = tx.object(used[0].objectId)
+    for (const r of used.slice(1)) {
+      tx.moveCall({
+        target: `${ids.multicoin}::multicoin::join_entry`,
+        arguments: [primary, tx.object(r.objectId)],
+      })
+    }
+    const take = fromWallet >= quantity ? quantity : fromWallet
+    walletPart =
+      fromWallet === take
+        ? primary
+        : (tx.moveCall({
+            target: `${ids.multicoin}::multicoin::split`,
+            arguments: [primary, tx.pure.u64(take)],
+          })[0] as TransactionObjectArgument)
+    if (fromWallet >= quantity) return walletPart
+  }
+
+  const remaining = quantity - fromWallet
+  if (!params.hangar) {
+    throw new TriexClientError(
+      TriexError.InsufficientBalance,
+      `Wallet receipts hold ${fromWallet} of asset ${assetId} in collection ${params.collectionId}; ${quantity} are needed. Pass a hangar to draw the rest from.`,
+    )
+  }
+  const { ssuObjectId, vaultConfigId } = params.hangar
+  const ssuCapType = `${ids.worldOriginal}::storage_unit::StorageUnit`
+  const charCapType = `${ids.worldOriginal}::character::Character`
+
+  // Which slots to draw from, in order: (cap, cap type, character, take).
+  const draws: [string, string, string, bigint][] = []
+  const ssuOwner = await fetchSsuOwnerInfo(suiClient, ssuObjectId, params.owner)
+  if (ssuOwner) {
+    const [ssuQty, charQty] = await Promise.all([
+      fetchInventorySlotQuantity(
+        suiClient,
+        ssuObjectId,
+        ssuOwner.ssuOwnerCapId,
+        assetId.toString(),
+      ),
+      fetchInventorySlotQuantity(
+        suiClient,
+        ssuObjectId,
+        ssuOwner.charOwnerCapId,
+        assetId.toString(),
+      ),
+    ])
+    const fromSsu = ssuQty >= remaining ? remaining : ssuQty
+    const fromChar = remaining - fromSsu
+    if (fromChar > charQty) {
+      throw new TriexClientError(
+        TriexError.InsufficientBalance,
+        `Insufficient items for asset ${assetId}: wallet receipts ${fromWallet}, storage-unit slot ${ssuQty}, character slot ${charQty}; ${quantity} are needed.`,
+      )
+    }
+    if (fromSsu > 0n) {
+      draws.push([
+        ssuOwner.ssuOwnerCapId,
+        ssuCapType,
+        ssuOwner.characterId,
+        fromSsu,
+      ])
+    }
+    if (fromChar > 0n) {
+      draws.push([
+        ssuOwner.charOwnerCapId,
+        charCapType,
+        ssuOwner.characterId,
+        fromChar,
+      ])
+    }
+  } else {
+    const character = await fetchCharacterInfo(suiClient, ids, params.owner)
+    if (!character) {
+      throw new TriexClientError(
+        TriexError.CharacterNotFound,
+        `Wallet receipts cover ${fromWallet} of ${quantity}, and no on-chain character resolved for ${params.owner} to draw hangar items from.`,
+      )
+    }
+    const slot = await fetchInventorySlotQuantity(
+      suiClient,
+      ssuObjectId,
+      character.ownerCapId,
+      assetId.toString(),
+    )
+    if (slot < remaining) {
+      throw new TriexClientError(
+        TriexError.InsufficientBalance,
+        `Insufficient items for asset ${assetId}: wallet receipts ${fromWallet}, hangar slot ${slot}; ${quantity} are needed.`,
+      )
+    }
+    draws.push([
+      character.ownerCapId,
+      charCapType,
+      character.characterId,
+      remaining,
+    ])
+  }
+
+  let result: TransactionObjectArgument | null = walletPart
+  for (const [capId, capTypeArg, characterId, take] of draws) {
+    if (take > 0xffff_ffffn) {
+      throw new TriexClientError(
+        TriexError.ValidationFailed,
+        `A hangar draw is at most ${0xffff_ffff} units (u32); asked for ${take}.`,
+      )
+    }
+    const receipt = depositHangarReceipt(tx, ids, {
+      ssuObjectId,
+      characterId,
+      capRef: await getObjectRef(suiClient, capId),
+      capTypeArg,
+      vaultConfigId,
+      vaultCollectionId: params.collectionId,
+      assetId,
+      amount: Number(take),
+    })
+    if (result) {
+      tx.moveCall({
+        target: `${ids.multicoin}::multicoin::join_entry`,
+        arguments: [receipt, result],
+      })
+    }
+    result = receipt
+  }
+  return result!
 }

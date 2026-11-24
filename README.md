@@ -235,7 +235,7 @@ whether the abort was `resolved`, came from a dependency package
 | `routing` | `route` · `compare` · `stats` |
 | `characters` | `get` · `byAddress` · `byName` · `batch` · `tribe` |
 | `world` | `items` · `item` · `recipes` · `recipesFor` |
-| `hauling` | `agreements` (job board) · `agreement` · `config` · `stats` · `orgAgreements` · `playerAgreements` · `actions` (to-do list) · `claimable` · `reputation` — see below |
+| `hauling` | reads: `agreements` (job board) · `agreement` · `config` · `stats` · `orgAgreements` · `playerAgreements` · `actions` (to-do list) · `claimable` · `reputation`; writes: `post` · `accept` · `deliver` · `cancel` · `default` · `forfeit` · `collect` · `deleteCap` — see below |
 | `coins` | `list` · `resolvePool` · `orderbook` · `tradeParams` · `quote` · `estimateMarket` · `openOrders` · `account` · `balances` · `deposit` · `withdraw` · `limit` · `market` · `swap` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `claimSettled` · `createPool` — see below |
 | `orgs` | `get` · `batch` · `directory` · `forPlayer` · `search` · `proposals` · `seats` · `tradingAccount` · `accessibleKeyspaces` · `vaultsAtHub` |
 | `org(id)` handle | `.governance` · `.members` · `.metadata` · `.types` · `.treasury` · `.orders` · `.vault` — see below |
@@ -311,6 +311,31 @@ const { actions } = await client.hauling.actions()
 // One agreement in full, from a viewer's point of view.
 const a = await client.hauling.agreement({ agreementId, viewer: wallet })
 ```
+
+Writes run the whole job lifecycle from the configured player's wallet:
+
+```ts
+// Lister: escrow cargo at the pickup hub, ask for it at the destination.
+const { agreementId } = await client.hauling.post({
+  pickupStorageUnitId, destinationStorageUnitId,
+  cargo: [{ assetId: '78437', quantity: 120n }],
+  reward: 5_000_000_000n, collateral: 1_000_000_000n,
+  acceptWindowMs: 86_400_000, haulDurationMs: 172_800_000,
+})
+// Hauler: accept (claim gates satisfied per the claim plan), then deliver.
+await hauler.hauling.accept({ agreementId })
+await hauler.hauling.deliver({ agreementId })
+// Lister: collect what the cap received.
+await client.hauling.collect({ agreementId })
+```
+
+Cargo and deliveries come from wallet-held warehouse receipts first, then
+the hangar at that hub (`useHangar: false` to skip it). Coins come from the
+wallet, and whatever the contract returns goes back to the player.
+`cancel`, `default` (anyone, after the delivery deadline), `forfeit` (the
+hauler, before it) and `deleteCap` round it out. Each write reads the
+agreement first and refuses, before signing, when its status rules the
+action out.
 
 Player-scoped reads (`playerAgreements`, `actions`, `claimable`,
 `reputation`) default to the configured address on `TriexClient` and take

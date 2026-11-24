@@ -1,6 +1,7 @@
 import { coinTools } from './tools/coins.js'
 import { coinPrepareTools } from './tools/coinsPrepare.js'
 import { haulingTools } from './tools/hauling.js'
+import { haulingPrepareTools } from './tools/haulingPrepare.js'
 import { keyspaceTools } from './tools/keyspace.js'
 import { orgTools } from './tools/org.js'
 import { orgLifecycleTools } from './tools/orgLifecycle.js'
@@ -23,6 +24,7 @@ export const ALL_TOOLS: ToolDef[] = [
   ...coinPrepareTools,
   ...orgPrepareTools,
   ...orgLifecycleTools,
+  ...haulingPrepareTools,
 ]
 
 /**

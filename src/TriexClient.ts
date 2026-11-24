@@ -10,7 +10,7 @@ import { OrgsWriteApi } from './armature/OrgsApi'
 import { CoinsApi } from './coins/CoinsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
-import { HaulingApi } from './hauling/HaulingApi'
+import { HaulingWriteApi } from './hauling/HaulingWriteApi'
 import { transactionCheckpoint } from './checkpoint'
 import { executeAndNormalize, findCreatedObject } from './execute'
 import type { NormalizedExecution } from './execute'
@@ -203,10 +203,11 @@ export class TriexClient {
   readonly coins: CoinsApi
   /**
    * Hauling agreements: the job board, agreements in full, what a player can
-   * accept and must do next, reputations and stats. Player-scoped reads
-   * default to the configured address.
+   * accept and must do next, reputations and stats — and the writes: post,
+   * accept, deliver, cancel, default, forfeit, collect, deleteCap.
+   * Player-scoped reads default to the configured address.
    */
-  readonly hauling: HaulingApi
+  readonly hauling: HaulingWriteApi
 
   constructor(config: TriexClientConfig) {
     this.suiClient = config.suiClient
@@ -236,9 +237,14 @@ export class TriexClient {
       },
     )
     this.coins = new CoinsApi(this)
-    this.hauling = new HaulingApi(this.indexer.hauling, (addr) =>
-      this.requireAddress(addr),
-    )
+    this.hauling = new HaulingWriteApi({
+      queries: this.indexer.hauling,
+      indexer: this.indexer,
+      suiClient: this.suiClient,
+      ids: this.ids,
+      requireAddress: (addr) => this.requireAddress(addr),
+      requireExecutor: () => this.requireExecutor(),
+    })
   }
 
   /**

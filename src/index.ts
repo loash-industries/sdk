@@ -16,6 +16,17 @@ export { OrgHandle } from './armature/OrgClient'
 export type { OrgHandleDeps, RunOutcome } from './armature/OrgClient'
 export { OrgQueries, MAX_BATCH_IDS } from './armature/queries'
 export { HaulingApi } from './hauling/HaulingApi'
+export { HaulingWriteApi } from './hauling/HaulingWriteApi'
+export type {
+  HaulingItem,
+  HaulingWriteDeps,
+  PostAgreementParams,
+  PostedAgreement,
+} from './hauling/HaulingWriteApi'
+export * as haulingTransactions from './hauling/transactions'
+export type { HaulingPrincipal, WantSpec } from './hauling/transactions'
+export { sourceItemBalance } from './funding'
+export type { SourceItemBalanceParams } from './funding'
 export { HaulingQueries } from './hauling/queries'
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
