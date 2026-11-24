@@ -11,6 +11,7 @@ import { CoinsApi } from './coins/CoinsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
 import { HaulingApi } from './hauling/HaulingApi'
+import { transactionCheckpoint } from './checkpoint'
 import { executeAndNormalize, findCreatedObject } from './execute'
 import type { NormalizedExecution } from './execute'
 import {
@@ -85,7 +86,8 @@ import type {
   EnsureAccountResult,
   FillsPage,
   FillsParams,
-  HistoryPageParams,
+  MinCheckpoint,
+  OpenOrdersParams,
   HubEnriched,
   HubItemOrderbook,
   HubItemsPage,
@@ -230,6 +232,33 @@ export class TriexClient {
     this.coins = new CoinsApi(this)
     this.hauling = new HaulingApi(this.indexer.hauling, (addr) =>
       this.requireAddress(addr),
+    )
+  }
+
+  /**
+   * The checkpoint a transaction landed in, for read-your-writes: pass it as
+   * `minCheckpoint` and the next indexer read reflects the write, without
+   * sleeping or polling for the result.
+   *
+   * ```ts
+   * const placed = await client.orders.limit({ … })
+   * const { orders } = await client.orders.openOrders({
+   *   minCheckpoint: await client.checkpointOf(placed),
+   * })
+   * ```
+   *
+   * Polls the fullnode briefly — a transaction is final a moment before it
+   * is checkpointed. Needs a gRPC `suiClient` (`SuiGrpcClient`).
+   * @throws `ValidationFailed` for a non-gRPC client; `Timeout`.
+   */
+  checkpointOf(
+    tx: TxResult | string,
+    opts?: { timeoutMs?: number; intervalMs?: number },
+  ): Promise<bigint> {
+    return transactionCheckpoint(
+      this.suiClient,
+      typeof tx === 'string' ? tx : tx.digest,
+      opts,
     )
   }
 
@@ -730,14 +759,15 @@ class AccountApi {
   }
 
   /**
-   * Claimable proceeds + idle BM items (indexer manifest, lags by seconds).
+   * Claimable proceeds + idle BM items (indexer manifest, lags by seconds;
+   * pass `minCheckpoint` to read past a write).
    * @throws `AddressRequired`; `TradingAccountNotFound` when no trading
    *   account exists.
    */
-  async sweepable(): Promise<Sweepable> {
+  async sweepable(opts?: MinCheckpoint): Promise<Sweepable> {
     const owner = this.c.requireAddress()
     const tradingAccountId = await this.c.requireTradingAccountId(owner)
-    return this.c.indexer.sweepable(tradingAccountId)
+    return this.c.indexer.sweepable(tradingAccountId, opts)
   }
 
   /**
@@ -887,9 +917,9 @@ class MarketApi {
    * Two reads, 40 CU.
    * @throws `HubNotFound` for an unknown hub id.
    */
-  async hub(hubId: string): Promise<TradeHubDetail> {
+  async hub(hubId: string, opts?: MinCheckpoint): Promise<TradeHubDetail> {
     const [vault, location] = await Promise.all([
-      this.c.indexer.hubVault(hubId),
+      this.c.indexer.hubVault(hubId, opts),
       this.c.indexer.hubLocation(hubId),
     ])
     return {
@@ -915,9 +945,9 @@ class MarketApi {
    */
   searchItems(
     query: string,
-    opts?: { limit?: number },
+    opts?: { limit?: number } & MinCheckpoint,
   ): Promise<ItemSearchPage> {
-    return this.c.indexer.searchItems(query, opts?.limit)
+    return this.c.indexer.searchItems(query, opts?.limit, opts)
   }
 
   /**
@@ -1655,7 +1685,7 @@ class OrdersApi {
    * #14 — the player's open orders (empty page when no BM exists yet). 30 CU.
    * @throws `AddressRequired`.
    */
-  async openOrders(params?: HistoryPageParams): Promise<OpenOrdersPage> {
+  async openOrders(params?: OpenOrdersParams): Promise<OpenOrdersPage> {
     const bm = await this.ownBm()
     if (!bm) return { orders: [], nextCursor: null }
     return this.c.indexer.openOrders(bm, params)

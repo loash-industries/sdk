@@ -18,7 +18,8 @@ import type {
   DiscoveryResult,
   FillsPage,
   FillsParams,
-  HistoryPageParams,
+  MinCheckpoint,
+  OpenOrdersParams,
   HubEnriched,
   HubItemOrderbook,
   HubItemsPage,
@@ -152,9 +153,9 @@ export class ReadOnlyClient {
   }
 
   /** #7 — trade-hub detail: vault descriptor + location (null if unrevealed). 2 calls, 40 CU. */
-  async hub(hubId: string): Promise<TradeHubDetail> {
+  async hub(hubId: string, opts?: MinCheckpoint): Promise<TradeHubDetail> {
     const [vault, location] = await Promise.all([
-      this.indexer.hubVault(hubId),
+      this.indexer.hubVault(hubId, opts),
       this.indexer.hubLocation(hubId),
     ])
     return {
@@ -177,9 +178,9 @@ export class ReadOnlyClient {
    */
   searchItems(
     query: string,
-    opts?: { limit?: number },
+    opts?: { limit?: number } & MinCheckpoint,
   ): Promise<ItemSearchPage> {
-    return this.indexer.searchItems(query, opts?.limit)
+    return this.indexer.searchItems(query, opts?.limit, opts)
   }
 
   /** #9a — resolve the pool for an item at a trade hub. 2 calls, 50 CU. */
@@ -359,7 +360,7 @@ export class ReadOnlyClient {
   /** #14 — open orders for an explicit trading account. 30 CU. */
   openOrders(
     tradingAccountId: string,
-    params?: HistoryPageParams,
+    params?: OpenOrdersParams,
   ): Promise<OpenOrdersPage> {
     return this.indexer.openOrders(tradingAccountId, params)
   }
@@ -375,8 +376,11 @@ export class ReadOnlyClient {
   }
 
   /** Claimable proceeds + idle BM items for an explicit trading account. 30 CU. */
-  sweepable(tradingAccountId: string): Promise<Sweepable> {
-    return this.indexer.sweepable(tradingAccountId)
+  sweepable(
+    tradingAccountId: string,
+    opts?: MinCheckpoint,
+  ): Promise<Sweepable> {
+    return this.indexer.sweepable(tradingAccountId, opts)
   }
 
   // ─── Orders & fills: point lookups ────────────────────────────────────────
