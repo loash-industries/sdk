@@ -391,6 +391,11 @@ export function sourceItemsFromHangar(
  *   borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap.
  * The caller decides where the balance goes (a trading account, a hauling
  * agreement, ...).
+ *
+ * It borrows the cap for this one deposit. A transaction depositing SEVERAL
+ * items under the same cap must borrow it once instead (`HangarCapBorrows`):
+ * a PTB can receive an object only once, so a second borrow of the same cap
+ * fails with `ArgumentWithoutValue`.
  */
 export function depositHangarReceipt(
   tx: Transaction,
@@ -398,33 +403,94 @@ export function depositHangarReceipt(
   args: HangarSourceArgs,
 ): TransactionObjectArgument {
   const character = tx.object(args.characterId)
+  const borrowed = borrowOwnerCap(tx, ids, {
+    character,
+    capRef: args.capRef,
+    capTypeArg: args.capTypeArg,
+  })
+  const receipt = depositForReceipt(tx, ids, {
+    ...args,
+    character,
+    cap: borrowed.cap,
+  })
+  returnOwnerCap(tx, ids, {
+    character,
+    capTypeArg: args.capTypeArg,
+    ...borrowed,
+  })
+  return receipt
+}
 
+/**
+ * `character::borrow_owner_cap<Cap>(character, Receiving<OwnerCap<Cap>>)`:
+ * the cap, and the receipt `returnOwnerCap` must consume in the same PTB.
+ */
+export function borrowOwnerCap(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    character: TransactionObjectArgument
+    capRef: { objectId: string; version: string; digest: string }
+    capTypeArg: string
+  },
+): { cap: TransactionObjectArgument; receipt: TransactionObjectArgument } {
   const borrow = tx.moveCall({
     target: `${ids.world}::character::borrow_owner_cap`,
     typeArguments: [args.capTypeArg],
-    arguments: [character, tx.receivingRef(args.capRef)],
+    arguments: [args.character, tx.receivingRef(args.capRef)],
   })
-  const cap = borrow[0]
-  const borrowReceipt = borrow[1]
+  return { cap: borrow[0], receipt: borrow[1] }
+}
 
+/** `character::return_owner_cap<Cap>(character, cap, receipt)`. */
+export function returnOwnerCap(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    character: TransactionObjectArgument
+    cap: TransactionObjectArgument
+    receipt: TransactionObjectArgument
+    capTypeArg: string
+  },
+): void {
+  tx.moveCall({
+    target: `${ids.world}::character::return_owner_cap`,
+    typeArguments: [args.capTypeArg],
+    arguments: [args.character, args.cap, args.receipt],
+  })
+}
+
+/**
+ * `receipt::deposit_for_receipt<Cap>` under an already-borrowed cap: `amount`
+ * units of `assetId` from the hangar slot the cap opens, as a new receipt
+ * `multicoin::Balance` in `vaultCollectionId`.
+ */
+export function depositForReceipt(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    ssuObjectId: string
+    character: TransactionObjectArgument
+    cap: TransactionObjectArgument
+    capTypeArg: string
+    vaultConfigId: string
+    vaultCollectionId: string
+    assetId: bigint
+    amount: number
+  },
+): TransactionObjectArgument {
   const [receipt] = tx.moveCall({
     target: `${ids.warehouseReceipts}::receipt::deposit_for_receipt`,
     typeArguments: [args.capTypeArg],
     arguments: [
       tx.object(args.ssuObjectId),
-      character,
-      cap,
+      args.character,
+      args.cap,
       tx.object(args.vaultConfigId),
       tx.object(args.vaultCollectionId),
       tx.pure.u64(args.assetId),
       tx.pure.u32(args.amount),
     ],
-  })
-
-  tx.moveCall({
-    target: `${ids.world}::character::return_owner_cap`,
-    typeArguments: [args.capTypeArg],
-    arguments: [character, cap, borrowReceipt],
   })
   return receipt
 }

@@ -25,7 +25,7 @@ export type {
 } from './hauling/HaulingWriteApi'
 export * as haulingTransactions from './hauling/transactions'
 export type { HaulingPrincipal, WantSpec } from './hauling/transactions'
-export { sourceItemBalance } from './funding'
+export { HangarCapBorrows, sourceItemBalance } from './funding'
 export type { SourceItemBalanceParams } from './funding'
 export { HaulingQueries } from './hauling/queries'
 

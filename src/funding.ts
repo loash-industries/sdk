@@ -15,8 +15,11 @@ import {
   getObjectRef,
 } from './onchain'
 import {
+  borrowOwnerCap,
+  depositForReceipt,
   depositHangarReceipt,
   depositMulticoinObject,
+  returnOwnerCap,
   sourceItemsFromHangar,
 } from './transactions'
 import type { PackageIds } from './types'
@@ -308,6 +311,74 @@ export interface SourceItemBalanceParams {
    * Omitted: wallet receipts only.
    */
   hangar?: { ssuObjectId: string; vaultConfigId: string }
+  /**
+   * Borrow hangar caps through this tracker, shared by every item the
+   * transaction sources, and leave them borrowed: the caller returns them all
+   * with `borrows.returnAll()` once the last item is sourced. Needed whenever
+   * one transaction sources more than one item from a hangar (see
+   * `HangarCapBorrows`). Omitted: each draw borrows and returns its own cap.
+   */
+  borrows?: HangarCapBorrows
+}
+
+/**
+ * The OwnerCaps a transaction has borrowed for hangar deposits, each borrowed
+ * ONCE and returned by `returnAll`.
+ *
+ * A PTB can receive an object only once, so drawing several items under the
+ * same cap (hauling cargo or a delivery of more than one item) must borrow it
+ * once and deposit every item under it, the way triex-app-api's
+ * `hangarBalanceArgs` does. Borrowing it again per item fails on chain with
+ * `ArgumentWithoutValue`.
+ */
+export class HangarCapBorrows {
+  private readonly held = new Map<
+    string,
+    {
+      character: TransactionObjectArgument
+      cap: TransactionObjectArgument
+      receipt: TransactionObjectArgument
+      capTypeArg: string
+    }
+  >()
+
+  constructor(
+    private readonly suiClient: ClientWithCoreApi,
+    private readonly tx: Transaction,
+    private readonly ids: PackageIds,
+  ) {}
+
+  /** The borrowed cap for `capId`, borrowing it on first use. */
+  async cap(
+    capId: string,
+    capTypeArg: string,
+    characterId: string,
+  ): Promise<{
+    character: TransactionObjectArgument
+    cap: TransactionObjectArgument
+  }> {
+    const key = capId.toLowerCase()
+    let held = this.held.get(key)
+    if (!held) {
+      const character = this.tx.object(characterId)
+      const borrowed = borrowOwnerCap(this.tx, this.ids, {
+        character,
+        capRef: await getObjectRef(this.suiClient, capId),
+        capTypeArg,
+      })
+      held = { character, capTypeArg, ...borrowed }
+      this.held.set(key, held)
+    }
+    return { character: held.character, cap: held.cap }
+  }
+
+  /** Return every borrowed cap. Call once, after the last deposit. */
+  returnAll(): void {
+    for (const held of this.held.values()) {
+      returnOwnerCap(this.tx, this.ids, held)
+    }
+    this.held.clear()
+  }
 }
 
 /**
@@ -464,16 +535,35 @@ export async function sourceItemBalance(
         `A hangar draw is at most ${0xffff_ffff} units (u32); asked for ${take}.`,
       )
     }
-    const receipt = depositHangarReceipt(tx, ids, {
-      ssuObjectId,
-      characterId,
-      capRef: await getObjectRef(suiClient, capId),
-      capTypeArg,
-      vaultConfigId,
-      vaultCollectionId: params.collectionId,
-      assetId,
-      amount: Number(take),
-    })
+    let receipt: TransactionObjectArgument
+    if (params.borrows) {
+      const { character, cap } = await params.borrows.cap(
+        capId,
+        capTypeArg,
+        characterId,
+      )
+      receipt = depositForReceipt(tx, ids, {
+        ssuObjectId,
+        character,
+        cap,
+        capTypeArg,
+        vaultConfigId,
+        vaultCollectionId: params.collectionId,
+        assetId,
+        amount: Number(take),
+      })
+    } else {
+      receipt = depositHangarReceipt(tx, ids, {
+        ssuObjectId,
+        characterId,
+        capRef: await getObjectRef(suiClient, capId),
+        capTypeArg,
+        vaultConfigId,
+        vaultCollectionId: params.collectionId,
+        assetId,
+        amount: Number(take),
+      })
+    }
     if (result) {
       tx.moveCall({
         target: `${ids.multicoin}::multicoin::join_entry`,
