@@ -1,5 +1,6 @@
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 import type { Transaction } from '@mysten/sui/transactions'
+import { z } from 'zod'
 
 /**
  * A prepared, unsigned transaction. This is the whole output contract of every
@@ -11,6 +12,8 @@ import type { Transaction } from '@mysten/sui/transactions'
  * `intent.worstCaseSpend`, and dry-run. Never blind-sign.
  */
 export interface PreparedTransaction {
+  /** Always true here; `false` marks the nothing-to-prepare answer. */
+  prepared: true
   /** Base64 BCS `TransactionKind`, built with `onlyTransactionKind: true`. */
   txKindBytes: string
   /** Address the transaction was built for; only this key can sign it. */
@@ -141,6 +144,7 @@ export async function toPrepared(
   tx.setSender(sender)
   const bytes = await tx.build({ client, onlyTransactionKind: true })
   return {
+    prepared: true,
     txKindBytes: Buffer.from(bytes).toString('base64'),
     sender,
     intent: { ...intent, targets: extractTargets(tx) },
@@ -148,4 +152,53 @@ export async function toPrepared(
     builtAtMs: Date.now(),
     notes: [VERIFY_NOTE, STALENESS_NOTE, ...extraNotes],
   }
+}
+
+/**
+ * The structured output every `prepare_*` tool declares (`outputSchema`):
+ * either a prepared transaction (`prepared: true`) or the answer that nothing
+ * needs preparing (`prepared: false`, with `reason`). One object rather than
+ * a union, because MCP output schemas must be object schemas.
+ */
+export const preparedOutputShape = {
+  prepared: z
+    .boolean()
+    .describe(
+      'true: unsigned bytes are ready; false: nothing to prepare (see reason).',
+    ),
+  txKindBytes: z
+    .string()
+    .optional()
+    .describe('Base64 BCS TransactionKind, built with onlyTransactionKind.'),
+  sender: z.string().optional(),
+  intent: z
+    .looseObject({
+      action: z.string(),
+      targets: z
+        .array(z.string())
+        .describe('Every Move call target in the bytes, in command order.'),
+      worstCaseSpend: z
+        .object({
+          asset: z.string(),
+          amount: z.string(),
+          kind: z.enum(['currency', 'item']),
+        })
+        .optional(),
+      params: z.record(z.string(), z.unknown()),
+    })
+    .optional(),
+  pinnedObjects: z
+    .array(
+      z.object({
+        objectId: z.string(),
+        version: z.string().nullable(),
+        kind: z.enum(['owned', 'shared', 'receiving']),
+      }),
+    )
+    .optional(),
+  builtAtMs: z.number().optional(),
+  notes: z.array(z.string()).optional(),
+  reason: z.string().optional().describe('Why nothing was prepared.'),
+  code: z.string().nullable().optional(),
+  detail: z.unknown().optional(),
 }
