@@ -229,13 +229,13 @@ function captureExecutor(opts?: { createBm?: boolean; createPool?: boolean }) {
       objectChanges.push({
         type: 'created',
         objectId: BM_ID,
-        objectType: `${IDS.triex}::trading_account::TradingAccount`,
+        objectType: `${IDS.triexOriginal}::trading_account::TradingAccount`,
       })
     if (opts?.createPool)
       objectChanges.push({
         type: 'created',
         objectId: POOL,
-        objectType: `${IDS.triex}::pool::Pool<${BASE}, ${CRED}>`,
+        objectType: `${IDS.triexOriginal}::pool::Pool<${BASE}, ${CRED}>`,
       })
     return { digest: '0xd1gest', objectChanges }
   })
@@ -313,7 +313,9 @@ function accountHolding(held: bigint | null): CoreImpl {
     getObject: ({ objectId }: any) => {
       if (objectId === POOL || objectId === POOL2)
         return {
-          object: { type: `${IDS.triex}::pool::Pool<${BASE}, ${CRED}>` },
+          object: {
+            type: `${IDS.triexOriginal}::pool::Pool<${BASE}, ${CRED}>`,
+          },
         }
       return {
         object: {
@@ -372,7 +374,7 @@ describe('coins.resolvePool', () => {
 
   it('types a bare pool id from its object type, and caches it', async () => {
     const getObject = jest.fn(() => ({
-      object: { type: `${IDS.triex}::pool::Pool<${BASE}, ${CRED}>` },
+      object: { type: `${IDS.triexOriginal}::pool::Pool<${BASE}, ${CRED}>` },
     }))
     const c = client(fakeSuiClient({ getObject }), undefined)
     expect(await c.coins.resolvePool({ poolId: POOL })).toEqual(POOL_SEL)
@@ -384,7 +386,7 @@ describe('coins.resolvePool', () => {
     const notPool = fakeSuiClient({
       getObject: () => ({
         object: {
-          type: `${IDS.triex}::multicoin_pool::MultiCoinPool<${CRED}>`,
+          type: `${IDS.triexOriginal}::multicoin_pool::MultiCoinPool<${CRED}>`,
         },
       }),
     })

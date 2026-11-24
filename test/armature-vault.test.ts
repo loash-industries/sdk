@@ -631,7 +631,10 @@ function unit(orgId: string, over: Partial<Org> = {}): Org {
 }
 
 function governance(): DaoGovernance {
-  const keys = tradingProposalTypes(ids.armatureTrading, ids.credCoinType)
+  const keys = tradingProposalTypes(
+    ids.armatureTradingOriginal,
+    ids.credCoinType,
+  )
   const config = {
     quorum: 1,
     approvalThreshold: 8000,
@@ -673,7 +676,7 @@ function harness(
     if (objectId === CUSTODY) {
       return {
         object: {
-          type: `${ids.armatureTrading}::trading_custody::TradingCustody`,
+          type: `${ids.armatureTradingOriginal}::trading_custody::TradingCustody`,
           json: { ou_id: OFFICERS, trading_account_id: ACCOUNT },
         },
       }

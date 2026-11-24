@@ -535,11 +535,14 @@ back into the SSU/hangar (needs `ssu`, `character`, `vaultConfig`, `collection`,
 excluded**. The current stillness trading IDs (for the SDK `testnet` preset):
 
 ```
-triexPackageId            0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945   (cycle 7 + TRIEX-158 fresh publish; = original id)
+triexPackageId            0x57f5fded64aebd46a202dceccf66f41aa912a28f7de395a4db1d8b60052e442c   (v3, 2026-10-05 — moveCall targets)
+triexPackageIdOriginal    0xdbf259ed33d70666379492199137e2ad50fcc1ed1e56acd5780329f7fe982945   (cycle 7 + TRIEX-158 fresh publish — type tags)
 triexRegistryId           0x2f37ad133427cabf94653be9a67560f87ea7458eaef2b410f6497808cef722c2   (shared obj — not in /package-ids)
 triexFeePolicyId          0xcd63402799fe6b3a3ff2d963f90449e843f178659c349a08a1503db516163748   (shared obj — not in /package-ids)
 multicoinPackageId        0xdbb778cba30e7deccf61169fbfbcd10a867654e1e2822facd789a99bd2c4e2ba
-warehouseReceiptsPackageId 0x134dfa96ad8bc50d4a2055cd78c91e264feb2fe79facf2d030f8bb466a80bb68
+warehouseReceiptsPackageId 0xcfd8ce37426e9ed1578795f538e8e5c6a5275d509c651d96586dfb877998194c   (v2, 2026-10-04 — moveCall targets)
+warehouseReceiptsOriginal 0x134dfa96ad8bc50d4a2055cd78c91e264feb2fe79facf2d030f8bb466a80bb68   (type tags)
+triexHubOperatorAdapter   0x658ee39f76e5c5be53f54cd5923e2409c9fadad0e813d3a5f74278f9311fcf75
 credCoinType              0xfbcbd9155669e157ce3999e073930b4c4b67255c3cf88d0d80c76342a31e6710::cred::CRED   (never republished)
 worldPackageId            0x7be18d6294e533bedd9a5d70a96ce8d9d4b87a7c74188ba65d3fe966bbed9d92   (= worldOriginalPackageId)
 clock                     0x6

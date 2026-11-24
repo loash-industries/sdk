@@ -83,7 +83,7 @@ describe('trading account balance reads', () => {
     )
     expect(seen[0].parentId).toBe(BAG)
     expect(seen[0].name.type).toBe(
-      `${IDS.triex}::trading_account::BalanceKey<${IDS.credCoinType}>`,
+      `${IDS.triexOriginal}::trading_account::BalanceKey<${IDS.credCoinType}>`,
     )
   })
 
@@ -137,7 +137,7 @@ describe('trading account balance reads', () => {
     ).toEqual({ hasKey: true, balance: 9n })
     expect(seen[0].parentId).toBe('0x1')
     expect(seen[0].name.type).toBe(
-      `${IDS.triex}::trading_account::MultiCoinBalanceKey`,
+      `${IDS.triexOriginal}::trading_account::MultiCoinBalanceKey`,
     )
   })
 })

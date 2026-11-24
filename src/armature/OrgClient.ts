@@ -1217,7 +1217,8 @@ class OrgTypesApi {
     ])
     const quoteType = params?.quoteType ?? this.h.deps.ids.credCoinType
     const actions = enableTradingActions(this.h.pkgs(), {
-      armatureTrading: this.h.deps.ids.armatureTrading,
+      // Slot types carry the defining (original) id, not the call target.
+      armatureTrading: this.h.deps.ids.armatureTradingOriginal,
       quoteType,
       alreadyEnabled: already,
     })
@@ -1507,6 +1508,7 @@ class OrgOrdersApi {
       this.h,
       setupTradingAccountAction({
         armatureTrading: this.h.deps.ids.armatureTrading,
+        armatureTradingOriginal: this.h.deps.ids.armatureTradingOriginal,
       }),
     )
     const plan = await this.h.governance.resolve(action)
@@ -1589,6 +1591,7 @@ class OrgOrdersApi {
       h,
       ctx: {
         armatureTrading: this.h.deps.ids.armatureTrading,
+        armatureTradingOriginal: this.h.deps.ids.armatureTradingOriginal,
         tradingCustodyId: info.tradingCustodyId,
         tradingAccountId,
         feePolicyId: this.h.deps.ids.triexFeePolicy,
@@ -1909,7 +1912,7 @@ class OrgOrdersApi {
       [...gov.typeBindings.values()].map((t) => normalizeType(t)),
     )
     const missing = coinPairProposalTypes(
-      this.h.deps.ids.armatureTrading,
+      this.h.deps.ids.armatureTradingOriginal,
       params.baseType,
       quoteType,
     ).filter(
@@ -1963,6 +1966,7 @@ class OrgOrdersApi {
     const action = createMulticoinPoolAction(
       {
         armatureTrading: this.h.deps.ids.armatureTrading,
+        armatureTradingOriginal: this.h.deps.ids.armatureTradingOriginal,
         triexRegistryId: this.h.deps.ids.triexRegistry,
         feePolicyId: this.h.deps.ids.triexFeePolicy,
       },

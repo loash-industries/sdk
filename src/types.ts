@@ -140,8 +140,22 @@ export interface PackageIds {
   triexFeePolicy: string
   /** multicoin package (defines the item `Balance` struct type). */
   multicoin: string
-  /** warehouse_receipts package (`receipt::redeem_receipt` / `deposit_for_receipt`). */
+  /**
+   * warehouse_receipts package (`receipt::redeem_receipt` /
+   * `deposit_for_receipt`) — the CURRENT id, for `moveCall` targets.
+   */
   warehouseReceipts: string
+  /**
+   * warehouse_receipts' ORIGINAL id, for type tags and event filters (receipt
+   * and vault types keep the id of the version that defined them). Defaults
+   * to {@link PackageIds.warehouseReceipts} when unset.
+   */
+  warehouseReceiptsOriginal?: string
+  /**
+   * `triex_hub_operator_adapter` package — the adapter `FeePolicy` pins to
+   * register or rotate a storage unit's hub-share payout address.
+   */
+  triexHubOperatorAdapter?: string
   /** The CRED trade-currency coin type (`0x…::cred::CRED`). */
   credCoinType: string
   /** World package (character owner-cap borrow/return). */
@@ -156,8 +170,8 @@ export interface PackageIds {
   // Each upgraded package carries a `*Original` sibling. `moveCall` targets use
   // the CURRENT id; dynamic-field key types and `StructType` filters must use
   // the ORIGINAL, because objects keep the type tag of the package version that
-  // created them. Cycle 7 fresh-published every package, so on `stillness` each
-  // pair is currently equal — they diverge again on the first upgrade.
+  // created them. Cycle 7 fresh-published every package; on `stillness` only
+  // armature_trading has been upgraded since (v2), so its pair differs.
 
   /** armature_framework: ou, board_voting, proposal, composite, treasury_vault, controller. */
   armature: string

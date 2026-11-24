@@ -160,7 +160,7 @@ function captureExecutor(opts?: { createBm?: boolean }) {
             {
               type: 'created',
               objectId: BM_ID,
-              objectType: `${IDS.triex}::trading_account::TradingAccount`,
+              objectType: `${IDS.triexOriginal}::trading_account::TradingAccount`,
             },
           ]
         : [],
@@ -335,7 +335,7 @@ describe('account.withdrawCurrency', () => {
     await client(sui, executor).account.withdrawCurrency({ amount: 1n })
     expect(listOwnedObjects.mock.calls[0][0]).toMatchObject({
       owner: OWNER,
-      type: `${IDS.triex}::trading_account::TradingAccount`,
+      type: `${IDS.triexOriginal}::trading_account::TradingAccount`,
     })
   })
 
@@ -963,7 +963,7 @@ describe('account caps', () => {
           {
             type: 'created',
             objectId: CAP,
-            objectType: `${IDS.triex}::trading_account::DepositCap`,
+            objectType: `${IDS.triexOriginal}::trading_account::DepositCap`,
           },
         ],
       }
@@ -1204,7 +1204,7 @@ describe('market.createPool', () => {
           {
             type: 'created',
             objectId: POOL,
-            objectType: `${IDS.triex}::multicoin_pool::MultiCoinPool<${IDS.credCoinType}>`,
+            objectType: `${IDS.triexOriginal}::multicoin_pool::MultiCoinPool<${IDS.credCoinType}>`,
           },
         ],
       }
