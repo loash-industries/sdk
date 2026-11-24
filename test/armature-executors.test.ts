@@ -84,7 +84,9 @@ const child: OrgNode = {
   tradingAccountId: null,
   subdaoControlCapId: CONTROL,
   roleKey: 'officer',
-} as OrgNode
+  roleLabel: 'Officers',
+  rank: 1,
+}
 
 const fullContext = (): Omit<PassedExecutionContext, 'pkgs'> => ({
   unit: {
