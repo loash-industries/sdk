@@ -73,6 +73,7 @@ import type {
   HubEnriched,
   HubItemMarket,
   HubItemsPage,
+  ItemSearchOptions,
   ItemSearchPage,
   HubLocation,
   HubLocationFilters,
@@ -195,6 +196,8 @@ export class IndexerClient {
       trading_account_id: filters?.tradingAccountId,
       side: filters?.side,
       public_only: filters?.publicOnly,
+      include_public: filters?.includePublic,
+      exclude_offline: filters?.excludeOffline,
       cursor: filters?.cursor,
       limit: filters?.limit,
     })
@@ -406,11 +409,15 @@ export class IndexerClient {
   async searchItems(
     query: string,
     limit?: number,
-    opts?: MinCheckpoint,
+    opts?: Omit<ItemSearchOptions, 'limit'>,
   ): Promise<ItemSearchPage> {
     const data = await this.get('/v1/world/items/search', {
       q: query,
       limit,
+      variants: opts?.variants,
+      variant_sort: opts?.variantSort,
+      variant_limit: opts?.variantLimit,
+      tenant: opts?.tenant,
       min_checkpoint: checkpointParam(opts),
     })
     return parseWith(ItemSearchPageSchema, data, 'searchItems')
@@ -754,6 +761,7 @@ export class IndexerClient {
       limit: params?.limit,
       public_only: params?.publicOnly,
       item_id: params?.assetId,
+      hub_id: params?.hubId,
     })
     return parseWith(RecentTradesPageSchema, data, 'recentTrades')
   }

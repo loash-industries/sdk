@@ -13,49 +13,49 @@ import { bigintString } from '../schemas'
 /** A raw integer that may be null (empty side / never traded / unknown). */
 const nullableBigint = bigintString.nullable()
 
-/** `CoinMarket` — the coin's pool, appended when it has one. */
+/**
+ * `CoinMarketResponse` — the coin's most active pool, appended when it has
+ * one. The base coin is the coin this entry describes, so `CoinInfoSchema`
+ * fills the `base*` fields from it. Fields the gateway stopped sending in
+ * 2026-11 (`pool_name`, the base/quote names and the entry fee) are still
+ * read when present but are null on the current contract — read fees from
+ * `coins.tradeParams()` (the live `FeePolicy`).
+ */
 export const CoinMarketSchema = z
   .object({
-    base_asset_id: z.string(),
-    base_asset_symbol: z.string().nullable(),
-    base_asset_name: z.string().nullable(),
-    base_asset_decimals: z.number(),
-    quote_asset_id: z.string(),
-    quote_asset_symbol: z.string().nullable(),
-    quote_asset_name: z.string().nullable(),
-    quote_asset_decimals: z.number(),
     pool_id: z.string(),
-    pool_name: z.string().nullable(),
-    fee: nullableBigint,
-    fee_rate: z.number().nullable(),
+    quote_asset_id: z.string().nullable(),
+    quote_asset_symbol: z.string().nullable(),
+    quote_asset_decimals: z.number().nullable(),
     best_bid: nullableBigint,
     best_ask: nullableBigint,
-    open_orders: z.number(),
-    traders: z.number(),
     last_price: nullableBigint,
     last_traded_at: z.number().nullable(),
+    open_orders: z.number(),
+    traders: z.number(),
+    price_change_24h: z.number().nullable().optional(),
+    // Dropped upstream in 2026-11; kept optional for older gateways.
+    pool_name: z.string().nullable().optional(),
+    quote_asset_name: z.string().nullable().optional(),
+    fee: nullableBigint.optional(),
+    fee_rate: z.number().nullable().optional(),
   })
   .transform((v) => ({
+    /** The representative (most active) pool for this coin. */
     poolId: v.pool_id,
-    poolName: v.pool_name,
-    /** Fully-qualified base coin type (the coin this entry describes). */
-    baseCoinType: v.base_asset_id,
-    baseSymbol: v.base_asset_symbol,
-    baseName: v.base_asset_name,
-    baseDecimals: v.base_asset_decimals,
+    poolName: v.pool_name ?? null,
     /** Fully-qualified quote coin type (CRED for permissionless pools). */
     quoteCoinType: v.quote_asset_id,
     quoteSymbol: v.quote_asset_symbol,
-    quoteName: v.quote_asset_name,
+    quoteName: v.quote_asset_name ?? null,
     quoteDecimals: v.quote_asset_decimals,
     /**
-     * Entry-tier TAKER rate, 1e9-scaled (11_000_000 = 1.10%); null if unknown.
-     * Display only — order funding reads the live `FeePolicy` on-chain
-     * (`coins.tradeParams`), which also carries the maker rate.
+     * Entry-tier TAKER rate, 1e9-scaled; null on the current contract. Order
+     * funding reads the live `FeePolicy` on-chain (`coins.tradeParams`).
      */
-    feeRateScaled: v.fee,
-    /** `feeRateScaled / 1e9`. */
-    feeRate: v.fee_rate,
+    feeRateScaled: v.fee ?? null,
+    /** `feeRateScaled / 1e9`; null on the current contract. */
+    feeRate: v.fee_rate ?? null,
     /** Raw 1e9-scaled prices; null when that side is empty / never traded. */
     bestBid: v.best_bid,
     bestAsk: v.best_ask,
@@ -64,6 +64,8 @@ export const CoinMarketSchema = z
     lastTradedAt: v.last_traded_at,
     openOrders: v.open_orders,
     traders: v.traders,
+    /** 24h price change as a fraction (0.0372 = +3.72%); null if unknown. */
+    priceChange24h: v.price_change_24h ?? null,
   }))
 
 export const CoinTreasuryHoldingSchema = z
@@ -104,7 +106,8 @@ export const CoinInfoSchema = z
     mint_policy: CoinMintPolicySchema.nullable(),
     immutable: z.boolean().nullable(),
     upgradeable: z.boolean().nullable(),
-    verified: z.boolean().nullable(),
+    // Not on the 2026-11 contract; kept for older gateways.
+    verified: z.boolean().nullish(),
     market: CoinMarketSchema.nullable(),
   })
   .transform((v) => ({
@@ -124,10 +127,19 @@ export const CoinInfoSchema = z
     /** Metadata cap deleted — metadata can no longer change. */
     immutable: v.immutable,
     upgradeable: v.upgradeable,
-    /** Supply facts were read from chain. */
-    verified: v.verified,
+    /** Supply facts were read from chain; null when not reported. */
+    verified: v.verified ?? null,
     /** The coin's pool (usually vs CRED); null when it has none. */
-    market: v.market,
+    market: v.market
+      ? {
+          ...v.market,
+          /** The coin this entry describes is the pool's base. */
+          baseCoinType: v.coin_type,
+          baseSymbol: v.symbol,
+          baseName: v.name,
+          baseDecimals: v.decimals,
+        }
+      : null,
   }))
 
 export const CoinListSchema = z.array(CoinInfoSchema)

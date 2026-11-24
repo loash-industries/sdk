@@ -36,6 +36,18 @@ export const readTools: ToolDef[] = [
         .describe('Restrict to these trade hubs. Omit to scan every hub.'),
       side: z.enum(['buy', 'sell', 'both']).optional(),
       publicOnly: z.boolean().optional(),
+      includePublic: z
+        .boolean()
+        .optional()
+        .describe(
+          'With storageUnitIds: also include orders on any hub that publishes its location. Without storageUnitIds it is the same as publicOnly.',
+        ),
+      excludeOffline: z
+        .boolean()
+        .optional()
+        .describe(
+          'Drop orders on hubs that are offline (hubs of unknown state are kept).',
+        ),
       ...cursorPagingShape,
     },
     handler: async (ctx, args) => ok(await ctx.readClient().discover(args)),
@@ -44,13 +56,36 @@ export const readTools: ToolDef[] = [
     name: 'market_search_items',
     title: 'Search items',
     description:
-      'Resolve an EVE Frontier item name to its asset id, with fuzzy matching.',
+      'Resolve an EVE Frontier item name to its asset id, with fuzzy matching. With variants, each match also reports how many units are in live storage units, over all its keys, and its top keys (the plain item and neotype variants) by supply or by storage units holding them. Supply is a decimal string. Costs 50 CU.',
     kind: 'read',
     sdkPath: 'market.searchItems',
     inputShape: {
       ...minCheckpointShape,
       query: z.string().min(1).describe('Item name or partial name.'),
       ...searchPagingShape,
+      variants: z
+        .boolean()
+        .optional()
+        .describe('Include supply and variants (keys with units in storage).'),
+      variantSort: z
+        .enum(['supply', 'storage_units'])
+        .optional()
+        .describe(
+          'Order variants by units in storage (default) or by storage units holding them.',
+        ),
+      variantLimit: z
+        .number()
+        .int()
+        .positive()
+        .max(50)
+        .optional()
+        .describe('Variants per match (default 5, max 50).'),
+      tenant: z
+        .string()
+        .optional()
+        .describe(
+          'World to count supply in, e.g. "stillness"; omit for every world.',
+        ),
     },
     handler: async (ctx, args) => {
       const { query, ...rest } = args
@@ -278,6 +313,9 @@ export const readTools: ToolDef[] = [
         .boolean()
         .optional()
         .describe('Only trades at hubs that publish their location.'),
+      hubId: objectId
+        .optional()
+        .describe('Only trades at this trade hub (storage unit id).'),
       limit: z
         .number()
         .int()

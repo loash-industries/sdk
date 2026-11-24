@@ -14,6 +14,8 @@ import type { Orderbook, OrderbookOrder } from '../src/types'
 
 const order = (price: bigint, remaining: bigint): OrderbookOrder => ({
   orderId: `${price}-${remaining}`,
+  tradingAccountId: null,
+  lastCheckpoint: null,
   quantity: remaining,
   filledQuantity: 0n,
   remainingQuantity: remaining,
