@@ -42,10 +42,10 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@mysten/sui": "^2.16.0",
-    "@trinaryex/keyspace": "^8.3.1",
-    "@trinaryex/sdk": "^3.8.0",
+    "@trinaryex/keyspace": "^9.2.0",
+    "@trinaryex/sdk": "^5.0.0",
     "express": "^5.2.1",
     "zod": "^4.4.3"
   },
