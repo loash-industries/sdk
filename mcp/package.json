@@ -1,7 +1,7 @@
 {
   "name": "@trinaryex/mcp",
   "version": "3.2.1",
-  "description": "Keyless, multi-tenant MCP server for Trinary Exchange \u2014 market reads and unsigned transaction preparation for EVE Frontier trading agents.",
+  "description": "Keyless, multi-tenant MCP server for Trinary Exchange — market reads and unsigned transaction preparation for EVE Frontier trading agents.",
   "homepage": "https://docs.trinary.exchange",
   "repository": {
     "type": "git",
@@ -92,7 +92,15 @@
       "src/**/*.{ts,js}"
     ],
     "testEnvironment": "node",
-    "coverageDirectory": "./coverage"
+    "coverageDirectory": "./coverage",
+    "coverageThreshold": {
+      "global": {
+        "statements": 90,
+        "branches": 58,
+        "functions": 95,
+        "lines": 90
+      }
+    }
   },
   "jest-junit": {
     "outputDirectory": ".",
