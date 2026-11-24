@@ -68,6 +68,21 @@ export const STILLNESS_PACKAGE_IDS: PackageIds = {
     '0xf447556abd7a92cc8690d626e1dd85dd40510c4a4dd75dcb5671f88ddfaec87e',
   ouReceiptVaultRegistry:
     '0x1013b7921bae7623ec066ae9d328cad2e72c47b3325239e93b20c45156794ddf',
+
+  // Hauling agreements — armature-vault PR #24, published 2026-10-26
+  // (triex-app-api tenants.ts → stillness). `agreements` was upgraded to v2;
+  // its types keep the original id.
+  haulingAgreements:
+    '0xc994255f765235db14e1edde543682ee1de1590357111cf4fe279d7eed1a6a06',
+  haulingConfig:
+    '0x53f55e40d88e8644f9064deb8de40ed565ff2a7c6ea15d2f4379666a87b6d510',
+  agreements:
+    '0x5cd30eec41c53850d005549d51cb28cde59caf6761d20e58d5733ee31466c6c7',
+  agreementsOriginal:
+    '0x74ec0fcf8aa5a701245d1dff0f541208b072d991c4348c1a4c7e24fcf55135df',
+  roles: '0xb918d3691ba22a30b5adc87fe37c9012c8de66446b426f96d1da89aec42bbb43',
+  agreementRoles:
+    '0x4d03af5b86a7ad762fb85d3a9189e6e5e640eec082f086ec2c436b964f063b6b',
 }
 
 export const NETWORK_PRESETS: Record<TriexNetwork, PackageIds> = {

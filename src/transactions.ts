@@ -379,6 +379,24 @@ export function sourceItemsFromHangar(
   bm: TransactionObjectArgument,
   args: HangarSourceArgs,
 ): void {
+  const receipt = depositHangarReceipt(tx, ids, args)
+  tx.moveCall({
+    target: `${ids.triex}::trading_account::deposit_multicoin`,
+    arguments: [bm, receipt],
+  })
+}
+
+/**
+ * Pull items out of a hangar/SSU into a fresh receipt `multicoin::Balance`:
+ *   borrow_owner_cap → receipt::deposit_for_receipt → return_owner_cap.
+ * The caller decides where the balance goes (a trading account, a hauling
+ * agreement, ...).
+ */
+export function depositHangarReceipt(
+  tx: Transaction,
+  ids: PackageIds,
+  args: HangarSourceArgs,
+): TransactionObjectArgument {
   const character = tx.object(args.characterId)
 
   const borrow = tx.moveCall({
@@ -408,11 +426,7 @@ export function sourceItemsFromHangar(
     typeArguments: [args.capTypeArg],
     arguments: [character, cap, borrowReceipt],
   })
-
-  tx.moveCall({
-    target: `${ids.triex}::trading_account::deposit_multicoin`,
-    arguments: [bm, receipt],
-  })
+  return receipt
 }
 
 // ─── Orders (item / multicoin pools) ─────────────────────────────────────────

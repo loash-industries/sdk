@@ -187,6 +187,23 @@ export interface PackageIds {
   armatureVaultOriginal: string
   /** `ou_receipt_vault::OuReceiptVaultRegistry` shared object (not a package). */
   ouReceiptVaultRegistry: string
+
+  // ─── Hauling agreements (armature-vault kit) ─────────────────────────────
+  // Optional: a network without hauling leaves them unset, and the hauling
+  // writes throw `ValidationFailed` there.
+
+  /** `hauling_agreements`: hauling + terms + config. */
+  haulingAgreements?: string
+  /** The shared hauling `Config` every post reads (fees, currencies). */
+  haulingConfig?: string
+  /** `agreements` (spec, payout, request) — CURRENT id, for calls. */
+  agreements?: string
+  /** `agreements`' ORIGINAL id, for type tags (`spec::Spec`). */
+  agreementsOriginal?: string
+  /** `roles` (`acl::Principal`) — claim-gate principals. */
+  roles?: string
+  /** `agreement_roles` — claim gates (`claim::requirement` / `satisfy`). */
+  agreementRoles?: string
 }
 
 // ─── Client config ──────────────────────────────────────────────────────────

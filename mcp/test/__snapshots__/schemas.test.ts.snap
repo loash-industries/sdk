@@ -2840,6 +2840,331 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
     ],
     "type": "object",
   },
+  "prepare_hauling_accept": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "agreementId": {
+        "description": "The hauling agreement object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "agreementId",
+    ],
+    "type": "object",
+  },
+  "prepare_hauling_cancel": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "agreementId": {
+        "description": "The hauling agreement object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "agreementId",
+    ],
+    "type": "object",
+  },
+  "prepare_hauling_collect": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "agreementId": {
+        "description": "The hauling agreement object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "agreementId",
+    ],
+    "type": "object",
+  },
+  "prepare_hauling_default": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "agreementId": {
+        "description": "The hauling agreement object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "agreementId",
+    ],
+    "type": "object",
+  },
+  "prepare_hauling_delete_cap": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "agreementId": {
+        "description": "The hauling agreement object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "agreementId",
+    ],
+    "type": "object",
+  },
+  "prepare_hauling_deliver": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "agreementId": {
+        "description": "The hauling agreement object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "useHangar": {
+        "type": "boolean",
+      },
+    },
+    "required": [
+      "sender",
+      "agreementId",
+    ],
+    "type": "object",
+  },
+  "prepare_hauling_forfeit": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "agreementId": {
+        "description": "The hauling agreement object id.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+    },
+    "required": [
+      "sender",
+      "agreementId",
+    ],
+    "type": "object",
+  },
+  "prepare_hauling_post": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "acceptWindowMs": {
+        "description": "How long the agreement can be accepted, ms from posting.",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991,
+        "type": "integer",
+      },
+      "beneficiary": {
+        "description": "Paid on delivery or default; omitted pays whoever holds the lister cap.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "cargo": {
+        "description": "What to escrow, one entry per item.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "description": "Item asset id, e.g. "78437".",
+              "type": "string",
+            },
+            "quantity": {
+              "description": "Units, as a decimal string.",
+              "pattern": "^\\d+$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "assetId",
+            "quantity",
+          ],
+          "type": "object",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+      "collateral": {
+        "description": "Collateral a hauler locks on accept, raw base units.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "currency": {
+        "description": "Reward and collateral coin type; default CRED. See hauling_config.",
+        "type": "string",
+      },
+      "destinationStorageUnitId": {
+        "description": "The hub the wanted items must reach.",
+        "type": "string",
+      },
+      "haulDurationMs": {
+        "description": "How long a hauler has to deliver once they accept, ms.",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991,
+        "type": "integer",
+      },
+      "pickupStorageUnitId": {
+        "description": "The hub (storage unit id) the cargo is at.",
+        "type": "string",
+      },
+      "principals": {
+        "description": "Who may accept; omitted: anyone.",
+        "items": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "address": {
+                  "pattern": "^0x[0-9a-fA-F]{1,64}$",
+                  "type": "string",
+                },
+                "kind": {
+                  "const": "player",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "address",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "address": {
+                  "pattern": "^0x[0-9a-fA-F]{1,64}$",
+                  "type": "string",
+                },
+                "kind": {
+                  "const": "machine",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "address",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "ou",
+                  "type": "string",
+                },
+                "orgId": {
+                  "pattern": "^0x[0-9a-fA-F]{1,64}$",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "kind",
+                "orgId",
+              ],
+              "type": "object",
+            },
+          ],
+        },
+        "maxItems": 32,
+        "type": "array",
+      },
+      "reward": {
+        "description": "Escrowed reward, raw base units.",
+        "pattern": "^\\d+$",
+        "type": "string",
+      },
+      "sender": {
+        "description": "Sui address the transaction is built for; only this address can sign the result.",
+        "pattern": "^0x[0-9a-fA-F]{1,64}$",
+        "type": "string",
+      },
+      "useHangar": {
+        "type": "boolean",
+      },
+      "want": {
+        "description": "What must be handed in at the destination; default: the cargo.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "assetId": {
+              "description": "Item asset id, e.g. "78437".",
+              "type": "string",
+            },
+            "quantity": {
+              "description": "Units, as a decimal string.",
+              "pattern": "^\\d+$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "assetId",
+            "quantity",
+          ],
+          "type": "object",
+        },
+        "minItems": 1,
+        "type": "array",
+      },
+    },
+    "required": [
+      "sender",
+      "pickupStorageUnitId",
+      "cargo",
+      "destinationStorageUnitId",
+      "reward",
+      "collateral",
+      "acceptWindowMs",
+      "haulDurationMs",
+    ],
+    "type": "object",
+  },
   "prepare_limit_order": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
