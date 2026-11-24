@@ -98,7 +98,15 @@
       "src/**/*.{ts,js}"
     ],
     "testEnvironment": "node",
-    "coverageDirectory": "./coverage"
+    "coverageDirectory": "./coverage",
+    "coverageThreshold": {
+      "global": {
+        "statements": 88,
+        "branches": 77,
+        "functions": 89,
+        "lines": 89
+      }
+    }
   },
   "keywords": [
     "trinary-exchange",
