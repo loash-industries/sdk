@@ -648,6 +648,29 @@ export function withdrawSettledAmountsPermissionless(
   })
 }
 
+/**
+ * `multicoin_pool::fold_pending_turnover<Quote>(pool, account)` (triex v2+) —
+ * fold the maker-fee turnover this pool holds for the account into its
+ * exchange-wide fee-tier turnover, so every pool on this quote prices the
+ * account at its real tier. Permissionless, and a no-op (never an abort) when
+ * nothing is pending, so claim flows append it for every pool they touch.
+ */
+export function foldPendingTurnover(
+  tx: Transaction,
+  ids: PackageIds,
+  args: {
+    poolId: string
+    bm: TransactionObjectArgument
+    quoteCoinType?: string
+  },
+): void {
+  tx.moveCall({
+    target: `${ids.triex}::multicoin_pool::fold_pending_turnover`,
+    typeArguments: [args.quoteCoinType ?? ids.credCoinType],
+    arguments: [tx.object(args.poolId), args.bm],
+  })
+}
+
 // ─── Swaps (item pools, no resting order) ────────────────────────────────────
 
 /**

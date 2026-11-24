@@ -1161,6 +1161,8 @@ describe('orders through the handle', () => {
     const tx = captured.txs[0]
     expect(commandNames(tx)).toEqual([
       'multicoin_pool::withdraw_settled_amounts_permissionless',
+      // Every claim folds the pool's maker-fee credits into the fee tier.
+      'multicoin_pool::fold_pending_turnover',
       'sweep_coin_to_treasury::new',
       'board_voting::submit_vote_execute',
       'trading_ops::execute_sweep_coin_to_treasury',
@@ -1168,6 +1170,9 @@ describe('orders through the handle', () => {
     const claim = calls(tx)[0]
     expect(claim.typeArgs).toEqual([CRED])
     expect(objectsOf(claim)).toEqual([POOL, ACCOUNT])
+    const fold = call(tx, 'multicoin_pool::fold_pending_turnover')
+    expect(fold.typeArgs).toEqual([CRED])
+    expect(objectsOf(fold)).toEqual([POOL, ACCOUNT])
   })
 
   it('claims from a coin pool with <Base, Quote> before sweeping the base', async () => {
@@ -1181,6 +1186,8 @@ describe('orders through the handle', () => {
     const claim = calls(tx)[0]
     expect(claim.fn).toBe('pool::withdraw_settled_amounts_permissionless')
     expect(claim.typeArgs).toEqual([BASE, CRED])
+    expect(calls(tx)[1].fn).toBe('pool::fold_pending_turnover')
+    expect(calls(tx)[1].typeArgs).toEqual([BASE, CRED])
     expect(call(tx, 'sweep_coin_to_treasury::new').typeArgs).toEqual([BASE])
   })
 

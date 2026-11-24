@@ -1079,7 +1079,9 @@ describe('coins cancel / modify / claim (no FeePolicy argument)', () => {
     expect(commandNames(tx)).toEqual([
       'trading_account::generate_proof_as_owner',
       'pool::withdraw_settled_amounts',
+      'pool::fold_pending_turnover',
       'pool::withdraw_settled_amounts',
+      'pool::fold_pending_turnover',
       'trading_account::withdraw_all',
       'TransferObjects',
     ])

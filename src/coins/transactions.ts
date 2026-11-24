@@ -239,6 +239,24 @@ export function withdrawSettledCoinAmountsPermissionless(
   })
 }
 
+/**
+ * `pool::fold_pending_turnover<Base, Quote>(pool, account)` (triex v2+) — the
+ * coin-pool counterpart of `foldPendingTurnover`: fold this pool's maker-fee
+ * credits into the account's exchange-wide turnover. Permissionless; a no-op
+ * when nothing is pending.
+ */
+export function foldPendingCoinTurnover(
+  tx: Transaction,
+  ids: PackageIds,
+  args: CoinPoolTypes & { account: TransactionObjectArgument },
+): void {
+  tx.moveCall({
+    target: `${ids.triex}::pool::fold_pending_turnover`,
+    typeArguments: typeArgs(args),
+    arguments: [tx.object(args.poolId), args.account],
+  })
+}
+
 // ─── Swaps (wallet coins in, coins out — no trading account) ─────────────────
 
 /** `0x2::coin::zero<T>()` — e.g. the `cred_in` placeholder swaps require. */

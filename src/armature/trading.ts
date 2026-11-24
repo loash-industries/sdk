@@ -680,6 +680,9 @@ export function sweepMulticoinToOuVaultAction(
  * vote. It belongs in FRONT of a sweep — a resting maker order that filled
  * leaves its proceeds in the pool, not the trading account, so sweeping
  * without claiming first silently moves less than the caller expects.
+ *
+ * It also folds the pool's pending maker-fee turnover into the account's fee
+ * tier (`fold_pending_turnover`, permissionless), as every claim should.
  */
 export function appendClaimSettled(
   tx: Transaction,
@@ -690,10 +693,18 @@ export function appendClaimSettled(
     tradingAccountId: string
   },
 ): void {
+  const account = tx.object(args.tradingAccountId)
   tx.moveCall({
     target: `${args.triex}::multicoin_pool::withdraw_settled_amounts_permissionless`,
     typeArguments: [args.quoteType],
-    arguments: [tx.object(args.poolId), tx.object(args.tradingAccountId)],
+    arguments: [tx.object(args.poolId), account],
+  })
+  // Fold the pool's maker-fee credits into the account's fee tier while the
+  // account is in hand (triex v2+; a no-op when nothing is pending).
+  tx.moveCall({
+    target: `${args.triex}::multicoin_pool::fold_pending_turnover`,
+    typeArguments: [args.quoteType],
+    arguments: [tx.object(args.poolId), account],
   })
 }
 
@@ -708,10 +719,16 @@ export function appendClaimSettledCoin(
     tradingAccountId: string
   },
 ): void {
+  const account = tx.object(args.tradingAccountId)
   tx.moveCall({
     target: `${args.triex}::pool::withdraw_settled_amounts_permissionless`,
     typeArguments: [args.baseType, args.quoteType],
-    arguments: [tx.object(args.poolId), tx.object(args.tradingAccountId)],
+    arguments: [tx.object(args.poolId), account],
+  })
+  tx.moveCall({
+    target: `${args.triex}::pool::fold_pending_turnover`,
+    typeArguments: [args.baseType, args.quoteType],
+    arguments: [tx.object(args.poolId), account],
   })
 }
 
