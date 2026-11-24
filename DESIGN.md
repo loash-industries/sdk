@@ -651,8 +651,11 @@ via `packageIds`. Optionally hydrate the *package* IDs at runtime from
 
 ### Remaining (resolve during Phase 2/3)
 
-- **RQ-2:** Is `GET /api/v1/package-ids` reachable via `api.trinary.exchange`, or origin-only?
-  If not routed through the gateway, the SDK just uses the baked-in preset (fine for MVP).
+- **RQ-2 — RESOLVED 2026-11-24:** `GET /api/v1/package-ids?tenant=stillness` is public on
+  `trinary.exchange` (no key, `max-age=60`); `api.trinary.exchange` does not route it.
+  `client.refreshPackageIds()` / `TriexClient.connect()` read it and move `moveCall` targets to
+  newer versions of the SAME packages (matching original id). A different original id (a new
+  cycle) is skipped, since shared objects change with it and need an SDK release.
 - **RQ-3 — RESOLVED 2026-08-21** from the production app (see §6.1): SSU cap type
   `{worldOriginal}::storage_unit::StorageUnit` (hub owners, drained first), character cap
   `{worldOriginal}::character::Character` (everyone). Live-SSU spot check still worthwhile

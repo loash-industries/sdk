@@ -127,6 +127,12 @@ export {
 export type { IterateOptions } from './paging'
 export { untilIndexed } from './wait'
 export { transactionCheckpoint } from './checkpoint'
+export {
+  PACKAGE_IDS_URL,
+  applyLivePackageIds,
+  fetchLivePackageIds,
+} from './livePackageIds'
+export type { LivePackageId, PackageIdRefresh } from './livePackageIds'
 export { READ_YOUR_WRITES } from './http'
 
 // Known values of the open enumerations in gateway responses (a value outside

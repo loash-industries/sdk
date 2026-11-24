@@ -13,9 +13,10 @@ export const CLOCK_ID = '0x6'
  * served (package IDs only) at `GET /api/v1/package-ids?tenant=stillness`.
  * Registry / shared-object IDs are baked here because that endpoint omits them.
  *
- * TODO(config): consider hydrating the *package* IDs at runtime from
- * `/api/v1/package-ids?tenant=stillness` if/when it is routed through the
- * gateway; keep the shared-object IDs baked. See DESIGN.md §8 / RQ-2.
+ * Package upgrades reach clients without an SDK release through
+ * `TriexClient.connect()` / `client.refreshPackageIds()` (livePackageIds.ts),
+ * which read the app's public `/api/v1/package-ids`. Shared objects and
+ * original ids stay baked.
  */
 export const STILLNESS_PACKAGE_IDS: PackageIds = {
   // Upgraded since the cycle-7 publish, so `moveCall` targets (the current
