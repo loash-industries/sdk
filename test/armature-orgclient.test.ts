@@ -624,7 +624,7 @@ describe('types', () => {
       'sweep_coin_to_treasury::SweepCoinToTreasury<CRED>',
       'sweep_multicoin_to_ou_vault::SweepMulticoinToOuVault',
     ].map((t) => ({
-      moveType: `${ids.armatureTrading}::${t.replace('CRED', ids.credCoinType)}`,
+      moveType: `${ids.armatureTradingOriginal}::${t.replace('CRED', ids.credCoinType)}`,
     }))
     const { handle } = harness({
       seat: OFFICERS,

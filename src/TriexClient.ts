@@ -1082,7 +1082,9 @@ class MarketApi {
   /**
    * Pay out accrued hub-operator fee shares (`claim_operator_share`, batched
    * one call per pool): the operator's share goes to the collection's
-   * registered beneficiary, the remainder to the treasury. Permissionless —
+   * registered beneficiary, the remainder to the treasury. Since triex v3 both
+   * legs are paid into the recipients' address balances (`send_funds`) rather
+   * than minted as coin objects, so the result creates no coins. Permissionless —
    * the destinations come from on-chain configuration, so any signer may run
    * it.
    * @throws `ValidationFailed` (no pools); `ExecutorRequired`;

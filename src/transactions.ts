@@ -815,7 +815,8 @@ export function createPermissionlessPoolItem(
 /**
  * `multicoin_pool::claim_operator_share<Quote>(pool, policy, registry, clock)`
  * → `(hubAmount, treasuryAmount)`: pay the hub operator's accrued fee share to
- * the collection's registered beneficiary and the rest to the treasury.
+ * the collection's registered beneficiary and the rest to the treasury, into
+ * their address balances (triex v3; v1 minted coins).
  * Permissionless — both destinations come from on-chain configuration. Aborts
  * `ENoOperatorBeneficiary` when a share is owed but no beneficiary is set.
  */

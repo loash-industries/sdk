@@ -34,7 +34,10 @@ import { FeeScheduleBcs } from '../src/onchain'
 
 const hex = (pair: string) => `0x${pair.repeat(32)}`
 const ids = resolvePackageIds('testnet')
+// armature_trading is upgraded on stillness: calls go to the current package,
+// payload types keep the original (defining) id.
 const TRADING = ids.armatureTrading
+const TYPES = ids.armatureTradingOriginal
 
 const ROOT = hex('c1')
 const OFFICERS = hex('c2')
@@ -59,6 +62,7 @@ const ctx: OuExecContext = {
 }
 const tctx: TradingContext = {
   armatureTrading: TRADING,
+  armatureTradingOriginal: TYPES,
   tradingCustodyId: CUSTODY,
   tradingAccountId: ACCOUNT,
   feePolicyId: ids.triexFeePolicy,
@@ -131,7 +135,10 @@ const own = (a: Parameters<typeof buildPlanTx>[1]) =>
 
 describe('trading actions are own-DAO only', () => {
   const actions = () => [
-    setupTradingAccountAction({ armatureTrading: TRADING }),
+    setupTradingAccountAction({
+      armatureTrading: TRADING,
+      armatureTradingOriginal: TYPES,
+    }),
     depositCoinToBookAction(tctx, {
       coinType: CRED,
       amount: 1n,
@@ -213,8 +220,8 @@ describe('trading actions are own-DAO only', () => {
 
   it('the default display keys match the type catalog', () => {
     const catalog = [
-      ...tradingProposalTypes(TRADING, CRED),
-      ...coinPairProposalTypes(TRADING, BASE, CRED),
+      ...tradingProposalTypes(TYPES, CRED),
+      ...coinPairProposalTypes(TYPES, BASE, CRED),
     ]
     for (const a of actions()) {
       const entry = catalog.find((e) => e.moveType === a.own!.payloadMoveType)
@@ -224,9 +231,55 @@ describe('trading actions are own-DAO only', () => {
   })
 })
 
+describe('upgraded armature_trading: call targets vs type tags', () => {
+  // The same rule triex-app-api pins: call the latest package, but tag the
+  // payload with the id of the version that defined it.
+  const packagesOf = (tx: Transaction) =>
+    (tx.getData().commands as any[])
+      .filter((c) => c.$kind === 'MoveCall')
+      .map((c) => ({
+        fn: `${c.MoveCall.module}::${c.MoveCall.function}`,
+        pkg: c.MoveCall.package,
+        typeArgs: c.MoveCall.typeArguments as string[],
+      }))
+
+  it('differs on stillness, so the split is exercised', () => {
+    expect(TYPES).not.toBe(TRADING)
+  })
+
+  it('calls the current package and tags the payload with the original id', () => {
+    const tx = own(
+      cancelOrderAction(tctx, { quoteType: CRED, poolId: POOL, orderId: 1n }),
+    )
+    const cmds = packagesOf(tx)
+    for (const fn of [
+      'cancel_order::new',
+      'trading_ops::execute_cancel_order',
+    ]) {
+      expect(cmds.find((c) => c.fn === fn)!.pkg).toBe(TRADING)
+    }
+    expect(
+      cmds.find((c) => c.fn === 'board_voting::submit_vote_execute')!.typeArgs,
+    ).toEqual([`${TYPES}::cancel_order::CancelOrder<${CRED}>`])
+  })
+
+  it('falls back to the current id when no original is configured', () => {
+    const tx = own(setupTradingAccountAction({ armatureTrading: TRADING }))
+    expect(
+      packagesOf(tx).find((c) => c.fn === 'board_voting::submit_vote_execute')!
+        .typeArgs,
+    ).toEqual([`${TRADING}::setup_trading_account::SetupTradingAccount`])
+  })
+})
+
 describe('trading PTBs, command by command', () => {
   it('setup: empty payload, handler takes only the ticket', () => {
-    const tx = own(setupTradingAccountAction({ armatureTrading: TRADING }))
+    const tx = own(
+      setupTradingAccountAction({
+        armatureTrading: TRADING,
+        armatureTradingOriginal: TYPES,
+      }),
+    )
     expect(commandNames(tx)).toEqual([
       'setup_trading_account::new',
       'board_voting::submit_vote_execute',
@@ -237,7 +290,7 @@ describe('trading PTBs, command by command', () => {
       objectsOf(call(tx, 'trading_ops::execute_setup_trading_account')),
     ).toEqual(['<ticket>'])
     expect(call(tx, 'board_voting::submit_vote_execute').typeArgs[0]).toBe(
-      `${TRADING}::setup_trading_account::SetupTradingAccount`,
+      `${TYPES}::setup_trading_account::SetupTradingAccount`,
     )
   })
 
@@ -406,7 +459,7 @@ describe('trading PTBs, command by command', () => {
       expireTimestamp: GTC_EXPIRE,
     })
     expect(action.own!.typeKey).toBe(
-      `${TRADING}::place_limit_order_coin::PlaceLimitOrderCoin<${BASE}, ${CRED}>`,
+      `${TYPES}::place_limit_order_coin::PlaceLimitOrderCoin<${BASE}, ${CRED}>`,
     )
     const tx = own(action)
     expect(commandNames(tx)).toEqual([
@@ -496,9 +549,9 @@ describe('trading PTBs, command by command', () => {
 describe('type catalog', () => {
   it('covers every armature_trading payload module, with the permission bits', () => {
     const entries = [
-      ...tradingProposalTypes(TRADING, CRED),
-      ...coinPairProposalTypes(TRADING, BASE, CRED),
-      createMulticoinPoolProposalType(TRADING, CRED),
+      ...tradingProposalTypes(TYPES, CRED),
+      ...coinPairProposalTypes(TYPES, BASE, CRED),
+      createMulticoinPoolProposalType(TYPES, CRED),
     ]
     const modules = entries.map((e) => e.moveType.split('::')[1]).sort()
     expect(modules).toEqual(
@@ -528,8 +581,8 @@ describe('type catalog', () => {
   })
 
   it('coin pairs get distinct display keys so several coexist', () => {
-    const a = coinPairProposalTypes(TRADING, BASE, CRED)
-    const b = coinPairProposalTypes(TRADING, `${hex('bb')}::x::X`, CRED)
+    const a = coinPairProposalTypes(TYPES, BASE, CRED)
+    const b = coinPairProposalTypes(TYPES, `${hex('bb')}::x::X`, CRED)
     expect(a[0].typeKey).not.toBe(b[0].typeKey)
   })
 })
@@ -557,7 +610,7 @@ describe('display-key resolution', () => {
       expireTimestamp: GTC_EXPIRE,
     })
     // Enabled under the legacy generics-free key, type spelled without 0x.
-    const legacyKey = `${TRADING}::place_limit_order_coin::PlaceLimitOrderCoin`
+    const legacyKey = `${TYPES}::place_limit_order_coin::PlaceLimitOrderCoin`
     const bindings = new Map([
       [legacyKey, action.own!.payloadMoveType.replace(/0x/g, '')],
     ])
@@ -583,7 +636,7 @@ describe('custody discovery', () => {
         ? { object: { content: accountBytes(CUSTODY) } }
         : {
             object: {
-              type: `${TRADING}::trading_custody::TradingCustody`,
+              type: `${TYPES}::trading_custody::TradingCustody`,
               json: { ou_id: OFFICERS, trading_account_id: ACCOUNT },
             },
           },
@@ -615,11 +668,11 @@ describe('custody discovery', () => {
       extractCreatedTradingCustody([
         {
           objectId: CUSTODY,
-          objectType: `${TRADING}::trading_custody::TradingCustody`,
+          objectType: `${TYPES}::trading_custody::TradingCustody`,
         },
         {
           objectId: ACCOUNT,
-          objectType: `${ids.triex}::trading_account::TradingAccount`,
+          objectType: `${ids.triexOriginal}::trading_account::TradingAccount`,
         },
       ]),
     ).toEqual({ tradingCustodyId: CUSTODY, tradingAccountId: ACCOUNT })
@@ -648,9 +701,9 @@ function unit(orgId: string, over: Partial<Org> = {}): Org {
 }
 
 const ENABLED = [
-  ...tradingProposalTypes(TRADING, CRED),
-  ...coinPairProposalTypes(TRADING, BASE, CRED),
-  createMulticoinPoolProposalType(TRADING, CRED),
+  ...tradingProposalTypes(TYPES, CRED),
+  ...coinPairProposalTypes(TYPES, BASE, CRED),
+  createMulticoinPoolProposalType(TYPES, CRED),
 ]
 
 /**
@@ -708,7 +761,7 @@ function harness(
     if (objectId === CUSTODY) {
       return {
         object: {
-          type: `${TRADING}::trading_custody::TradingCustody`,
+          type: `${TYPES}::trading_custody::TradingCustody`,
           json: { ou_id: accountUnit, trading_account_id: ACCOUNT },
         },
       }
@@ -1026,7 +1079,7 @@ describe('orders through the handle', () => {
 
   it('blocks a coin-pool order whose pair is not enabled', async () => {
     const { handle, executor } = harness({
-      keys: tradingProposalTypes(TRADING, CRED),
+      keys: tradingProposalTypes(TYPES, CRED),
     })
     const outcome = await handle.orders.limitCoin({
       poolId: COIN_POOL,
@@ -1043,7 +1096,7 @@ describe('orders through the handle', () => {
     // DepositCoinToBook enabled, PlaceLimitOrder not: resolving only the first
     // step would sign a transaction that aborts on the second.
     const { handle, executor } = harness({
-      keys: tradingProposalTypes(TRADING, CRED).filter(
+      keys: tradingProposalTypes(TYPES, CRED).filter(
         (e) => !e.moveType.includes('place_limit_order'),
       ),
     })
@@ -1060,12 +1113,12 @@ describe('orders through the handle', () => {
 
   it('resolves under the display key the OU actually used', async () => {
     // The pair is enabled under the legacy generics-free key.
-    const legacy = coinPairProposalTypes(TRADING, BASE, CRED).map((e) => ({
+    const legacy = coinPairProposalTypes(TYPES, BASE, CRED).map((e) => ({
       ...e,
       typeKey: e.typeKey.replace(/<.*$/, ''),
     }))
     const { handle, captured } = harness({
-      keys: [...tradingProposalTypes(TRADING, CRED), ...legacy],
+      keys: [...tradingProposalTypes(TYPES, CRED), ...legacy],
     })
     const outcome = await handle.orders.cancelCoin({
       poolId: COIN_POOL,
@@ -1181,11 +1234,11 @@ describe('orders through the handle', () => {
       createdObjects: [
         {
           objectId: CUSTODY,
-          objectType: `${TRADING}::trading_custody::TradingCustody`,
+          objectType: `${TYPES}::trading_custody::TradingCustody`,
         },
         {
           objectId: ACCOUNT,
-          objectType: `${ids.triex}::trading_account::TradingAccount`,
+          objectType: `${ids.triexOriginal}::trading_account::TradingAccount`,
         },
       ],
     })
@@ -1216,7 +1269,7 @@ describe('orders through the handle', () => {
 
   it('enableCoinPair enables only the missing pair types', async () => {
     const { handle, captured } = harness({
-      keys: tradingProposalTypes(TRADING, CRED),
+      keys: tradingProposalTypes(TYPES, CRED),
     })
     await handle.orders.enableCoinPair({ baseType: BASE })
     const names = commandNames(captured.txs[0])

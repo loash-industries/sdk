@@ -40,7 +40,14 @@ export { normalizeMoveType }
 
 /** Ids and objects every trading action needs. */
 export interface TradingContext {
+  /** armature_trading's CURRENT id — the `moveCall` target. */
   armatureTrading: string
+  /**
+   * armature_trading's ORIGINAL id. Payload types (proposal slot keys and the
+   * `P` of `submit_*<P>`) keep the id of the version that defined them, so
+   * they are built from this; defaults to `armatureTrading` (no upgrade yet).
+   */
+  armatureTradingOriginal?: string
   /** The shared `TradingCustody` that owns the account and holds its caps. */
   tradingCustodyId: string
   /** The organization's shared triex `TradingAccount`. */
@@ -164,9 +171,10 @@ export function createMulticoinPoolProposalType(
  */
 export function setupTradingAccountAction(armature: {
   armatureTrading: string
+  armatureTradingOriginal?: string
 }): OuProposalAction {
   const pkg = armature.armatureTrading
-  const typeKey = `${pkg}::setup_trading_account::SetupTradingAccount`
+  const typeKey = `${armature.armatureTradingOriginal ?? pkg}::setup_trading_account::SetupTradingAccount`
   return {
     kind: 'setup_trading_account',
     own: {
@@ -198,7 +206,7 @@ export function depositCoinToBookAction(
   params: { coinType: string; amount: bigint; treasuryVaultId: string },
 ): OuProposalAction {
   const pkg = ctx.armatureTrading
-  const typeKey = `${pkg}::deposit_coin_to_book::DepositCoinToBook`
+  const typeKey = `${ctx.armatureTradingOriginal ?? pkg}::deposit_coin_to_book::DepositCoinToBook`
   return {
     kind: 'deposit_coin_to_book',
     own: {
@@ -240,7 +248,7 @@ export function depositFromOuVaultToBookAction(
   params: { vaultId: string; assetId: bigint; amount: bigint },
 ): OuProposalAction {
   const pkg = ctx.armatureTrading
-  const typeKey = `${pkg}::deposit_from_ou_vault_to_book::DepositFromOuVaultToBook`
+  const typeKey = `${ctx.armatureTradingOriginal ?? pkg}::deposit_from_ou_vault_to_book::DepositFromOuVaultToBook`
   return {
     kind: 'deposit_from_ou_vault_to_book',
     own: {
@@ -283,6 +291,7 @@ export function depositFromOuVaultToBookAction(
 export function createMulticoinPoolAction(
   pkgs: {
     armatureTrading: string
+    armatureTradingOriginal?: string
     triexRegistryId: string
     feePolicyId: string
   },
@@ -294,7 +303,7 @@ export function createMulticoinPoolAction(
   },
 ): OuProposalAction {
   const pkg = pkgs.armatureTrading
-  const typeKey = `${pkg}::create_multicoin_pool::CreateMulticoinPool`
+  const typeKey = `${pkgs.armatureTradingOriginal ?? pkg}::create_multicoin_pool::CreateMulticoinPool`
   return {
     kind: 'create_multicoin_pool',
     own: {
@@ -359,7 +368,7 @@ export function placeLimitOrderAction(
   params: { quoteType: string } & LimitOrderFields,
 ): OuProposalAction {
   const pkg = ctx.armatureTrading
-  const typeKey = `${pkg}::place_limit_order::PlaceLimitOrder`
+  const typeKey = `${ctx.armatureTradingOriginal ?? pkg}::place_limit_order::PlaceLimitOrder`
   return {
     kind: 'place_limit_order',
     own: {
@@ -405,7 +414,7 @@ export function placeMarketOrderAction(
   },
 ): OuProposalAction {
   const pkg = ctx.armatureTrading
-  const typeKey = `${pkg}::place_market_order::PlaceMarketOrder`
+  const typeKey = `${ctx.armatureTradingOriginal ?? pkg}::place_market_order::PlaceMarketOrder`
   return {
     kind: 'place_market_order',
     own: {
@@ -448,7 +457,7 @@ export function cancelOrderAction(
   params: { quoteType: string; poolId: string; orderId: bigint },
 ): OuProposalAction {
   const pkg = ctx.armatureTrading
-  const typeKey = `${pkg}::cancel_order::CancelOrder`
+  const typeKey = `${ctx.armatureTradingOriginal ?? pkg}::cancel_order::CancelOrder`
   return {
     kind: 'cancel_order',
     own: {
@@ -490,7 +499,7 @@ export function placeLimitOrderCoinAction(
   params: { baseType: string; quoteType: string } & LimitOrderFields,
 ): OuProposalAction {
   const pkg = ctx.armatureTrading
-  const moveType = `${pkg}::place_limit_order_coin::PlaceLimitOrderCoin<${params.baseType}, ${params.quoteType}>`
+  const moveType = `${ctx.armatureTradingOriginal ?? pkg}::place_limit_order_coin::PlaceLimitOrderCoin<${params.baseType}, ${params.quoteType}>`
   return {
     kind: 'place_limit_order_coin',
     own: {
@@ -536,7 +545,7 @@ export function cancelOrderCoinAction(
   },
 ): OuProposalAction {
   const pkg = ctx.armatureTrading
-  const moveType = `${pkg}::cancel_order_coin::CancelOrderCoin<${params.baseType}, ${params.quoteType}>`
+  const moveType = `${ctx.armatureTradingOriginal ?? pkg}::cancel_order_coin::CancelOrderCoin<${params.baseType}, ${params.quoteType}>`
   return {
     kind: 'cancel_order_coin',
     own: {
@@ -580,7 +589,7 @@ export function sweepCoinToTreasuryAction(
   params: { coinType: string; amount: bigint; treasuryVaultId: string },
 ): OuProposalAction {
   const pkg = ctx.armatureTrading
-  const typeKey = `${pkg}::sweep_coin_to_treasury::SweepCoinToTreasury`
+  const typeKey = `${ctx.armatureTradingOriginal ?? pkg}::sweep_coin_to_treasury::SweepCoinToTreasury`
   return {
     kind: 'sweep_coin_to_treasury',
     own: {
@@ -626,7 +635,7 @@ export function sweepMulticoinToOuVaultAction(
   },
 ): OuProposalAction {
   const pkg = ctx.armatureTrading
-  const typeKey = `${pkg}::sweep_multicoin_to_ou_vault::SweepMulticoinToOuVault`
+  const typeKey = `${ctx.armatureTradingOriginal ?? pkg}::sweep_multicoin_to_ou_vault::SweepMulticoinToOuVault`
   return {
     kind: 'sweep_multicoin_to_ou_vault',
     own: {

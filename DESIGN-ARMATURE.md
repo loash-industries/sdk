@@ -597,7 +597,7 @@ package carries flat `{ current, original }` siblings (D-A6):
 ```ts
 armature, armatureOriginal
 armatureProposals, armatureProposalsOriginal
-armatureTrading, armatureTradingOriginal          // equal after the cycle-7 fresh publish
+armatureTrading, armatureTradingOriginal          // differ since v2 (2026-10-04): calls → current, payload types → original
 armatureVault, armatureVaultOriginal              // equal after the cycle-7 fresh publish
 ouReceiptVaultRegistry                            // shared object, not a package
 ```

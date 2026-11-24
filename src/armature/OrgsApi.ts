@@ -258,7 +258,8 @@ export class OrgsWriteApi extends OrgsApi {
       ...(params.enableTrading === false || !ids.armatureTrading
         ? []
         : tradingTypeInits(
-            ids.armatureTrading,
+            // Payload types carry the defining (original) package id.
+            ids.armatureTradingOriginal,
             params.quoteType ?? ids.credCoinType,
           )),
       ...(params.overrides?.officers ?? []),
