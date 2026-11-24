@@ -231,14 +231,15 @@ whether the abort was `resolved`, came from a dependency package
 | `routing` | `route` · `compare` · `stats` |
 | `characters` | `get` · `byAddress` · `byName` · `batch` · `tribe` |
 | `world` | `items` · `item` · `recipes` · `recipesFor` |
+| `hauling` | `agreements` (job board) · `agreement` · `config` · `stats` · `orgAgreements` · `playerAgreements` · `actions` (to-do list) · `claimable` · `reputation` — see below |
 | `coins` | `list` · `resolvePool` · `orderbook` · `tradeParams` · `quote` · `estimateMarket` · `openOrders` · `account` · `balances` · `deposit` · `withdraw` · `limit` · `market` · `swap` · `cancel` · `cancelMany` · `cancelAll` · `modify` · `claimSettled` · `createPool` — see below |
 | `orgs` | `get` · `batch` · `directory` · `forPlayer` · `search` · `proposals` · `seats` · `tradingAccount` · `accessibleKeyspaces` · `vaultsAtHub` |
 | `org(id)` handle | `.governance` · `.members` · `.metadata` · `.types` · `.treasury` · `.orders` · `.vault` — see below |
-| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `estimateMarketSellProceeds` · `computeBidQuoteDeposit` · `computeAskProceeds` · `computeQuoteFee` · `iterateDiscovery/Fills/Trades/OpenOrders/RecentTrades/HubLocations/ItemLocations/OrgDirectory` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
+| helpers | `aggregateLevels` · `midPrice` · `spread` · `depth` · `vwap` · `estimateMarketBuyCost` · `estimateMarketSellProceeds` · `computeBidQuoteDeposit` · `computeAskProceeds` · `computeQuoteFee` · `iterateDiscovery/Fills/Trades/OpenOrders/RecentTrades/HubLocations/ItemLocations/OrgDirectory/Agreements/PlayerAgreements/ClaimableAgreements` · `untilIndexed` · `explainMoveAbort` / `explainMoveAbortDetailed` · `toBase` / `fromBase` |
 
 `ReadOnlyClient` exposes the same reads flat (`ro.recentTrades()`,
-`ro.order()`, `ro.character()`, `ro.route()`, `ro.worldItems()`, …) with
-identity always explicit. Every read's JSDoc gives its compute-unit cost —
+`ro.order()`, `ro.character()`, `ro.route()`, `ro.worldItems()`, …), and
+`coins`, `orgs` and `hauling` as groups, with identity always explicit. Every read's JSDoc gives its compute-unit cost —
 from 20 CU (a single lookup) to 150 CU (`discover`) and 300 CU
 (`routing.compare`, three route searches).
 
@@ -280,6 +281,39 @@ const route = await client.routing.route({
 > market price; pool metadata's `feeRateScaled` is the fee class's *entry*
 > tier — use `orders.fees()` for maker rates and your own tier — and the rate a fill actually charged is on the fill
 > (`fee`, `makerFee`/`takerFee`, `feeRateBps`).
+
+### Hauling agreements
+
+Hauling agreements are on-chain jobs. A lister escrows a reward for moving
+cargo from one hub to another, and asks for collateral. A hauler accepts,
+locks the collateral and has a fixed time to deliver. Deliver in time and
+they're paid; miss the deadline and they default and forfeit the collateral.
+The `hauling` group reads them:
+
+```ts
+// The job board: open agreements, newest first, filtered like a search.
+const { agreements, nextCursor } = await client.hauling.agreements({
+  destinationHubId, minReward: 1_000_000_000n, sort: 'reward_desc',
+})
+
+// What this player can accept, each with its claim plan (per claim gate:
+// satisfy it directly, or through an organization whose board it sits on).
+const { agreements: open } = await client.hauling.claimable()
+
+// The to-do list: deliver before the deadline, collect proceeds, cancel a
+// listing nobody took. Each names the Move call to make.
+const { actions } = await client.hauling.actions()
+
+// One agreement in full, from a viewer's point of view.
+const a = await client.hauling.agreement({ agreementId, viewer: wallet })
+```
+
+Player-scoped reads (`playerAgreements`, `actions`, `claimable`,
+`reputation`) default to the configured address on `TriexClient` and take
+`address` on `ReadOnlyClient`. Amounts are raw base units as `bigint`.
+`lapsed` (open past the accept deadline) and `overdue` (accepted past the
+delivery deadline) are judged at the page's `evaluatedAt`. Every read takes
+`minCheckpoint` for read-your-writes after a transaction.
 
 ## Coin markets (currency pairs)
 

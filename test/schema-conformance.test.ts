@@ -21,6 +21,15 @@
 import { z } from 'zod'
 import { loadSpec } from '../scripts/gateway-surface.mjs'
 import {
+  ClaimableAgreementPageSchema,
+  HaulingActionPageSchema,
+  HaulingAgreementDetailSchema,
+  HaulingAgreementPageSchema,
+  HaulingConfigSchema,
+  HaulingReputationSchema,
+  HaulingStatsSchema,
+} from '../src/hauling/schemas'
+import {
   AssemblyEnrichedSchema,
   AssemblyOwnerSchema,
   AutocompleteSystemsSchema,
@@ -125,25 +134,25 @@ const SDK_SCHEMAS: Record<string, z.ZodType> = {
   getRoute: RouteSchema,
   compareRoutes: RouteComparisonSchema,
   getRoutingStats: RoutingStatsSchema,
+  // hauling agreements
+  listAgreements: HaulingAgreementPageSchema,
+  getAgreement: HaulingAgreementDetailSchema,
+  getAgreementsConfig: HaulingConfigSchema,
+  getAgreementStats: HaulingStatsSchema,
+  listOrgAgreements: HaulingAgreementPageSchema,
+  listPlayerAgreements: HaulingAgreementPageSchema,
+  listPlayerAgreementActions: HaulingActionPageSchema,
+  listClaimableAgreements: ClaimableAgreementPageSchema,
+  getPlayerAgreementReputation: HaulingReputationSchema,
 }
 
 /**
  * Operations whose responses another module pins: Armature (orgs, players,
  * hub DAO vaults) has its own schemas and tests, and coin markets are the
- * coin-pool module's. Hauling agreements are pinned by the `hauling` group
- * (TRIEX-221); remove those entries when it lands.
+ * coin-pool module's.
  */
 const PINNED_ELSEWHERE = new Set([
   'listCoins',
-  'listAgreements',
-  'getAgreement',
-  'getAgreementsConfig',
-  'getAgreementStats',
-  'listOrgAgreements',
-  'listPlayerAgreements',
-  'listPlayerAgreementActions',
-  'listClaimableAgreements',
-  'getPlayerAgreementReputation',
   'batchGetOrgs',
   'getOrg',
   'listOrgDirectory',

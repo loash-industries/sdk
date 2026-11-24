@@ -7,8 +7,8 @@
  * Walks the real read surface end-to-end: discovery → hub detail → items →
  * pool resolve → orderbook → metadata → hub balances → order status → order /
  * fill lookups → market feeds, prices and stats → characters and tribes →
- * world items and recipes → star map and routing, then the fullnode currency
- * read for a discovered trading account. Exits non-zero if any step fails.
+ * world items and recipes → star map and routing → hauling agreements, then the
+ * fullnode currency read for a discovered trading account. Exits non-zero if any step fails.
  */
 import { SuiGrpcClient } from '@mysten/sui/grpc'
 import {
@@ -206,6 +206,36 @@ await step('route between two reported names', async () => {
     throw e
   }
 })
+
+// ── 6b. hauling agreements ───────────────────────────────────────────────────
+let job
+await step('hauling.config + stats', async () => {
+  const config = await ro.hauling.config()
+  const stats = await ro.hauling.stats()
+  return `${config.currencies.length} currencies, ${config.deliveryFeeBps} bps; ${stats.byStatus.open} open, ${stats.lanes.length} lanes`
+})
+await step('hauling.agreements (job board)', async () => {
+  const page = await ro.hauling.agreements({ status: ['open', 'accepted'], limit: 5 })
+  job = page.agreements[0]
+  return `${page.agreements.length} agreements, nextCursor=${page.nextCursor}`
+})
+if (job) {
+  await step('hauling.agreement (detail, as the lister)', async () => {
+    const a = await ro.hauling.agreement({
+      agreementId: job.agreementId,
+      viewer: job.lister.address,
+    })
+    return `${a.status}, ${a.timeline.length} events, viewer roles ${a.viewer?.roles.join(',')}`
+  })
+  await step('hauling: lister’s agreements, actions, claimable, reputation', async () => {
+    const address = job.lister.address
+    const mine = await ro.hauling.playerAgreements({ address, limit: 5 })
+    const todo = await ro.hauling.actions({ address })
+    const claimable = await ro.hauling.claimable({ address, limit: 5 })
+    const rep = await ro.hauling.reputation({ address })
+    return `${mine.agreements.length} agreements, ${todo.actions.length} actions, ${claimable.agreements.length} claimable, posted ${rep.asLister.posted}`
+  })
+}
 
 // ── 7. fullnode currency reads (no API key involved) ─────────────────────────
 await step('onchain: BM CRED balance (BalanceKey dynamic field)', async () => {

@@ -2,6 +2,7 @@ import { OrgsApi } from './armature/OrgsApi'
 import { CoinsReadApi } from './coins/CoinsApi'
 import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
 import { TriexClientError, TriexError } from './errors'
+import { HaulingApi } from './hauling/HaulingApi'
 import { IndexerClient } from './queries'
 import type {
   AssemblyEnriched,
@@ -98,6 +99,12 @@ export class ReadOnlyClient {
    * config. Account-scoped reads take an explicit `tradingAccountId`.
    */
   readonly coins: CoinsReadApi
+  /**
+   * Hauling agreements: the job board, agreements in full, what an address
+   * can accept and must do next, reputations and stats. Player-scoped reads
+   * REQUIRE an explicit `address` here.
+   */
+  readonly hauling: HaulingApi
 
   constructor(config: ReadOnlyClientConfig) {
     this.ids = resolvePackageIds(config.network ?? 'testnet', config.packageIds)
@@ -110,6 +117,15 @@ export class ReadOnlyClient {
         throw new TriexClientError(
           TriexError.AddressRequired,
           'ReadOnlyClient has no configured player — pass the address explicitly.',
+        )
+      }
+      return addr
+    })
+    this.hauling = new HaulingApi(this.indexer.hauling, (addr) => {
+      if (!addr) {
+        throw new TriexClientError(
+          TriexError.AddressRequired,
+          'ReadOnlyClient has no configured player — pass `address` explicitly.',
         )
       }
       return addr
