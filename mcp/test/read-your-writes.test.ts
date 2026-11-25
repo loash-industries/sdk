@@ -10,7 +10,7 @@ import { ALL_TOOLS } from '../src/registry.js'
  */
 const config = loadConfig({
   TRIEX_MCP_MODE: 'read',
-  TRIEX_INDEXER_URL: 'https://api.example.test',
+  VOIDWIRE_API_URL: 'https://api.example.test',
   TRIEX_GATEWAY: 'triex',
 } as NodeJS.ProcessEnv)
 const HEX = `0x${'7f'.repeat(32)}`

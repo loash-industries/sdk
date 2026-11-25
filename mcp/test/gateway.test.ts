@@ -52,9 +52,9 @@ describe('TRIEX_GATEWAY', () => {
     ])
   })
 
-  it('keeps Trinary Exchange for a TRIEX_API_URL that names it', async () => {
+  it('keeps Trinary Exchange for a VOIDWIRE_API_URL that names it', async () => {
     expect(
-      await readBoth({ TRIEX_API_URL: 'https://api.trinary.exchange' }),
+      await readBoth({ VOIDWIRE_API_URL: 'https://api.trinary.exchange' }),
     ).toEqual([
       'https://api.trinary.exchange/v1/discovery',
       'https://api.trinary.exchange/v1/players/0xabc/accessible-keyspaces',

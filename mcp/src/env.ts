@@ -66,7 +66,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     mode,
     network: (env.TRIEX_NETWORK ?? 'testnet') as TriexNetwork,
     grpcUrl: env.SUI_GRPC_URL ?? DEFAULT_GRPC_URL,
-    ...(env.TRIEX_API_URL ? { indexerUrl: env.TRIEX_API_URL } : {}),
+    ...(env.VOIDWIRE_API_URL ? { indexerUrl: env.VOIDWIRE_API_URL } : {}),
     ...(gateway ? { gateway } : {}),
     maxConcurrencyPerKey: intFromEnv('MAX_CONCURRENCY_PER_KEY', 8),
     ...(certPath && keyPath ? { tls: { certPath, keyPath } } : {}),

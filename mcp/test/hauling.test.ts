@@ -11,7 +11,7 @@ import { ALL_TOOLS, toolsForMode } from '../src/registry.js'
  */
 const config = loadConfig({
   TRIEX_MCP_MODE: 'read',
-  TRIEX_INDEXER_URL: 'https://api.example.test',
+  VOIDWIRE_API_URL: 'https://api.example.test',
   TRIEX_GATEWAY: 'triex',
 } as NodeJS.ProcessEnv)
 

@@ -40,7 +40,7 @@ All configuration is **non-secret** — note the absence of any key, address, or
 | `PORT` / `HOST` | `8080` / `0.0.0.0` | Listen address |
 | `SUI_GRPC_URL` | testnet fullnode | Fullnode used for object resolution and PTB builds |
 | `TRIEX_GATEWAY` | SDK default (`voidwire`) | Gateway the callers' keys belong to: `voidwire` (`sk_vw_…` keys) or `triex` (Trinary Exchange keys) |
-| `TRIEX_API_URL` | the gateway's | Indexer base URL override. Without `TRIEX_GATEWAY`, `https://api.trinary.exchange` here selects `triex` |
+| `VOIDWIRE_API_URL` | the gateway's | API base URL override (was `TRIEX_API_URL` before 6.0). Without `TRIEX_GATEWAY`, `https://api.trinary.exchange` here selects `triex` |
 | `TRIEX_NETWORK` | `testnet` | Network preset |
 | `MAX_CONCURRENCY_PER_KEY` | `8` | Fairness cap so one caller cannot starve the fleet |
 | `TLS_CERT_PATH` / `TLS_KEY_PATH` | — | Serve HTTPS directly; set both or neither |
