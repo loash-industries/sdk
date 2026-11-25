@@ -1,9 +1,23 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { TriexClientError, TriexError } from '@trinaryex/sdk'
 import type { RequestContext } from './context.js'
 import { preparedOutputShape } from './prepare.js'
 import { fail } from './result.js'
 import { toolsForMode } from './registry.js'
 import { packageVersion } from './version.js'
+
+/**
+ * Refuse a call naming a world other than the one the request is scoped to:
+ * whoever wrote the URL chose the world, and a tool argument can't leave it.
+ */
+function assertTenant(ctx: RequestContext, args: { tenant?: unknown }): void {
+  if (ctx.tenant === undefined || args?.tenant === undefined) return
+  if (String(args.tenant).trim().toLowerCase() === ctx.tenant) return
+  throw new TriexClientError(
+    TriexError.ValidationFailed,
+    `This server is called for tenant "${ctx.tenant}"; "${String(args.tenant)}" is not available. Leave tenant out.`,
+  )
+}
 
 /**
  * Build an MCP server bound to one request's context.
@@ -41,6 +55,7 @@ export function createServer(ctx: RequestContext): McpServer {
       },
       async (args: any) => {
         try {
+          assertTenant(ctx, args)
           return (await tool.handler(ctx, args)) as any
         } catch (e) {
           return fail(e) as any

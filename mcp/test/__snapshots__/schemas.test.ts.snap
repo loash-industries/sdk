@@ -1119,7 +1119,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "integer",
       },
       "tenant": {
-        "description": "Tenant (shard) to restrict to.",
+        "description": "World (tenant) to list hubs on, e.g. "liminality". Omit to use the one this server is called with, else "stillness".",
         "type": "string",
       },
     },
@@ -1320,7 +1320,7 @@ exports[`tool input schemas matches the published JSON Schema snapshot 1`] = `
         "type": "string",
       },
       "tenant": {
-        "description": "World to count supply in, e.g. "stillness"; omit for every world.",
+        "description": "World (tenant) to count supply in, e.g. "liminality". Omit to use the one this server is called with, else "stillness".",
         "type": "string",
       },
       "variantLimit": {

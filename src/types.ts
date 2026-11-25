@@ -237,6 +237,14 @@ export interface TriexClientConfig {
    * path layout follows `gateway`.
    */
   indexerUrl?: string
+  /**
+   * EVE Frontier world (tenant) to read, e.g. `liminality`, sent as `tenant` on
+   * every indexer read. Omitted, the gateway answers for `stillness`. Coin
+   * pools, organizations, keyspaces and the world catalogue are the same on
+   * every tenant. Scopes indexer reads only: fullnode reads and transactions
+   * take object ids and are not checked against it.
+   */
+  tenant?: string
   /** Network preset selector. Defaults to `testnet`. */
   network?: TriexNetwork
   /** Per-field overrides of the network's baked-in package IDs. */
@@ -248,6 +256,14 @@ export interface ReadOnlyClientConfig {
   /** Which API gateway serves reads. Defaults to `triex`. */
   gateway?: TriexGateway
   indexerUrl?: string
+  /**
+   * EVE Frontier world (tenant) to read, e.g. `liminality`, sent as `tenant` on
+   * every indexer read. Omitted, the gateway answers for `stillness`. Coin
+   * pools, organizations, keyspaces and the world catalogue are the same on
+   * every tenant. Scopes indexer reads only: fullnode reads and transactions
+   * take object ids and are not checked against it.
+   */
+  tenant?: string
   network?: TriexNetwork
   packageIds?: Partial<PackageIds>
   /**
@@ -472,7 +488,7 @@ export interface CoordinateSearchParams {
 export interface HubLocationFilters {
   /** Numeric solar system id to restrict to. */
   solarSystemId?: number
-  /** Tenant (shard) to restrict to. */
+  /** Tenant (world) to list, overriding the client's `tenant`. */
   tenant?: string
   /** Only hubs that have trading initialised (a vault exists). */
   hasVault?: boolean
@@ -557,7 +573,7 @@ export interface ItemSearchOptions extends MinCheckpoint {
   variantSort?: 'supply' | 'storage_units'
   /** Variants per match (default 5, max 50). */
   variantLimit?: number
-  /** World to count supply in, e.g. `stillness`; omitted: every world. */
+  /** Tenant (world) to count supply in, overriding the client's `tenant`. */
   tenant?: string
 }
 

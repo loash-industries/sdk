@@ -170,9 +170,10 @@ export class IndexerClient {
     private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly gateway: TriexGateway = 'triex',
+    private readonly tenant?: string,
   ) {
-    this.orgs = new OrgQueries(baseUrl, apiKey, gateway)
-    this.hauling = new HaulingQueries(baseUrl, apiKey, gateway)
+    this.orgs = new OrgQueries(baseUrl, apiKey, gateway, tenant)
+    this.hauling = new HaulingQueries(baseUrl, apiKey, gateway, tenant)
   }
 
   /**
@@ -192,6 +193,7 @@ export class IndexerClient {
       query,
       notFound,
       this.gateway,
+      this.tenant,
     )
   }
 

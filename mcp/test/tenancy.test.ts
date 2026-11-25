@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals'
 import type { Server } from 'node:http'
-import { createApp, extractApiKey } from '../src/http.js'
+import { createApp, extractApiKey, extractTenant } from '../src/http.js'
 import { createContext } from '../src/context.js'
 import { loadConfig } from '../src/env.js'
 import { log, redact, tenantLabel } from '../src/logging.js'
@@ -165,5 +165,122 @@ describe('http surface', () => {
     expect(text).toContain('market_orderbook')
     // The caller's own key must never be echoed back.
     expect(text).not.toContain(KEY_A)
+  })
+})
+
+describe('world scoping (?tenant=)', () => {
+  const realFetch = global.fetch
+  let server: Server
+  let base: string
+  let upstream: URL[]
+
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => {
+      server = createApp(
+        loadConfig({
+          TRIEX_MCP_MODE: 'prepare',
+          TRIEX_API_URL: 'https://api.example.test',
+        } as NodeJS.ProcessEnv),
+      ).listen(0, '127.0.0.1', () => resolve())
+    })
+    const addr = server.address()
+    if (!addr || typeof addr === 'string') throw new Error('no address')
+    base = `http://127.0.0.1:${addr.port}`
+  })
+
+  // Indexer requests are recorded and stubbed; the MCP call itself is real.
+  beforeEach(() => {
+    upstream = []
+    global.fetch = (async (input: any, init?: any) => {
+      if (!String(input).startsWith('https://api.example.test'))
+        return realFetch(input, init)
+      upstream.push(new URL(String(input)))
+      return new Response(
+        JSON.stringify({ data: [], next_cursor: null, prev_cursor: null }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as typeof fetch
+  })
+
+  afterEach(() => {
+    global.fetch = realFetch
+  })
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  })
+
+  const call = (query: string, name: string, args: object) =>
+    fetch(`${base}/mcp${query}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'x-api-key': KEY_A,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name, arguments: args },
+      }),
+    })
+  const sent = () => upstream.map((u) => u.searchParams.getAll('tenant'))
+
+  it('scopes every indexer read of the call', async () => {
+    for (const [name, args] of [
+      ['market_hub_locations', {}],
+      ['market_item_locations', { assetId: '70810' }],
+      ['characters_by_address', { address: ADDR_A }],
+      ['hauling_agreements', {}],
+      ['org_directory', {}],
+    ] as const)
+      await (await call('?tenant=Liminality', name, args)).text()
+    expect(upstream).toHaveLength(5)
+    expect(sent()).toEqual(Array(5).fill(['liminality']))
+  })
+
+  it('sends no tenant when the URL has none', async () => {
+    await (await call('', 'market_item_locations', { assetId: '1' })).text()
+    expect(sent()).toEqual([[]])
+  })
+
+  it('honours a tool tenant when the URL has none', async () => {
+    await (
+      await call('', 'market_hub_locations', { tenant: 'liminality' })
+    ).text()
+    expect(sent()).toEqual([['liminality']])
+  })
+
+  it('accepts a tool naming the same tenant, and refuses another', async () => {
+    const q = '?tenant=liminality'
+    await (
+      await call(q, 'market_hub_locations', { tenant: 'liminality' })
+    ).text()
+    expect(sent()).toEqual([['liminality']])
+    const text = await (
+      await call(q, 'market_hub_locations', { tenant: 'stillness' })
+    ).text()
+    expect(text).toContain('TRIEX_VALIDATION_FAILED')
+    expect(text).toContain('"isError":true')
+    expect(upstream).toHaveLength(1)
+  })
+
+  it.each(['?tenant=', '?tenant=a&tenant=b', '?tenant=no%20such'])(
+    'refuses %s before any upstream call',
+    async (q) => {
+      const res = await call(q, 'market_hub_locations', {})
+      expect(res.status).toBe(400)
+      expect(upstream).toHaveLength(0)
+      await res.text()
+    },
+  )
+
+  it('reads a single name only', () => {
+    const of = (tenant: unknown) => extractTenant({ query: { tenant } } as any)
+    expect(of(undefined)).toBeUndefined()
+    expect(of(' Liminality ')).toBe('liminality')
+    for (const bad of ['', ['a', 'b'], { a: 1 }, 'x'.repeat(65)])
+      expect(of(bad)).toBeNull()
   })
 })

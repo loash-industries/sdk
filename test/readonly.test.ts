@@ -206,3 +206,38 @@ describe('iterateTrades', () => {
     expect(seen).toEqual([30, 20])
   })
 })
+
+describe('tenant', () => {
+  const page = { data: [], next_cursor: null, prev_cursor: null }
+  const tenantOf = (fn: jest.Mock, i = 0) =>
+    (fn.mock.calls[i]![0] as URL).searchParams.getAll('tenant')
+  const client = (tenant?: string) =>
+    new ReadOnlyClient({
+      apiKey: 'k',
+      indexerUrl: 'https://api.example.test',
+      tenant,
+    })
+
+  it('goes on trading, organization and hauling reads', async () => {
+    const fn = routeFetch([['/v1/', page]])
+    const ro = client('liminality')
+    // Only the requests matter here; the stub body need not parse.
+    await ro.hubLocations().catch(() => undefined)
+    await ro.indexer.orgs.get(HEX).catch(() => undefined)
+    await ro.indexer.hauling.agreements().catch(() => undefined)
+    expect(fn).toHaveBeenCalledTimes(3)
+    for (const i of [0, 1, 2]) expect(tenantOf(fn, i)).toEqual(['liminality'])
+  })
+
+  it('is left out when not configured', async () => {
+    const fn = routeFetch([['/v1/', page]])
+    await client().hubLocations()
+    expect(tenantOf(fn)).toEqual([])
+  })
+
+  it('yields to a tenant passed to the call', async () => {
+    const fn = routeFetch([['/v1/', page]])
+    await client('liminality').hubLocations({ tenant: 'stillness' })
+    expect(tenantOf(fn)).toEqual(['stillness'])
+  })
+})

@@ -84,7 +84,7 @@ export const readTools: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'World to count supply in, e.g. "stillness"; omit for every world.',
+          'World (tenant) to count supply in, e.g. "liminality". Omit to use the one this server is called with, else "stillness".',
         ),
     },
     handler: async (ctx, args) => {
@@ -155,7 +155,12 @@ export const readTools: ToolDef[] = [
         .positive()
         .optional()
         .describe('Numeric solar system id, e.g. 30000142.'),
-      tenant: z.string().optional().describe('Tenant (shard) to restrict to.'),
+      tenant: z
+        .string()
+        .optional()
+        .describe(
+          'World (tenant) to list hubs on, e.g. "liminality". Omit to use the one this server is called with, else "stillness".',
+        ),
       hasVault: z
         .boolean()
         .optional()

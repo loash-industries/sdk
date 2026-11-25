@@ -49,6 +49,7 @@ export class HaulingQueries {
     private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly gateway: TriexGateway = 'triex',
+    private readonly tenant?: string,
   ) {}
 
   private get<T = unknown>(
@@ -63,6 +64,7 @@ export class HaulingQueries {
       query,
       notFound,
       this.gateway,
+      this.tenant,
     )
   }
 

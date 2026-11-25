@@ -215,6 +215,9 @@ export class TriexClient {
    */
   readonly hauling: HaulingWriteApi
 
+  /** The configured tenant; undefined leaves the gateway's default. */
+  readonly tenant: string | undefined
+
   /** Package-id fields the caller pinned; a live refresh never moves them. */
   private readonly pinnedIds: ReadonlySet<string>
 
@@ -244,6 +247,7 @@ export class TriexClient {
     this.suiClient = config.suiClient
     this.executor = config.executor
     this.address = config.address
+    this.tenant = config.tenant
     this.ids = resolvePackageIds(config.network ?? 'testnet', config.packageIds)
     this.pinnedIds = new Set(Object.keys(config.packageIds ?? {}))
     const gateway = config.gateway ?? 'triex'
@@ -251,6 +255,7 @@ export class TriexClient {
       config.indexerUrl ?? GATEWAY_URLS[gateway],
       config.apiKey,
       gateway,
+      config.tenant,
     )
 
     this.account = new AccountApi(this)
@@ -294,7 +299,10 @@ export class TriexClient {
     tenant?: string
     url?: string
   }): Promise<PackageIdRefresh> {
-    const live = await fetchLivePackageIds(opts)
+    const live = await fetchLivePackageIds({
+      ...opts,
+      tenant: opts?.tenant ?? this.tenant,
+    })
     this.lastPackageIdRefresh = applyLivePackageIds(
       this.ids,
       live,

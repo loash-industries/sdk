@@ -20,8 +20,14 @@ export async function indexerGet<T = unknown>(
   query?: QueryParams,
   notFound?: TriexError,
   gateway: TriexGateway = 'triex',
+  tenant?: string,
 ): Promise<T> {
   const route = gatewayPath(gateway, path)
+  // The client's tenant goes on every read: routes that aren't tenant-scoped
+  // ignore it. A tenant passed to the call itself wins.
+  if (tenant !== undefined && query?.tenant === undefined) {
+    query = { ...query, tenant }
+  }
   const wanted = parseCheckpoint(query?.min_checkpoint)
   for (let attempt = 0; ; attempt++) {
     const { data, checkpoint } = await indexerGetOnce<T>(

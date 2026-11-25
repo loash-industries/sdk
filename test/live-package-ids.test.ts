@@ -108,6 +108,16 @@ describe('client.refreshPackageIds / TriexClient.connect', () => {
     expect(client.lastPackageIdRefresh).toBeNull()
   })
 
+  it("asks for the client's tenant unless the call names one", async () => {
+    const fetchMock = serve(wire())
+    const client = new TriexClient({ ...config, tenant: 'liminality' })
+    await client.refreshPackageIds()
+    await client.refreshPackageIds({ tenant: 'stillness' })
+    expect(
+      fetchMock.mock.calls.map((c) => (c[0] as URL).searchParams.get('tenant')),
+    ).toEqual(['liminality', 'stillness'])
+  })
+
   it('connect respects packageIds overrides', async () => {
     serve(wire())
     const client = await TriexClient.connect({

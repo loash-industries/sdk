@@ -120,6 +120,13 @@ const ro = new ReadOnlyClient({
 `TriexClient` takes the same option; writes are unaffected. Voidwire serves every
 read the SDK makes.
 
+### Reading another world
+
+Reads answer for the `stillness` world by default. Pass `tenant` to read
+another, e.g. `tenant: 'liminality'`; it goes on every indexer read, and a
+`tenant` passed to a single call overrides it. It doesn't apply to fullnode
+reads or transactions, which take object ids.
+
 ## Recipes
 
 ### Market analytics

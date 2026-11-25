@@ -35,6 +35,23 @@ export function extractApiKey(req: Request): string | null {
   return null
 }
 
+const TENANT_NAME = /^[a-z0-9_-]{1,64}$/
+
+/**
+ * The world (`?tenant=`) an MCP call is scoped to: the canonical name,
+ * undefined when the parameter is absent, or null when it isn't one name.
+ * A blank or repeated value is refused rather than dropped, since dropping it
+ * would answer from the default world. Whether the world exists is the
+ * indexer's call.
+ */
+export function extractTenant(req: Request): string | undefined | null {
+  const raw: unknown = req.query['tenant']
+  if (raw === undefined) return undefined
+  if (typeof raw !== 'string') return null
+  const tenant = raw.trim().toLowerCase()
+  return TENANT_NAME.test(tenant) ? tenant : null
+}
+
 export function createApp(config: ServerConfig): Express {
   const app = express()
   app.use(express.json({ limit: '1mb' }))
@@ -68,6 +85,20 @@ export function createApp(config: ServerConfig): Express {
       return
     }
 
+    const tenant = extractTenant(req)
+    if (tenant === null) {
+      res.status(400).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32602,
+          message:
+            'Invalid tenant. Pass one world name, e.g. /mcp?tenant=liminality, or leave it out.',
+        },
+        id: null,
+      })
+      return
+    }
+
     const label = tenantLabel(apiKey)
     if (!acquire(label, config.maxConcurrencyPerKey)) {
       res.status(429).json({
@@ -86,7 +117,9 @@ export function createApp(config: ServerConfig): Express {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     })
-    const server = createServer(createContext(apiKey, config))
+    const server = createServer(
+      createContext(apiKey, config, undefined, tenant),
+    )
 
     res.on('close', () => {
       release(label)
