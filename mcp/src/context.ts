@@ -1,7 +1,7 @@
 import { SuiGrpcClient } from '@mysten/sui/grpc'
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 import { ReadOnlyAclClient } from '@trinaryex/keyspace'
-import { ReadOnlyClient, TriexClient } from '@trinaryex/sdk'
+import { ReadOnlyClient, resolveGateway, TriexClient } from '@trinaryex/sdk'
 import { captureExecutor } from './capture.js'
 import type { ServerConfig } from './env.js'
 
@@ -10,7 +10,10 @@ import type { ServerConfig } from './env.js'
  * it completes — the server holds no cross-request tenant state at all.
  */
 export interface RequestContext {
-  /** The caller's TriEx API key, taken from the request headers. */
+  /**
+   * The caller's API key, taken from the request headers. It belongs to the
+   * configured gateway (Voidwire unless `TRIEX_GATEWAY` says otherwise).
+   */
   readonly apiKey: string
   readonly config: ServerConfig
   /**
@@ -74,6 +77,9 @@ export function createContext(
   tenant?: string,
 ): RequestContext {
   const scope = tenant === undefined ? {} : { tenant }
+  // Resolved once and passed to every client, so the trading and Keyspace
+  // clients always agree on where this caller's key is valid.
+  const gateway = resolveGateway(config.gateway, config.indexerUrl)
   const sui = () => suiClientOverride ?? getSuiClient(config)
   return {
     apiKey,
@@ -84,6 +90,7 @@ export function createContext(
       new ReadOnlyAclClient({
         suiClient: sui() as never,
         apiKey,
+        gateway,
         ...(config.indexerUrl ? { indexerUrl: config.indexerUrl } : {}),
       }),
     readClient: () =>
@@ -92,6 +99,7 @@ export function createContext(
         network: config.network,
         suiClient: sui(),
         ...scope,
+        gateway,
         ...(config.indexerUrl ? { indexerUrl: config.indexerUrl } : {}),
       }),
     writeClient: (sender?: string) =>
@@ -102,6 +110,7 @@ export function createContext(
         executor: captureExecutor,
         network: config.network,
         ...scope,
+        gateway,
         ...(config.indexerUrl ? { indexerUrl: config.indexerUrl } : {}),
       }),
   }

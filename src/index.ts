@@ -54,7 +54,7 @@ export {
   resolvePackageIds,
 } from './config'
 
-export { GATEWAY_URLS } from './gateways'
+export { DEFAULT_GATEWAY, GATEWAY_URLS, resolveGateway } from './gateways'
 export type { TriexGateway } from './gateways'
 
 // ─── Money helpers ───────────────────────────────────────────────────────────

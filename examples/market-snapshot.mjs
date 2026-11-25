@@ -15,7 +15,8 @@ import {
   fromBase,
 } from '../dist/index.js'
 
-const apiKey = process.env.TRINARY_API_KEY ?? process.env.TRIEX_API_KEY
+const apiKey = process.env.VOIDWIRE_API_KEY
+// A Voidwire key (sk_vw_…). For a Trinary Exchange key, add gateway: 'triex'.
 const ro = new ReadOnlyClient({ apiKey })
 
 // 1. What's trading right now, anywhere in the universe?

@@ -27,6 +27,7 @@ describe('ReadOnlyClient', () => {
   const ro = new ReadOnlyClient({
     apiKey: 'k',
     indexerUrl: 'https://api.example.test',
+    gateway: 'triex' as const,
   })
 
   it('fetches the combined hub-item orderbook in one call like the full client', async () => {
@@ -77,7 +78,7 @@ describe('ReadOnlyClient', () => {
 })
 
 describe('IndexerClient remaining param mappings', () => {
-  const client = new IndexerClient('https://api.example.test', 'k')
+  const client = new IndexerClient('https://api.example.test', 'k', 'triex')
 
   it('inventoryBalances maps all selector params', async () => {
     const fetchMock = routeFetch([
@@ -134,6 +135,7 @@ describe('ReadOnlyClient location reads', () => {
   const ro = new ReadOnlyClient({
     apiKey: 'k',
     indexerUrl: 'https://api.example.test',
+    gateway: 'triex' as const,
   })
 
   it('reaches every location endpoint from the read-only surface', async () => {
@@ -215,6 +217,7 @@ describe('tenant', () => {
     new ReadOnlyClient({
       apiKey: 'k',
       indexerUrl: 'https://api.example.test',
+      gateway: 'triex' as const,
       tenant,
     })
 

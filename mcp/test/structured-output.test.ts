@@ -15,6 +15,7 @@ import { createServer } from '../src/server.js'
 const config = loadConfig({
   TRIEX_MCP_MODE: 'prepare',
   TRIEX_INDEXER_URL: 'https://api.example.test',
+  TRIEX_GATEWAY: 'triex',
 } as NodeJS.ProcessEnv)
 
 async function connect(sui: any = {}) {

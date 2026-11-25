@@ -1,5 +1,5 @@
 import { TriexClientError, TriexError } from './errors'
-import { gatewayPath, type TriexGateway } from './gateways'
+import { DEFAULT_GATEWAY, gatewayPath, type TriexGateway } from './gateways'
 
 /** Query values accepted by {@link indexerGet}; `undefined` keys are dropped. */
 export type QueryParams = Record<string, string | number | boolean | undefined>
@@ -19,7 +19,7 @@ export async function indexerGet<T = unknown>(
   path: string,
   query?: QueryParams,
   notFound?: TriexError,
-  gateway: TriexGateway = 'triex',
+  gateway: TriexGateway = DEFAULT_GATEWAY,
   tenant?: string,
 ): Promise<T> {
   const route = gatewayPath(gateway, path)
@@ -36,6 +36,7 @@ export async function indexerGet<T = unknown>(
       route,
       query,
       notFound,
+      gateway,
     )
     // Read-your-writes: the gateway waits briefly for the indexer to reach
     // `min_checkpoint`, then answers with whatever it has and says which
@@ -87,6 +88,7 @@ async function indexerGetOnce<T>(
   path: string,
   query: QueryParams | undefined,
   notFound: TriexError | undefined,
+  gateway: TriexGateway,
 ): Promise<{ data: T; checkpoint: bigint | null }> {
   if (!apiKey) {
     throw new TriexClientError(
@@ -121,7 +123,7 @@ async function indexerGetOnce<T>(
     if (res.status === 401 || res.status === 403) {
       throw new TriexClientError(
         TriexError.Unauthorized,
-        `${base}. Check your API key, its access tier, and that it belongs to this gateway.`,
+        `${base}. ${unauthorizedHint(gateway, apiKey)}`,
         undefined,
         res.status,
       )
@@ -165,4 +167,16 @@ async function indexerGetOnce<T>(
     res.headers?.get?.('x-indexer-checkpoint') ?? null,
   )
   return { data: (await res.json()) as T, checkpoint }
+}
+
+/**
+ * What to tell the caller about a 401/403. Voidwire keys start `sk_vw_`; any
+ * other key sent to Voidwire is almost certainly a Trinary Exchange key on a
+ * client that took the default gateway, so name the fix.
+ */
+function unauthorizedHint(gateway: TriexGateway, apiKey: string): string {
+  if (gateway === 'voidwire' && !apiKey.startsWith('sk_vw_')) {
+    return "The SDK reads through Voidwire by default, which takes Voidwire keys (sk_vw_…). For a Trinary Exchange key, pass gateway: 'triex'."
+  }
+  return 'Check your API key, its access tier, and that it belongs to this gateway.'
 }

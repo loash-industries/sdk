@@ -26,7 +26,11 @@ describe('IndexerClient request building', () => {
     const fetchMock = mockFetch([
       { data: [], next_cursor: null, prev_cursor: null },
     ])
-    const client = new IndexerClient('https://api.example.test', 'sekret')
+    const client = new IndexerClient(
+      'https://api.example.test',
+      'sekret',
+      'triex',
+    )
     await client.discovery({
       storageUnitIds: [HEX, '0xabc'],
       assetId: '70810',
@@ -69,7 +73,7 @@ describe('IndexerClient request building', () => {
         ],
       },
     ])
-    const client = new IndexerClient('https://api.example.test', 'k')
+    const client = new IndexerClient('https://api.example.test', 'k', 'triex')
     const page = await client.searchItems('carbon', 5)
 
     const [url] = fetchMock.mock.calls[0] as [URL]
@@ -117,7 +121,7 @@ describe('IndexerClient request building', () => {
         ],
       },
     ])
-    const client = new IndexerClient('https://api.example.test', 'k')
+    const client = new IndexerClient('https://api.example.test', 'k', 'triex')
     const page = await client.searchItems('crude', 5, {
       variants: true,
       variantSort: 'storage_units',
@@ -143,7 +147,7 @@ describe('IndexerClient request building', () => {
 
   it('searchItems omits limit when not given', async () => {
     const fetchMock = mockFetch([{ data: [] }])
-    const client = new IndexerClient('https://api.example.test', 'k')
+    const client = new IndexerClient('https://api.example.test', 'k', 'triex')
     await client.searchItems('ore')
 
     const [url] = fetchMock.mock.calls[0] as [URL]
@@ -152,7 +156,7 @@ describe('IndexerClient request building', () => {
 
   it('resolvePool passes collection_id + asset_id and surfaces a null miss', async () => {
     const fetchMock = mockFetch([{ pool_id: null }])
-    const client = new IndexerClient('https://api.example.test', 'k')
+    const client = new IndexerClient('https://api.example.test', 'k', 'triex')
     const poolId = await client.resolvePool({
       collectionId: HEX,
       assetId: '70810',
@@ -165,7 +169,7 @@ describe('IndexerClient request building', () => {
 
   it('maps order-status paging params (before/after/limit)', async () => {
     const fetchMock = mockFetch([{ data: [], next_cursor: null }])
-    const client = new IndexerClient('https://api.example.test', 'k')
+    const client = new IndexerClient('https://api.example.test', 'k', 'triex')
     await client.openOrders(HEX, { before: 200, after: 100, limit: 50 })
     const [url] = fetchMock.mock.calls[0] as [URL]
     expect(String(url)).toContain(`/v1/trading-accounts/${HEX}/open-orders`)
@@ -189,7 +193,7 @@ describe('IndexerClient request building', () => {
         json: async () => body,
       }))
     }
-    const client = new IndexerClient('https://api.example.test', 'k')
+    const client = new IndexerClient('https://api.example.test', 'k', 'triex')
 
     // 401/403 → Unauthorized
     respond(401, 'Unauthorized', { error: 'bad key' })
@@ -231,7 +235,7 @@ describe('IndexerClient request building', () => {
 
   it('requires an apiKey before any request', async () => {
     const fetchMock = mockFetch([])
-    const client = new IndexerClient('https://api.example.test', '')
+    const client = new IndexerClient('https://api.example.test', '', 'triex')
     await expect(client.hubVault(HEX)).rejects.toMatchObject({
       code: TriexError.ApiKeyRequired,
     })
@@ -244,6 +248,7 @@ describe('TriexClient.market composition', () => {
     suiClient: {} as any,
     apiKey: 'k',
     indexerUrl: 'https://api.example.test',
+    gateway: 'triex' as const,
   }
 
   it('orderbook() fetches the combined hub-item endpoint in one call', async () => {
@@ -371,7 +376,7 @@ describe('error surface', () => {
  * cheerful, fully unfiltered 200. The assertions below pin the wire names.
  */
 describe('IndexerClient location reads', () => {
-  const client = new IndexerClient('https://api.example.test', 'k')
+  const client = new IndexerClient('https://api.example.test', 'k', 'triex')
 
   /** One hub-placement row, as the gateway sends it. */
   const placement = {
@@ -571,7 +576,7 @@ describe('IndexerClient location reads', () => {
  * than sending nulls; a schema that required them would throw on live data.
  */
 describe('IndexerClient spatial reads', () => {
-  const client = new IndexerClient('https://api.example.test', 'k')
+  const client = new IndexerClient('https://api.example.test', 'k', 'triex')
 
   const coords = {
     x: '-6523761465801880000',

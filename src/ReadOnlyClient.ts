@@ -1,7 +1,7 @@
 import { OrgsApi } from './armature/OrgsApi'
 import { CoinsReadApi } from './coins/CoinsApi'
 import { resolvePackageIds } from './config'
-import { GATEWAY_URLS } from './gateways'
+import { GATEWAY_URLS, resolveGateway } from './gateways'
 import { TriexClientError, TriexError } from './errors'
 import { HaulingApi } from './hauling/HaulingApi'
 import { IndexerClient } from './queries'
@@ -111,7 +111,7 @@ export class ReadOnlyClient {
 
   constructor(config: ReadOnlyClientConfig) {
     this.ids = resolvePackageIds(config.network ?? 'testnet', config.packageIds)
-    const gateway = config.gateway ?? 'triex'
+    const gateway = resolveGateway(config.gateway, config.indexerUrl)
     this.indexer = new IndexerClient(
       config.indexerUrl ?? GATEWAY_URLS[gateway],
       config.apiKey,

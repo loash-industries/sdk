@@ -1,4 +1,4 @@
-import type { TriexNetwork } from '@trinaryex/sdk'
+import type { TriexGateway, TriexNetwork } from '@trinaryex/sdk'
 
 export type ServerMode = 'read' | 'prepare'
 
@@ -12,6 +12,11 @@ export interface ServerConfig {
   grpcUrl: string
   /** Indexer base URL override; the SDK default applies when unset. */
   indexerUrl?: string
+  /**
+   * API gateway the callers' keys belong to. Unset, the SDK decides: Voidwire,
+   * or Trinary Exchange when `indexerUrl` is that gateway's URL.
+   */
+  gateway?: TriexGateway
   /** Max concurrent in-flight tool calls per API key. Fairness, not security. */
   maxConcurrencyPerKey: number
   tls?: { certPath: string; keyPath: string }
@@ -42,6 +47,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     throw new Error(`TRIEX_MCP_MODE must be "read" or "prepare", got: ${mode}`)
   }
 
+  const gateway = env.TRIEX_GATEWAY
+  if (gateway !== undefined && gateway !== 'voidwire' && gateway !== 'triex') {
+    throw new Error(
+      `TRIEX_GATEWAY must be "voidwire" or "triex", got: ${gateway}`,
+    )
+  }
+
   const certPath = env.TLS_CERT_PATH
   const keyPath = env.TLS_KEY_PATH
   if ((certPath && !keyPath) || (!certPath && keyPath)) {
@@ -55,6 +67,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     network: (env.TRIEX_NETWORK ?? 'testnet') as TriexNetwork,
     grpcUrl: env.SUI_GRPC_URL ?? DEFAULT_GRPC_URL,
     ...(env.TRIEX_API_URL ? { indexerUrl: env.TRIEX_API_URL } : {}),
+    ...(gateway ? { gateway } : {}),
     maxConcurrencyPerKey: intFromEnv('MAX_CONCURRENCY_PER_KEY', 8),
     ...(certPath && keyPath ? { tls: { certPath, keyPath } } : {}),
   }

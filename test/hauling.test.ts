@@ -49,14 +49,16 @@ const queryOf = (fetchMock: jest.Mock, i = 0) =>
 
 afterEach(() => jest.restoreAllMocks())
 
-const indexer = new IndexerClient('https://api.example.test', 'k')
+const indexer = new IndexerClient('https://api.example.test', 'k', 'triex')
 const ro = new ReadOnlyClient({
   apiKey: 'k',
   indexerUrl: 'https://api.example.test',
+  gateway: 'triex' as const,
 })
 const me = new TriexClient({
   apiKey: 'k',
   indexerUrl: 'https://api.example.test',
+  gateway: 'triex' as const,
   address: WALLET,
   suiClient: {} as any,
 })

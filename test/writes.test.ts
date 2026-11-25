@@ -253,6 +253,7 @@ function client(suiClient: any, executor: any) {
     suiClient,
     apiKey: 'k',
     indexerUrl: 'https://api.example.test',
+    gateway: 'triex' as const,
     address: OWNER,
     executor,
   })
@@ -1174,6 +1175,7 @@ describe('orders.fees', () => {
       suiClient: sui,
       apiKey: 'k',
       indexerUrl: 'https://api.example.test',
+      gateway: 'triex' as const,
     })
     const fees = await ro.orders.fees({ poolId: POOL })
     expect(fees.account).toBeNull()
@@ -1503,6 +1505,7 @@ describe('balances.currency', () => {
       suiClient: sui,
       apiKey: 'k',
       indexerUrl: 'https://api.example.test',
+      gateway: 'triex' as const,
     })
     const balances = await ro.balances.currency(other)
 
@@ -1528,6 +1531,7 @@ describe('balances.currency', () => {
       suiClient: sui,
       apiKey: 'k',
       indexerUrl: 'https://api.example.test',
+      gateway: 'triex' as const,
     })
     await expect(ro.balances.currency()).rejects.toMatchObject({
       code: TriexError.AddressRequired,

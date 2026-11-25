@@ -24,7 +24,8 @@ if (!apiKey) {
   process.exit(1)
 }
 
-const ro = new ReadOnlyClient({ apiKey })
+// A Trinary Exchange key from .env, so read through that gateway.
+const ro = new ReadOnlyClient({ apiKey, gateway: 'triex' })
 const sui = new SuiGrpcClient({
   network: 'testnet',
   baseUrl: 'https://fullnode.testnet.sui.io:443',

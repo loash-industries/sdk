@@ -31,6 +31,7 @@ console.log(`signer: ${address}`)
 
 const makeClient = () =>
   new TriexClient({
+    gateway: 'triex', // a Trinary Exchange key from .env
     suiClient: sui,
     apiKey,
     address,

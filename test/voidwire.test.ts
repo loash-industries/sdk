@@ -7,11 +7,17 @@ import {
   readGatewaySurface,
   readSdkCalls,
 } from '../scripts/gateway-surface.mjs'
-import { DEFAULT_INDEXER_URL, GATEWAY_URLS } from '../src'
+import {
+  DEFAULT_GATEWAY,
+  DEFAULT_INDEXER_URL,
+  GATEWAY_URLS,
+  resolveGateway,
+} from '../src'
 import { TriexError } from '../src/errors'
 import { gatewayPath } from '../src/gateways'
 import { IndexerClient } from '../src/queries'
 import { ReadOnlyClient } from '../src/ReadOnlyClient'
+import { TriexClient } from '../src/TriexClient'
 
 const PAGE = { data: [], next_cursor: null, prev_cursor: null }
 
@@ -54,7 +60,7 @@ describe('lock-step with the Voidwire gateway', () => {
 })
 
 describe('gatewayPath', () => {
-  it('leaves the default gateway alone', () => {
+  it('leaves Trinary Exchange paths alone', () => {
     expect(gatewayPath('triex', '/v1/discovery')).toBe('/v1/discovery')
   })
 
@@ -79,13 +85,72 @@ describe('gatewayPath', () => {
 })
 
 describe('client configuration', () => {
-  it('reads from Trinary Exchange unless told otherwise', async () => {
+  it('reads from Voidwire unless told otherwise', async () => {
     const fetchMock = mockFetch({ json: async () => PAGE })
     await new ReadOnlyClient({ apiKey: 'k' }).discover()
-    expect(DEFAULT_INDEXER_URL).toBe('https://api.trinary.exchange')
+    expect(DEFAULT_GATEWAY).toBe('voidwire')
+    expect(DEFAULT_INDEXER_URL).toBe('https://api.voidwire.xyz')
+    expect(requested(fetchMock).href).toBe(
+      'https://api.voidwire.xyz/explore/v1/discovery',
+    )
+  })
+
+  it.each([
+    [
+      'ReadOnlyClient',
+      () => new ReadOnlyClient({ apiKey: 'k', gateway: 'triex' }).discover(),
+    ],
+    [
+      'TriexClient',
+      () =>
+        new TriexClient({
+          apiKey: 'k',
+          suiClient: {} as any,
+          gateway: 'triex',
+        }).market.discover(),
+    ],
+  ])(
+    '%s reads from Trinary Exchange with `gateway: triex`',
+    async (_n, read) => {
+      const fetchMock = mockFetch({ json: async () => PAGE })
+      await read()
+      expect(requested(fetchMock).href).toBe(
+        'https://api.trinary.exchange/v1/discovery',
+      )
+    },
+  )
+
+  it('TriexClient reads from Voidwire unless told otherwise', async () => {
+    const fetchMock = mockFetch({ json: async () => PAGE })
+    await new TriexClient({
+      apiKey: 'k',
+      suiClient: {} as any,
+    }).market.discover()
+    expect(requested(fetchMock).href).toBe(
+      'https://api.voidwire.xyz/explore/v1/discovery',
+    )
+  })
+
+  it('keeps the Trinary Exchange layout for an indexerUrl that names that gateway', async () => {
+    const fetchMock = mockFetch({ json: async () => PAGE })
+    await new ReadOnlyClient({
+      apiKey: 'k',
+      indexerUrl: 'https://api.trinary.exchange/',
+    }).discover()
     expect(requested(fetchMock).href).toBe(
       'https://api.trinary.exchange/v1/discovery',
     )
+  })
+
+  it('lets an explicit gateway beat the indexerUrl', () => {
+    expect(resolveGateway('voidwire', 'https://api.trinary.exchange')).toBe(
+      'voidwire',
+    )
+    expect(resolveGateway(undefined, 'https://api-dev.example.test')).toBe(
+      'voidwire',
+    )
+    expect(resolveGateway(undefined, 'not a url')).toBe('voidwire')
+    expect(resolveGateway()).toBe('voidwire')
   })
 
   it('reads from Voidwire with `gateway: voidwire`', async () => {
@@ -141,5 +206,34 @@ describe('HTTP 402', () => {
       status: 402,
       message: expect.stringContaining('https://voidwire.xyz/account/billing'),
     })
+  })
+})
+
+describe('HTTP 401', () => {
+  const unauthorized = {
+    ok: false,
+    status: 401,
+    statusText: 'Unauthorized',
+    json: async () => ({}),
+  }
+
+  it('names the fix when a non-Voidwire key meets the default gateway', async () => {
+    mockFetch(unauthorized)
+    await expect(
+      new ReadOnlyClient({ apiKey: 'sk_dev_abc' }).discover(),
+    ).rejects.toMatchObject({
+      code: TriexError.Unauthorized,
+      message: expect.stringContaining("pass gateway: 'triex'"),
+    })
+  })
+
+  it('keeps the generic advice for a Voidwire key', async () => {
+    mockFetch(unauthorized)
+    const err = await new ReadOnlyClient({ apiKey: 'sk_vw_abc' })
+      .discover()
+      .catch((e) => e)
+    expect(err.code).toBe(TriexError.Unauthorized)
+    expect(err.message).toContain('Check your API key')
+    expect(err.message).not.toContain("gateway: 'triex'")
   })
 })

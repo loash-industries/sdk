@@ -29,7 +29,8 @@ const suiClient = new SuiGrpcClient({
 const keypair = Ed25519Keypair.fromSecretKey(process.env.SUI_PRIVATE_KEY)
 const client = new TriexClient({
   suiClient,
-  apiKey: process.env.TRINARY_API_KEY ?? process.env.TRIEX_API_KEY,
+  // A Voidwire key (sk_vw_…). For a Trinary Exchange key, add gateway: 'triex'.
+  apiKey: process.env.VOIDWIRE_API_KEY,
   address: keypair.toSuiAddress(),
   executor: (tx) =>
     suiClient.signAndExecuteTransaction({

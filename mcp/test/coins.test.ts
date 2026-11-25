@@ -17,6 +17,7 @@ import { ALL_TOOLS, toolsForMode } from '../src/registry.js'
 const config = loadConfig({
   TRIEX_MCP_MODE: 'prepare',
   TRIEX_INDEXER_URL: 'https://api.example.test',
+  TRIEX_GATEWAY: 'triex',
 } as NodeJS.ProcessEnv)
 
 const SENDER = '0x'.padEnd(66, 'a')

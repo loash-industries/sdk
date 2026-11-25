@@ -60,7 +60,7 @@ const urlOf = (fetchMock: jest.Mock, i = 0) => fetchMock.mock.calls[i][0] as URL
 
 afterEach(() => jest.restoreAllMocks())
 
-const client = new IndexerClient('https://api.example.test', 'k')
+const client = new IndexerClient('https://api.example.test', 'k', 'triex')
 
 // ─── Wire fixtures ───────────────────────────────────────────────────────────
 
@@ -1376,6 +1376,7 @@ describe('ReadOnlyClient reaches every new read', () => {
   const ro = new ReadOnlyClient({
     apiKey: 'k',
     indexerUrl: 'https://api.example.test',
+    gateway: 'triex' as const,
   })
 
   it.each<[string, () => Promise<unknown>, string, unknown]>([
@@ -1494,6 +1495,7 @@ describe('TriexClient groups', () => {
       suiClient: {} as any,
       apiKey: 'k',
       indexerUrl: 'https://api.example.test',
+      gateway: 'triex' as const,
       address,
     })
 
