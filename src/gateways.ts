@@ -19,16 +19,15 @@ export const GATEWAY_URLS: Readonly<Record<TriexGateway, string>> = {
 }
 
 /**
- * Voidwire's group for a `/v1/…` path, first match wins. `null` marks a route
- * Voidwire does not serve. The specific rows come first: an organization's or
+ * Voidwire's group for a `/v1/…` path, first match wins. The specific rows come
+ * first: an organization's or
  * player's agreements are `hauling`, and a hub item's book is `trading`.
  * `test/voidwire.test.ts` checks every SDK call site against Voidwire's
  * published contract, so a new read that lands in the wrong group fails there.
  */
-const VOIDWIRE_GROUPS: readonly (readonly [RegExp, string | null])[] = [
-  [/^\/v1\/players\/[^/]+\/accessible-keyspaces$/, null],
+const VOIDWIRE_GROUPS: readonly (readonly [RegExp, string])[] = [
   [/^\/v1\/(orgs|players)\/[^/]+\/agreements(\/|$)/, 'hauling'],
-  [/^\/v1\/players\/[^/]+\/orgs$/, 'orgs'],
+  [/^\/v1\/players\/[^/]+\/(accessible-keyspaces|orgs)$/, 'orgs'],
   [/^\/v1\/hubs\/[^/]+\/items\/[^/]+\/orderbook$/, 'trading'],
   [/^\/v1\/agreements(\/|$)/, 'hauling'],
   [/^\/v1\/(assemblies|collections|hubs|inventory|items)(\/|$)/, 'hubs'],
