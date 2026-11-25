@@ -26,13 +26,10 @@ const requested = (fn: jest.Mock) => (fn.mock.calls[0] as [URL])[0]
 /** Call-site paths carry `${}` placeholders; stand in a real-looking segment. */
 const concrete = (path: string) => path.replace(/\$\{\}/g, '0xabc')
 
-const NOT_ON_VOIDWIRE = '/v1/players/${}/accessible-keyspaces'
-
 describe('lock-step with the Voidwire gateway', () => {
   const surface = readGatewaySurface(loadSpec(VOIDWIRE_FIXTURE))
   const calls = readSdkCalls()
-  const served = calls.filter((c) => c.path !== NOT_ON_VOIDWIRE)
-  const mapped = served.map((c) => {
+  const mapped = calls.map((c) => {
     const group = gatewayPath('voidwire', concrete(c.path)).split('/')[1]
     const path = `/${group}${c.path}`
     return { ...c, path, normalized: normalizePath(path) }
@@ -51,23 +48,14 @@ describe('lock-step with the Voidwire gateway', () => {
     )
   })
 
-  it('refuses exactly the one read Voidwire does not serve', () => {
-    expect(calls.length - served.length).toBe(1)
-    expect(
-      surface.some((op) => op.path.endsWith('/accessible-keyspaces')),
-    ).toBe(false)
-    expect(() => gatewayPath('voidwire', concrete(NOT_ON_VOIDWIRE))).toThrow(
-      expect.objectContaining({ code: TriexError.NotOnGateway }),
-    )
+  it('covers every SDK call site', () => {
+    expect(diff.matched.length).toBe(calls.length)
   })
 })
 
 describe('gatewayPath', () => {
   it('leaves the default gateway alone', () => {
     expect(gatewayPath('triex', '/v1/discovery')).toBe('/v1/discovery')
-    expect(gatewayPath('triex', concrete(NOT_ON_VOIDWIRE))).toBe(
-      '/v1/players/0xabc/accessible-keyspaces',
-    )
   })
 
   it.each([
@@ -76,6 +64,7 @@ describe('gatewayPath', () => {
     ['/v1/orgs/0x1', 'orgs'],
     ['/v1/orgs/0x1/agreements', 'hauling'],
     ['/v1/players/0x1/orgs', 'orgs'],
+    ['/v1/players/0x1/accessible-keyspaces', 'orgs'],
     ['/v1/players/0x1/agreements', 'hauling'],
     ['/v1/players/0x1/agreements/claimable', 'hauling'],
   ])('puts %s in %s', (path, group) => {

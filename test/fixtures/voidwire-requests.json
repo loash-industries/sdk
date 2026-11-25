@@ -1184,6 +1184,23 @@
         ]
       }
     },
+    "/orgs/v1/players/{address}/accessible-keyspaces": {
+      "get": {
+        "operationId": "listAccessibleKeyspaces",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
     "/orgs/v1/players/{address}/orgs": {
       "get": {
         "operationId": "listPlayerOrgs",

@@ -118,7 +118,7 @@ const ro = new ReadOnlyClient({
 ```
 
 `TriexClient` takes the same option; writes are unaffected. Voidwire serves every
-read except an address's accessible keyspaces, which throws `NotOnGateway`.
+read the SDK makes.
 
 ## Recipes
 
