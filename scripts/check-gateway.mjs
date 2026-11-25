@@ -20,12 +20,15 @@
 import { writeFileSync } from 'node:fs'
 import {
   SPEC_FIXTURE,
+  VOIDWIRE_FIXTURE,
+  VOIDWIRE_SPEC_URL,
   contractsDiffer,
   diffGateway,
   fetchSpec,
   loadSpec,
   readGatewaySurface,
   readSdkCalls,
+  requestShape,
 } from './gateway-surface.mjs'
 
 const live = process.argv.includes('--live')
@@ -36,12 +39,29 @@ const refresh = process.argv.includes('--refresh')
 const strict = process.argv.includes('--strict')
 
 const spec = live || refresh ? await fetchSpec() : loadSpec()
+const voidwire =
+  live || refresh ? requestShape(await fetchSpec(VOIDWIRE_SPEC_URL)) : undefined
 
 if (refresh) {
   writeFileSync(SPEC_FIXTURE, JSON.stringify(spec, null, 2) + '\n')
   console.log(
     `Refreshed ${SPEC_FIXTURE.split('/').slice(-3).join('/')} — ${Object.keys(spec.paths ?? {}).length} paths, API version ${spec.info?.version ?? '?'}`,
   )
+}
+
+if (refresh) {
+  writeFileSync(VOIDWIRE_FIXTURE, JSON.stringify(voidwire, null, 2) + '\n')
+}
+
+// Same for the reduced Voidwire contract, which test/voidwire.test.ts uses to
+// check the group each request is sent to.
+let staleVoidwire = false
+if (live && !refresh) {
+  try {
+    staleVoidwire = contractsDiffer(loadSpec(VOIDWIRE_FIXTURE), voidwire)
+  } catch {
+    staleVoidwire = true
+  }
 }
 
 // A stale fixture does not break anything today, but it quietly weakens the
@@ -144,6 +164,15 @@ if (staleFixture && strict) {
       'offline suite is still testing against the older copy. Run:\n' +
       '\n  npm run refresh:gateway\n',
   )
+}
+
+if (staleVoidwire) {
+  const message =
+    'The vendored Voidwire contract (test/fixtures/voidwire-requests.json) is stale:\n' +
+    'api.voidwire.xyz publishes different paths or parameters. Run:\n' +
+    '\n  npm run refresh:gateway && npm test'
+  if (strict) problems.push(message)
+  else console.warn('\n' + message + '\n')
 }
 
 if (problems.length) {

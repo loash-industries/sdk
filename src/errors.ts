@@ -20,7 +20,8 @@ export enum TriexError {
   ApiKeyRequired = 'TRIEX_API_KEY_REQUIRED',
   /**
    * The API key was rejected (HTTP 401/403) — missing, revoked, or lacking
-   * access to this route. Check `TRINARY_API_KEY` / the key's tier.
+   * access to this route. Check the key's tier, and that it belongs to the
+   * configured `gateway`.
    */
   Unauthorized = 'TRIEX_UNAUTHORIZED',
   /**
@@ -29,6 +30,13 @@ export enum TriexError {
    * Discovery is the most expensive read (150 CU).
    */
   RateLimited = 'TRIEX_RATE_LIMITED',
+  /**
+   * The free allowance and prepaid credits are used up (HTTP 402, Voidwire
+   * only). Retrying does not help; the message carries the top-up URL.
+   */
+  PaymentRequired = 'TRIEX_PAYMENT_REQUIRED',
+  /** The configured `gateway` does not serve this read. */
+  NotOnGateway = 'TRIEX_NOT_ON_GATEWAY',
   /** The indexer returned an unexpected non-2xx response (5xx, unmapped 4xx). */
   IndexerError = 'TRIEX_INDEXER_ERROR',
   /** The indexer response did not match the expected schema. */

@@ -1,6 +1,7 @@
 import { OrgsApi } from './armature/OrgsApi'
 import { CoinsReadApi } from './coins/CoinsApi'
-import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
+import { resolvePackageIds } from './config'
+import { GATEWAY_URLS } from './gateways'
 import { TriexClientError, TriexError } from './errors'
 import { HaulingApi } from './hauling/HaulingApi'
 import { IndexerClient } from './queries'
@@ -110,9 +111,11 @@ export class ReadOnlyClient {
 
   constructor(config: ReadOnlyClientConfig) {
     this.ids = resolvePackageIds(config.network ?? 'testnet', config.packageIds)
+    const gateway = config.gateway ?? 'triex'
     this.indexer = new IndexerClient(
-      config.indexerUrl ?? DEFAULT_INDEXER_URL,
+      config.indexerUrl ?? GATEWAY_URLS[gateway],
       config.apiKey,
+      gateway,
     )
     this.orgs = new OrgsApi(this.indexer, (addr) => {
       if (!addr) {

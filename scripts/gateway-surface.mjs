@@ -33,6 +33,21 @@ export const SPEC_FIXTURE = join(
   'gateway-openapi.json',
 )
 
+/**
+ * Voidwire's contract, reduced to what requests depend on (see
+ * {@link requestShape}): the SDK's other gateway serves the same operations
+ * under `/{group}/v1/…`.
+ */
+export const VOIDWIRE_FIXTURE = join(
+  here,
+  '..',
+  'test',
+  'fixtures',
+  'voidwire-requests.json',
+)
+
+export const VOIDWIRE_SPEC_URL = 'https://api.voidwire.xyz/swagger.json'
+
 /** The published contract, fetched live. */
 export const SPEC_URL = 'https://api.trinary.exchange/swagger.json'
 
@@ -88,6 +103,28 @@ export function contractShape(spec) {
 /** Whether two documents differ in anything a client depends on. */
 export function contractsDiffer(a, b) {
   return JSON.stringify(contractShape(a)) !== JSON.stringify(contractShape(b))
+}
+
+/** Only the paths, methods and parameters of an OpenAPI document. */
+export function requestShape(spec) {
+  const paths = {}
+  for (const path of Object.keys(spec.paths ?? {}).sort()) {
+    const item = spec.paths[path]
+    const shared = item.parameters ?? []
+    for (const [method, operation] of Object.entries(item)) {
+      if (!HTTP_METHODS.has(method)) continue
+      paths[path] ??= {}
+      paths[path][method] = {
+        operationId: operation.operationId,
+        parameters: [...shared, ...(operation.parameters ?? [])].map((p) => ({
+          name: p.name,
+          in: p.in,
+          required: Boolean(p.required),
+        })),
+      }
+    }
+  }
+  return { paths }
 }
 
 /** Load the live OpenAPI document. Used by the drift check, never by tests. */

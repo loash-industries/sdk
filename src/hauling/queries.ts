@@ -1,3 +1,4 @@
+import type { TriexGateway } from '../gateways'
 import { TriexError } from '../errors'
 import {
   checkpointParam as checkpoint,
@@ -47,6 +48,7 @@ export class HaulingQueries {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
+    private readonly gateway: TriexGateway = 'triex',
   ) {}
 
   private get<T = unknown>(
@@ -54,7 +56,14 @@ export class HaulingQueries {
     query?: QueryParams,
     notFound?: TriexError,
   ): Promise<T> {
-    return indexerGet<T>(this.baseUrl, this.apiKey, path, query, notFound)
+    return indexerGet<T>(
+      this.baseUrl,
+      this.apiKey,
+      path,
+      query,
+      notFound,
+      this.gateway,
+    )
   }
 
   /** The job board: open agreements by default, newest first. 50 CU. */

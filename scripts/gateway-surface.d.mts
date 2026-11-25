@@ -45,9 +45,12 @@ export interface GatewayDiff {
 
 export declare const SPEC_FIXTURE: string
 export declare const SPEC_URL: string
+export declare const VOIDWIRE_FIXTURE: string
+export declare const VOIDWIRE_SPEC_URL: string
 
 export declare function normalizePath(path: string): string
 export declare function loadSpec(specPath?: string): any
+export declare function requestShape(spec: any): { paths: Record<string, any> }
 export declare function fetchSpec(url?: string): Promise<any>
 export declare function readGatewaySurface(spec?: any): GatewayOperation[]
 export declare function readSdkCalls(

@@ -54,6 +54,9 @@ export {
   resolvePackageIds,
 } from './config'
 
+export { GATEWAY_URLS } from './gateways'
+export type { TriexGateway } from './gateways'
+
 // ─── Money helpers ───────────────────────────────────────────────────────────
 export {
   toBase,

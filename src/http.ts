@@ -1,4 +1,5 @@
 import { TriexClientError, TriexError } from './errors'
+import { gatewayPath, type TriexGateway } from './gateways'
 
 /** Query values accepted by {@link indexerGet}; `undefined` keys are dropped. */
 export type QueryParams = Record<string, string | number | boolean | undefined>
@@ -18,13 +19,15 @@ export async function indexerGet<T = unknown>(
   path: string,
   query?: QueryParams,
   notFound?: TriexError,
+  gateway: TriexGateway = 'triex',
 ): Promise<T> {
+  const route = gatewayPath(gateway, path)
   const wanted = parseCheckpoint(query?.min_checkpoint)
   for (let attempt = 0; ; attempt++) {
     const { data, checkpoint } = await indexerGetOnce<T>(
       baseUrl,
       apiKey,
-      path,
+      route,
       query,
       notFound,
     )
@@ -97,8 +100,10 @@ async function indexerGetOnce<T>(
   if (!res.ok) {
     // Surface the API's own message when it sent one (NestJS-style bodies).
     let detail = ''
+    let topUpUrl: string | undefined
     try {
       const body: any = await res.json()
+      if (typeof body?.top_up_url === 'string') topUpUrl = body.top_up_url
       const msg = body?.message ?? body?.error ?? body?.reason
       if (msg)
         detail = ` — ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`
@@ -110,7 +115,15 @@ async function indexerGetOnce<T>(
     if (res.status === 401 || res.status === 403) {
       throw new TriexClientError(
         TriexError.Unauthorized,
-        `${base}. Check TRINARY_API_KEY and the key's access tier.`,
+        `${base}. Check your API key, its access tier, and that it belongs to this gateway.`,
+        undefined,
+        res.status,
+      )
+    }
+    if (res.status === 402) {
+      throw new TriexClientError(
+        TriexError.PaymentRequired,
+        `${base}. Allowance and prepaid credits are used up${topUpUrl ? ` — top up at ${topUpUrl}` : ''}.`,
         undefined,
         res.status,
       )

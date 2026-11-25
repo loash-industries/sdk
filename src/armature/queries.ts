@@ -1,3 +1,4 @@
+import type { TriexGateway } from '../gateways'
 import { TriexClientError, TriexError } from '../errors'
 import { checkpointParam, indexerGet } from '../http'
 import type { MinCheckpoint } from '../types'
@@ -40,6 +41,7 @@ export class OrgQueries {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
+    private readonly gateway: TriexGateway = 'triex',
   ) {}
 
   private fetchJson<T = unknown>(
@@ -47,7 +49,14 @@ export class OrgQueries {
     query?: Record<string, string | number | boolean | undefined>,
     notFound?: TriexError,
   ): Promise<T> {
-    return indexerGet<T>(this.baseUrl, this.apiKey, path, query, notFound)
+    return indexerGet<T>(
+      this.baseUrl,
+      this.apiKey,
+      path,
+      query,
+      notFound,
+      this.gateway,
+    )
   }
 
   // ─── Organizations ────────────────────────────────────────────────────────

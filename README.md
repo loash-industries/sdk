@@ -104,6 +104,22 @@ const ro = new ReadOnlyClient({ apiKey: process.env.TRINARY_API_KEY! })
 const feed = await ro.discover({ assetId: '70810', side: 'sell' })
 ```
 
+### Reading through Voidwire
+
+Reads go to the Trinary Exchange gateway by default. To use
+[Voidwire](https://voidwire.xyz) instead, pass `gateway: 'voidwire'` and a
+Voidwire key (`sk_vw_…`). Keys are not shared between the two gateways.
+
+```ts
+const ro = new ReadOnlyClient({
+  gateway: 'voidwire',
+  apiKey: process.env.VOIDWIRE_API_KEY!,
+})
+```
+
+`TriexClient` takes the same option; writes are unaffected. Voidwire serves every
+read except an address's accessible keyspaces, which throws `NotOnGateway`.
+
 ## Recipes
 
 ### Market analytics
@@ -208,8 +224,10 @@ whether the abort was `resolved`, came from a dependency package
 
 | Code | Raised when | Recovery |
 |---|---|---|
-| `Unauthorized` | API key missing/revoked/wrong tier (HTTP 401/403) | fix `TRINARY_API_KEY` |
+| `Unauthorized` | API key missing/revoked/wrong tier (HTTP 401/403) | fix the key; check it belongs to the configured `gateway` |
 | `RateLimited` | compute-unit budget exhausted (HTTP 429) | wait `e.retryAfterMs`, retry |
+| `PaymentRequired` | Voidwire allowance and prepaid credits used up (HTTP 402) | buy credits at the URL in `e.message` |
+| `NotOnGateway` | the configured `gateway` doesn't serve this read | use `gateway: 'triex'` with a Trinary Exchange key |
 | `IndexerError` | 5xx / unexpected HTTP failure (`e.status` set) | retry with backoff |
 | `UnexpectedResponse` | response didn't match the pinned schema | report — API drift |
 | `HubNotFound` / `PoolNotFound` / `TradingAccountNotFound` / `OrderNotFound` / `FillNotFound` / `CharacterNotFound` / `TribeNotFound` / `ItemNotFound` / `SolarSystemNotFound` | unknown id for the target resource | check inputs (a system *name* may simply be unreported yet — try its id) |

@@ -8,7 +8,8 @@ import type { ClientWithCoreApi } from '@mysten/sui/client'
 import { OrgHandle } from './armature/OrgClient'
 import { OrgsWriteApi } from './armature/OrgsApi'
 import { CoinsApi } from './coins/CoinsApi'
-import { DEFAULT_INDEXER_URL, resolvePackageIds } from './config'
+import { resolvePackageIds } from './config'
+import { GATEWAY_URLS } from './gateways'
 import { TriexClientError, TriexError } from './errors'
 import { HaulingWriteApi } from './hauling/HaulingWriteApi'
 import { transactionCheckpoint } from './checkpoint'
@@ -245,9 +246,11 @@ export class TriexClient {
     this.address = config.address
     this.ids = resolvePackageIds(config.network ?? 'testnet', config.packageIds)
     this.pinnedIds = new Set(Object.keys(config.packageIds ?? {}))
+    const gateway = config.gateway ?? 'triex'
     this.indexer = new IndexerClient(
-      config.indexerUrl ?? DEFAULT_INDEXER_URL,
+      config.indexerUrl ?? GATEWAY_URLS[gateway],
       config.apiKey,
+      gateway,
     )
 
     this.account = new AccountApi(this)

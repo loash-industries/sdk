@@ -3,6 +3,7 @@ import { OrgQueries } from './armature/queries'
 import { CoinListSchema } from './coins/schemas'
 import type { CoinInfo } from './coins/types'
 import { TriexClientError, TriexError } from './errors'
+import type { TriexGateway } from './gateways'
 import { HaulingQueries } from './hauling/queries'
 import { indexerGet } from './http'
 import { checkpointParam } from './http'
@@ -168,9 +169,10 @@ export class IndexerClient {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
+    private readonly gateway: TriexGateway = 'triex',
   ) {
-    this.orgs = new OrgQueries(baseUrl, apiKey)
-    this.hauling = new HaulingQueries(baseUrl, apiKey)
+    this.orgs = new OrgQueries(baseUrl, apiKey, gateway)
+    this.hauling = new HaulingQueries(baseUrl, apiKey, gateway)
   }
 
   /**
@@ -183,7 +185,14 @@ export class IndexerClient {
     query?: QueryParams,
     notFound?: TriexError,
   ): Promise<T> {
-    return indexerGet<T>(this.baseUrl, this.apiKey, path, query, notFound)
+    return indexerGet<T>(
+      this.baseUrl,
+      this.apiKey,
+      path,
+      query,
+      notFound,
+      this.gateway,
+    )
   }
 
   // ─── Discovery / market data ──────────────────────────────────────────────

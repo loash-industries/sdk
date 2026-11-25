@@ -1,3 +1,4 @@
+import type { TriexGateway } from './gateways'
 import type { Transaction } from '@mysten/sui/transactions'
 // `ClientWithCoreApi` is the modern SuiClient interface (what `new SuiClient()`
 // satisfies); `@mysten/sui` v2 no longer type-exports a `SuiClient` name.
@@ -226,7 +227,15 @@ export interface TriexClientConfig {
    * wallets that expose the address dynamically, pass it per-call instead.
    */
   address?: string
-  /** Indexer base URL. Defaults to `https://api.trinary.exchange`. */
+  /**
+   * Which API gateway serves indexer reads. Defaults to `triex`. The `apiKey`
+   * must belong to it: keys are not shared between gateways.
+   */
+  gateway?: TriexGateway
+  /**
+   * Indexer base URL. Defaults to the `gateway`'s. Changes the host only; the
+   * path layout follows `gateway`.
+   */
   indexerUrl?: string
   /** Network preset selector. Defaults to `testnet`. */
   network?: TriexNetwork
@@ -236,6 +245,8 @@ export interface TriexClientConfig {
 
 export interface ReadOnlyClientConfig {
   apiKey: string
+  /** Which API gateway serves reads. Defaults to `triex`. */
+  gateway?: TriexGateway
   indexerUrl?: string
   network?: TriexNetwork
   packageIds?: Partial<PackageIds>

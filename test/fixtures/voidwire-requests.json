@@ -1,0 +1,2073 @@
+{
+  "paths": {
+    "/characters/v1/characters/address/{address}": {
+      "get": {
+        "operationId": "getCharacterByAddress",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "enrich",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/characters/v1/characters/batch": {
+      "get": {
+        "operationId": "batchGetCharacters",
+        "parameters": [
+          {
+            "name": "addresses",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/characters/v1/characters/name/{name}": {
+      "get": {
+        "operationId": "getCharacterByName",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/characters/v1/characters/{object_id}": {
+      "get": {
+        "operationId": "getCharacter",
+        "parameters": [
+          {
+            "name": "object_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "enrich",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/characters/v1/players": {
+      "get": {
+        "operationId": "CharactersController_listPlayers_v1",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/explore/v1/discovery": {
+      "get": {
+        "operationId": "getDiscovery",
+        "parameters": [
+          {
+            "name": "storage_unit_ids",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "asset_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "trading_account_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "public_only",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "include_public",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "exclude_offline",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/explore/v1/leaderboard": {
+      "get": {
+        "operationId": "LeaderboardController_getLeaderboard_v1",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "org_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/explore/v1/leaderboard/hubs": {
+      "get": {
+        "operationId": "LeaderboardController_getHubLeaderboard_v1",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/explore/v1/search": {
+      "get": {
+        "operationId": "search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "characters",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "orgs",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "enrich_orgs",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/explore/v1/stats": {
+      "get": {
+        "operationId": "getStats",
+        "parameters": [
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hauling/v1/agreements": {
+      "get": {
+        "operationId": "listAgreements",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_reward",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "source_hub_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "destination_hub_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cargo_collection_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "want_collection_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cargo_asset_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "want_asset_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "lister",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "hauler",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "org_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "gated",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "claimable_by",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "accept_deadline_before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hauling/v1/agreements/config": {
+      "get": {
+        "operationId": "getAgreementsConfig",
+        "parameters": [
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hauling/v1/agreements/stats": {
+      "get": {
+        "operationId": "getAgreementStats",
+        "parameters": [
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hauling/v1/agreements/{agreement_id}": {
+      "get": {
+        "operationId": "getAgreement",
+        "parameters": [
+          {
+            "name": "agreement_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "viewer",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hauling/v1/orgs/{org_id}/agreements": {
+      "get": {
+        "operationId": "listOrgAgreements",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "relation",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hauling/v1/players/{address}/agreements": {
+      "get": {
+        "operationId": "listPlayerAgreements",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hauling/v1/players/{address}/agreements/actions": {
+      "get": {
+        "operationId": "listPlayerAgreementActions",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hauling/v1/players/{address}/agreements/claimable": {
+      "get": {
+        "operationId": "listClaimableAgreements",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "include_unknown",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hauling/v1/players/{address}/agreements/reputation": {
+      "get": {
+        "operationId": "getPlayerAgreementReputation",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/assemblies/enriched": {
+      "get": {
+        "operationId": "batchGetAssemblies",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/assemblies/owners": {
+      "get": {
+        "operationId": "batchGetAssemblyOwners",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/collections/{collection_id}/hub": {
+      "get": {
+        "operationId": "getCollectionHub",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/economics": {
+      "get": {
+        "operationId": "batchGetHubEconomics",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/enriched": {
+      "get": {
+        "operationId": "batchGetHubs",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/locations": {
+      "get": {
+        "operationId": "listHubLocations",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "solar_system",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "has_vault",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/nearby-by-system": {
+      "get": {
+        "operationId": "listHubsNearSolarSystem",
+        "parameters": [
+          {
+            "name": "system_id",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "range",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "type_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/{hub_id}/dao-vaults": {
+      "get": {
+        "operationId": "listHubDaoVaults",
+        "parameters": [
+          {
+            "name": "hub_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/{hub_id}/items": {
+      "get": {
+        "operationId": "listHubItems",
+        "parameters": [
+          {
+            "name": "hub_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/{hub_id}/location": {
+      "get": {
+        "operationId": "getHubLocation",
+        "parameters": [
+          {
+            "name": "hub_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/{hub_id}/nearby": {
+      "get": {
+        "operationId": "listHubsNearHub",
+        "parameters": [
+          {
+            "name": "hub_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "range",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "type_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/{hub_id}/top-items": {
+      "get": {
+        "operationId": "SSUController_getTopItems_v1",
+        "parameters": [
+          {
+            "name": "hub_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/hubs/{hub_id}/vault": {
+      "get": {
+        "operationId": "getHubVault",
+        "parameters": [
+          {
+            "name": "hub_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/inventory/balances": {
+      "get": {
+        "operationId": "getInventoryBalances",
+        "parameters": [
+          {
+            "name": "storage_unit_id",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "owner_address",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "trading_account_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "vault_ids",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "inventory_key",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/hubs/v1/items/{item_id}/locations": {
+      "get": {
+        "operationId": "listItemLocations",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/map/v1/routing/compare": {
+      "get": {
+        "operationId": "compareRoutes",
+        "parameters": [
+          {
+            "name": "origin",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "destination",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "mass",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "gate_weight",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "max_jump_range_ly",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/map/v1/routing/route": {
+      "get": {
+        "operationId": "getRoute",
+        "parameters": [
+          {
+            "name": "origin",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "destination",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "optimization",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "mass",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "gate_weight",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "max_jump_range_ly",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/map/v1/routing/stats": {
+      "get": {
+        "operationId": "getRoutingStats",
+        "parameters": []
+      }
+    },
+    "/map/v1/solar-systems/names": {
+      "get": {
+        "operationId": "batchGetSolarSystemNames",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/map/v1/spatial/coordinates/nearby": {
+      "get": {
+        "operationId": "listSystemsNearCoordinates",
+        "parameters": [
+          {
+            "name": "x",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "y",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "z",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "radius_ly",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/map/v1/spatial/stats": {
+      "get": {
+        "operationId": "getStarMapStats",
+        "parameters": []
+      }
+    },
+    "/map/v1/spatial/systems": {
+      "get": {
+        "operationId": "batchGetSolarSystems",
+        "parameters": [
+          {
+            "name": "solar_system_ids",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "solar_system_names",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/map/v1/spatial/systems/search/autocomplete": {
+      "get": {
+        "operationId": "autocompleteSolarSystems",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/map/v1/spatial/systems/{solar_system}": {
+      "get": {
+        "operationId": "getSolarSystem",
+        "parameters": [
+          {
+            "name": "solar_system",
+            "in": "path",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/map/v1/spatial/systems/{solar_system}/nearby": {
+      "get": {
+        "operationId": "listSystemsNearSolarSystem",
+        "parameters": [
+          {
+            "name": "solar_system",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "radius_ly",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/orgs/v1/orgs": {
+      "get": {
+        "operationId": "batchGetOrgs",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/orgs/v1/orgs/directory": {
+      "get": {
+        "operationId": "listOrgDirectory",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/orgs/v1/orgs/{org_id}": {
+      "get": {
+        "operationId": "getOrg",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/orgs/v1/orgs/{org_id}/proposals": {
+      "get": {
+        "operationId": "listOrgProposals",
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/orgs/v1/players/{address}/orgs": {
+      "get": {
+        "operationId": "listPlayerOrgs",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/coin-pools/discovery": {
+      "get": {
+        "operationId": "CoinPoolsController_getDiscovery_v1",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/coin-pools/open-orders": {
+      "get": {
+        "operationId": "CoinPoolsController_listMarketOpenOrders_v1",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "trading_account_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "pool_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "coin_type",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/coin-pools/resolve": {
+      "get": {
+        "operationId": "CoinPoolsController_resolvePool_v1",
+        "parameters": [
+          {
+            "name": "base_type",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "quote_type",
+            "in": "query",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/trading/v1/coin-pools/trades/recent": {
+      "get": {
+        "operationId": "CoinPoolsController_getRecentTrades_v1",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "pool_id",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/coin-pools/{pool_id}/metadata": {
+      "get": {
+        "operationId": "CoinPoolsController_getPoolMetadata_v1",
+        "parameters": [
+          {
+            "name": "pool_id",
+            "in": "path",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/trading/v1/coin-pools/{pool_id}/orderbook": {
+      "get": {
+        "operationId": "CoinPoolsController_getOrderbook_v1",
+        "parameters": [
+          {
+            "name": "pool_id",
+            "in": "path",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/trading/v1/coin-pools/{pool_id}/orders/{order_id}": {
+      "get": {
+        "operationId": "CoinPoolsController_getOrder_v1",
+        "parameters": [
+          {
+            "name": "pool_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/trading/v1/coins": {
+      "get": {
+        "operationId": "listCoins",
+        "parameters": [
+          {
+            "name": "coin_types",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/display-prices": {
+      "get": {
+        "operationId": "listDisplayPrices",
+        "parameters": [
+          {
+            "name": "item_ids",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "storage_unit_ids",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "fallback",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/display-prices/{item_id}": {
+      "get": {
+        "operationId": "getDisplayPrice",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "storage_unit_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "fallback",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/fills/{event_digest}": {
+      "get": {
+        "operationId": "getFill",
+        "parameters": [
+          {
+            "name": "event_digest",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/hubs/{hub_id}/items/{asset_id}/orderbook": {
+      "get": {
+        "operationId": "getHubItemOrderbook",
+        "parameters": [
+          {
+            "name": "hub_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "quote_type",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/pools": {
+      "get": {
+        "operationId": "PoolsController_listPools_v1",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/pools/resolve": {
+      "get": {
+        "operationId": "resolvePool",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "asset_id",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "quote_type",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/pools/top-by-fees": {
+      "get": {
+        "operationId": "listTopPoolsByFees",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/pools/{pool_id}/fee": {
+      "get": {
+        "operationId": "PoolsController_getPoolFee_v1",
+        "parameters": [
+          {
+            "name": "pool_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "trading_account_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/pools/{pool_id}/metadata": {
+      "get": {
+        "operationId": "getPoolMetadata",
+        "parameters": [
+          {
+            "name": "pool_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/pools/{pool_id}/orderbook": {
+      "get": {
+        "operationId": "getPoolOrderbook",
+        "parameters": [
+          {
+            "name": "pool_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/pools/{pool_id}/orders/{order_id}": {
+      "get": {
+        "operationId": "getPoolOrder",
+        "parameters": [
+          {
+            "name": "pool_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/trades/recent": {
+      "get": {
+        "operationId": "getRecentTrades",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "public_only",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "item_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "hub_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/trading-accounts/owners": {
+      "get": {
+        "operationId": "batchGetTradingAccountOwners",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/trading/v1/trading-accounts/{trading_account_id}/coin-pools/fills": {
+      "get": {
+        "operationId": "CoinPoolsController_listFills_v1",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "pool_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/trading-accounts/{trading_account_id}/coin-pools/open-orders": {
+      "get": {
+        "operationId": "CoinPoolsController_listOpenOrders_v1",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/trading-accounts/{trading_account_id}/coin-pools/trades": {
+      "get": {
+        "operationId": "CoinPoolsController_listTrades_v1",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "base_type",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/trading-accounts/{trading_account_id}/fills": {
+      "get": {
+        "operationId": "listAccountFills",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "pool_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/trading-accounts/{trading_account_id}/open-orders": {
+      "get": {
+        "operationId": "listAccountOpenOrders",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/trading-accounts/{trading_account_id}/sweepable": {
+      "get": {
+        "operationId": "listAccountSweepable",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/trading/v1/trading-accounts/{trading_account_id}/trades": {
+      "get": {
+        "operationId": "listAccountTrades",
+        "parameters": [
+          {
+            "name": "trading_account_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "asset_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/world/v1/world/items": {
+      "get": {
+        "operationId": "listItems",
+        "parameters": []
+      }
+    },
+    "/world/v1/world/items/search": {
+      "get": {
+        "operationId": "searchAssets",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "variants",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "variant_sort",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "variant_limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/world/v1/world/items/{asset_id}": {
+      "get": {
+        "operationId": "getAsset",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/world/v1/world/items/{type_id}/variants": {
+      "get": {
+        "operationId": "ItemVariantsController_listVariants_v1",
+        "parameters": [
+          {
+            "name": "type_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "tenant",
+            "in": "query",
+            "required": false
+          },
+          {
+            "name": "min_checkpoint",
+            "in": "query",
+            "required": false
+          }
+        ]
+      }
+    },
+    "/world/v1/world/recipes": {
+      "get": {
+        "operationId": "listRecipes",
+        "parameters": []
+      }
+    },
+    "/world/v1/world/recipes/{item_id}": {
+      "get": {
+        "operationId": "getRecipe",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/world/v1/world/tribes/{tribe_id}": {
+      "get": {
+        "operationId": "getTribe",
+        "parameters": [
+          {
+            "name": "tribe_id",
+            "in": "path",
+            "required": true
+          }
+        ]
+      }
+    }
+  }
+}
