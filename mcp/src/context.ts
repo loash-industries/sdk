@@ -14,6 +14,11 @@ export interface RequestContext {
   readonly apiKey: string
   readonly config: ServerConfig
   /**
+   * The EVE Frontier world this request reads, from `POST /mcp?tenant=`. Sent
+   * on every indexer read; undefined leaves the gateway's default (stillness).
+   */
+  readonly tenant?: string
+  /**
    * A read client bound to this caller's key. It carries the shared fullnode
    * client too, because `coins.*` reads (books, fees, quotes, account state)
    * are on-chain simulations rather than indexer routes.
@@ -66,11 +71,14 @@ export function createContext(
   apiKey: string,
   config: ServerConfig,
   suiClientOverride?: ClientWithCoreApi,
+  tenant?: string,
 ): RequestContext {
+  const scope = tenant === undefined ? {} : { tenant }
   const sui = () => suiClientOverride ?? getSuiClient(config)
   return {
     apiKey,
     config,
+    ...scope,
     suiClient: sui,
     keyspaceClient: () =>
       new ReadOnlyAclClient({
@@ -83,6 +91,7 @@ export function createContext(
         apiKey,
         network: config.network,
         suiClient: sui(),
+        ...scope,
         ...(config.indexerUrl ? { indexerUrl: config.indexerUrl } : {}),
       }),
     writeClient: (sender?: string) =>
@@ -92,6 +101,7 @@ export function createContext(
         ...(sender ? { address: sender } : {}),
         executor: captureExecutor,
         network: config.network,
+        ...scope,
         ...(config.indexerUrl ? { indexerUrl: config.indexerUrl } : {}),
       }),
   }

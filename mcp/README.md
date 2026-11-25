@@ -48,11 +48,15 @@ All configuration is **non-secret** — note the absence of any key, address, or
 
 | Route | Purpose |
 |---|---|
-| `POST /mcp` | MCP Streamable HTTP (stateless). Requires `x-api-key` |
+| `POST /mcp` | MCP Streamable HTTP (stateless). Requires `x-api-key`. Optional `?tenant=`, see below |
 | `GET /healthz` | Liveness |
 | `GET /readyz` | Readiness, mode and network |
 
 `GET`/`DELETE` on `/mcp` return 405: the server runs stateless, so there are no sessions and no server-initiated streams.
+
+### Choosing a world
+
+Add `?tenant=` to read one EVE Frontier world, e.g. `POST /mcp?tenant=liminality`. It goes on every indexer read that call makes. Without it, reads come from `stillness`. A value that isn't one world name is a 400, and a tool call whose `tenant` input names a different world is refused. Coin markets, organizations, keyspaces and the item catalogue are the same on every world. Fullnode reads and prepared transactions take object ids and are not checked against it.
 
 ## Tools
 

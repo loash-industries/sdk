@@ -42,6 +42,7 @@ export class OrgQueries {
     private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly gateway: TriexGateway = 'triex',
+    private readonly tenant?: string,
   ) {}
 
   private fetchJson<T = unknown>(
@@ -56,6 +57,7 @@ export class OrgQueries {
       query,
       notFound,
       this.gateway,
+      this.tenant,
     )
   }
 

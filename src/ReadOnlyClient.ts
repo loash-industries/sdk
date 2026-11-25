@@ -116,6 +116,7 @@ export class ReadOnlyClient {
       config.indexerUrl ?? GATEWAY_URLS[gateway],
       config.apiKey,
       gateway,
+      config.tenant,
     )
     this.orgs = new OrgsApi(this.indexer, (addr) => {
       if (!addr) {
