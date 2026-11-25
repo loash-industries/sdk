@@ -1,4 +1,4 @@
-import type { TriexGateway } from '../gateways'
+import { DEFAULT_GATEWAY, type TriexGateway } from '../gateways'
 import { TriexError } from '../errors'
 import {
   checkpointParam as checkpoint,
@@ -48,7 +48,7 @@ export class HaulingQueries {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly gateway: TriexGateway = 'triex',
+    private readonly gateway: TriexGateway = DEFAULT_GATEWAY,
     private readonly tenant?: string,
   ) {}
 

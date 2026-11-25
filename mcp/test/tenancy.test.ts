@@ -179,7 +179,7 @@ describe('world scoping (?tenant=)', () => {
       server = createApp(
         loadConfig({
           TRIEX_MCP_MODE: 'prepare',
-          TRIEX_API_URL: 'https://api.example.test',
+          VOIDWIRE_API_URL: 'https://api.example.test',
         } as NodeJS.ProcessEnv),
       ).listen(0, '127.0.0.1', () => resolve())
     })

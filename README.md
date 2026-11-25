@@ -38,9 +38,11 @@ Built for exactly the things you'd want to build on an exchange:
 One deliberate exception: **currency (CRED) balances are fullnode reads**, not
 API reads — order funding math needs head-current values.
 
-Get an API key at <https://trinary.exchange/settings> (docs:
-<https://docs.trinary.exchange/docs/api-keys>). The docs' samples use the
-`TRINARY_API_KEY` env var; this README follows that convention.
+Reads go through [Voidwire](https://voidwire.xyz) by default. Create a
+Voidwire key (`sk_vw_…`) on your [Voidwire account page](https://voidwire.xyz/account)
+(docs: <https://docs.trinary.exchange/docs/api-keys>). The docs' samples use the
+`VOIDWIRE_API_KEY` env var; this README follows that convention. Already have
+a Trinary Exchange key? See [Reading through Trinary Exchange](#reading-through-trinary-exchange).
 
 ## Install
 
@@ -65,7 +67,7 @@ const keypair = Ed25519Keypair.fromSecretKey(process.env.SUI_PRIVATE_KEY!)
 
 const client = new TriexClient({
   suiClient,
-  apiKey: process.env.TRINARY_API_KEY!,
+  apiKey: process.env.VOIDWIRE_API_KEY!,
   address: keypair.toSuiAddress(),
   // The SDK normalizes v2 core-client results AND legacy {digest, objectChanges}
   // shapes, and surfaces on-chain aborts as typed errors. Include effects +
@@ -100,25 +102,29 @@ as the `executor`.
 ```ts
 import { ReadOnlyClient } from '@trinaryex/sdk'
 
-const ro = new ReadOnlyClient({ apiKey: process.env.TRINARY_API_KEY! })
+const ro = new ReadOnlyClient({ apiKey: process.env.VOIDWIRE_API_KEY! })
 const feed = await ro.discover({ assetId: '70810', side: 'sell' })
 ```
 
-### Reading through Voidwire
+### Reading through Trinary Exchange
 
-Reads go to the Trinary Exchange gateway by default. To use
-[Voidwire](https://voidwire.xyz) instead, pass `gateway: 'voidwire'` and a
-Voidwire key (`sk_vw_…`). Keys are not shared between the two gateways.
+Since 6.0, reads go to [Voidwire](https://voidwire.xyz)
+(`https://api.voidwire.xyz`) by default, with a Voidwire key (`sk_vw_…`).
+Voidwire serves every read the SDK makes. To keep reading through the Trinary
+Exchange gateway with a Trinary Exchange key, pass `gateway: 'triex'`. Keys are
+not shared between the two gateways.
 
 ```ts
 const ro = new ReadOnlyClient({
-  gateway: 'voidwire',
-  apiKey: process.env.VOIDWIRE_API_KEY!,
+  gateway: 'triex',
+  apiKey: process.env.TRINARY_API_KEY!,
 })
 ```
 
-`TriexClient` takes the same option; writes are unaffected. Voidwire serves every
-read the SDK makes.
+`TriexClient` takes the same option; writes are unaffected. Without a
+`gateway`, an `indexerUrl` of `https://api.trinary.exchange` also selects
+`triex`. A Trinary Exchange key sent to Voidwire fails with `Unauthorized`, and
+the error message says to pass `gateway: 'triex'`.
 
 ### Reading another world
 
@@ -231,7 +237,7 @@ whether the abort was `resolved`, came from a dependency package
 
 | Code | Raised when | Recovery |
 |---|---|---|
-| `Unauthorized` | API key missing/revoked/wrong tier (HTTP 401/403) | fix the key; check it belongs to the configured `gateway` |
+| `Unauthorized` | API key missing/revoked/wrong tier (HTTP 401/403) | fix the key; check it belongs to the configured `gateway` (Voidwire by default; a Trinary Exchange key needs `gateway: 'triex'`) |
 | `RateLimited` | compute-unit budget exhausted (HTTP 429) | wait `e.retryAfterMs`, retry |
 | `PaymentRequired` | Voidwire allowance and prepaid credits used up (HTTP 402) | buy credits at the URL in `e.message` |
 | `NotOnGateway` | the configured `gateway` doesn't serve this read | use `gateway: 'triex'` with a Trinary Exchange key |

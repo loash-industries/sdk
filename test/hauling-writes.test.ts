@@ -136,6 +136,7 @@ const client = (sui: any, executor: any) =>
     suiClient: sui,
     apiKey: 'k',
     indexerUrl: 'https://api.example.test',
+    gateway: 'triex' as const,
     address: OWNER,
     executor,
   })

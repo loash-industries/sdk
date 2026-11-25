@@ -334,6 +334,7 @@ function client(sui: any, executor: any) {
     suiClient: sui,
     apiKey: 'k',
     indexerUrl: 'https://api.example.test',
+    gateway: 'triex' as const,
     address: OWNER,
     executor,
   })
@@ -661,6 +662,7 @@ describe('coins.list (GET /v1/coins)', () => {
     const ro = new ReadOnlyClient({
       apiKey: 'k',
       indexerUrl: 'https://api.example.test',
+      gateway: 'triex' as const,
     })
     const coins = await ro.coins.list({ coinTypes: [BASE, CRED] })
 

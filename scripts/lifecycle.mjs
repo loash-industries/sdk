@@ -27,6 +27,7 @@ const sui = new SuiGrpcClient({
   baseUrl: 'https://fullnode.testnet.sui.io:443',
 })
 const client = new TriexClient({
+  gateway: 'triex', // a Trinary Exchange key from .env
   suiClient: sui,
   apiKey,
   address: keypair.toSuiAddress(),

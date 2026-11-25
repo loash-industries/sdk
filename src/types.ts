@@ -228,8 +228,11 @@ export interface TriexClientConfig {
    */
   address?: string
   /**
-   * Which API gateway serves indexer reads. Defaults to `triex`. The `apiKey`
-   * must belong to it: keys are not shared between gateways.
+   * Which API gateway serves indexer reads. Defaults to `voidwire` (a Voidwire
+   * key, `sk_vw_…`); pass `triex` for a Trinary Exchange key. The `apiKey`
+   * must belong to it: keys are not shared between gateways. Without a
+   * `gateway`, an `indexerUrl` of `https://api.trinary.exchange` selects
+   * `triex`.
    */
   gateway?: TriexGateway
   /**
@@ -253,7 +256,11 @@ export interface TriexClientConfig {
 
 export interface ReadOnlyClientConfig {
   apiKey: string
-  /** Which API gateway serves reads. Defaults to `triex`. */
+  /**
+   * Which API gateway serves reads. Defaults to `voidwire` (a Voidwire key,
+   * `sk_vw_…`); pass `triex` for a Trinary Exchange key. Without a `gateway`,
+   * an `indexerUrl` of `https://api.trinary.exchange` selects `triex`.
+   */
   gateway?: TriexGateway
   indexerUrl?: string
   /**

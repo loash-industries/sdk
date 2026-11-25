@@ -9,7 +9,7 @@ import { OrgHandle } from './armature/OrgClient'
 import { OrgsWriteApi } from './armature/OrgsApi'
 import { CoinsApi } from './coins/CoinsApi'
 import { resolvePackageIds } from './config'
-import { GATEWAY_URLS } from './gateways'
+import { GATEWAY_URLS, resolveGateway } from './gateways'
 import { TriexClientError, TriexError } from './errors'
 import { HaulingWriteApi } from './hauling/HaulingWriteApi'
 import { transactionCheckpoint } from './checkpoint'
@@ -160,7 +160,7 @@ import type {
 /**
  * High-level, full-featured trading client for Trinary Exchange.
  *
- * Reads go through the indexer (`api.trinary.exchange`, `x-api-key`) except
+ * Reads go through the indexer (Voidwire by default, `x-api-key`) except
  * currency balances, which are head-current fullnode reads; writes are built
  * as Sui PTBs and handed to the caller-supplied `executor` to sign. The API
  * surface is grouped: `account`, `balances`, `market`, `orders`, `spatial`,
@@ -250,7 +250,7 @@ export class TriexClient {
     this.tenant = config.tenant
     this.ids = resolvePackageIds(config.network ?? 'testnet', config.packageIds)
     this.pinnedIds = new Set(Object.keys(config.packageIds ?? {}))
-    const gateway = config.gateway ?? 'triex'
+    const gateway = resolveGateway(config.gateway, config.indexerUrl)
     this.indexer = new IndexerClient(
       config.indexerUrl ?? GATEWAY_URLS[gateway],
       config.apiKey,

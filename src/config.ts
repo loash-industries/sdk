@@ -1,8 +1,8 @@
-import { GATEWAY_URLS } from './gateways'
+import { DEFAULT_GATEWAY, GATEWAY_URLS } from './gateways'
 import type { PackageIds, TriexNetwork } from './types'
 
-/** Default indexer host (the sluice gateway that fronts etl-api). */
-export const DEFAULT_INDEXER_URL = GATEWAY_URLS.triex
+/** Default indexer host: the default gateway's (Voidwire). */
+export const DEFAULT_INDEXER_URL = GATEWAY_URLS[DEFAULT_GATEWAY]
 
 /** The Sui system `Clock` shared object. */
 export const CLOCK_ID = '0x6'

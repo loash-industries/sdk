@@ -78,7 +78,7 @@ export function createApp(config: ServerConfig): Express {
         error: {
           code: -32001,
           message:
-            'Missing credential. Send your Trinary Exchange API key as an x-api-key header.',
+            'Missing credential. Send your API key as an x-api-key header.',
         },
         id: null,
       })
